@@ -67,6 +67,63 @@ public class ApartmentDAO {
         return apartments;
     }
     
+    // ===== ADDED FOR PANEL COMPATIBILITY =====
+    
+    /**
+     * Get apartments by building ID (through floor relationship)
+     */
+    public List<Apartment> getApartmentsByBuildingId(Long buildingId) {
+        List<Apartment> apartments = new ArrayList<>();
+        String sql = "SELECT a.* FROM apartments a " +
+                     "JOIN floors f ON a.floor_id = f.id " +
+                     "WHERE f.building_id = ? AND a.is_deleted = 0 " +
+                     "ORDER BY a.room_number";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setLong(1, buildingId);
+            ResultSet rs = pstmt.executeQuery();
+            
+            while (rs.next()) {
+                Apartment apartment = new Apartment();
+                apartment.setId(rs.getLong("id"));
+                apartment.setFloorId(rs.getLong("floor_id"));
+                apartment.setRoomNumber(rs.getString("room_number"));
+                apartment.setArea(rs.getDouble("area"));
+                apartment.setStatus(rs.getString("status"));
+                apartment.setBasePrice(rs.getBigDecimal("base_price"));
+                apartment.setDescription(rs.getString("description"));
+                apartment.setDeleted(rs.getBoolean("is_deleted"));
+                apartments.add(apartment);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return apartments;
+    }
+    
+    /**
+     * Count apartments by status
+     */
+    public int countApartmentsByStatus(String status) {
+        String sql = "SELECT COUNT(*) FROM apartments WHERE status = ? AND is_deleted = 0";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, status);
+            ResultSet rs = pstmt.executeQuery();
+            
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+    
     // Get apartment by ID
     public Apartment getApartmentById(Long id) {
         String sql = "SELECT * FROM apartments WHERE id = ? AND is_deleted = 0";

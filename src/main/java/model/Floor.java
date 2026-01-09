@@ -1,5 +1,4 @@
 package model;
-
 /**
  * Floor Entity
  * Represents a floor in a building
@@ -9,6 +8,7 @@ public class Floor {
     private Long buildingId;
     private int floorNumber;
     private String name;
+    private String description; // Added for compatibility
     private boolean isDeleted;
     
     // For display purposes
@@ -80,6 +80,22 @@ public class Floor {
     
     public void setBuildingName(String buildingName) {
         this.buildingName = buildingName;
+    }
+    
+    // ===== ADDED FOR PANEL COMPATIBILITY =====
+    
+    /**
+     * Get floor description
+     */
+    public String getDescription() {
+        return description;
+    }
+    
+    /**
+     * Set floor description
+     */
+    public void setDescription(String description) {
+        this.description = description;
     }
     
     @Override

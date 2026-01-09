@@ -9,7 +9,7 @@ import java.awt.*;
 import java.awt.event.*;
 
 /**
- * Main Dashboard - FIXED with proper icon rendering
+ * Main Dashboard - FIXED with all 7 management panels integrated
  */
 public class MainDashboard extends JFrame {
     
@@ -135,9 +135,6 @@ public class MainDashboard extends JFrame {
         btnReports.addActionListener(e -> showReportsPanel());
     }
     
-    /**
-     * Create menu button with Unicode icon - FIXED
-     */
     private JButton createMenuButton(String text, String iconChar, boolean isActive) {
         JButton btn = new JButton();
         btn.setLayout(new BorderLayout(10, 0));
@@ -263,88 +260,54 @@ public class MainDashboard extends JFrame {
         showPanel(new BuildingManagementPanel(), "Quản Lý Tòa Nhà", btnBuildings);
     }
     
+    // ===== INTEGRATED 7 NEW PANELS =====
+    
     private void showFloorsPanel() {
-        showPanel(createPlaceholderPanel("Quản Lý Tầng", "\u2261"), "Quản Lý Tầng", btnFloors);
+        showPanel(new FloorManagementPanel(), "Quản Lý Tầng", btnFloors);
     }
     
     private void showApartmentsPanel() {
-        showPanel(createPlaceholderPanel("Quản Lý Căn Hộ", "\u2302"), "Quản Lý Căn Hộ", btnApartments);
+        showPanel(new ApartmentManagementPanel(), "Quản Lý Căn Hộ", btnApartments);
     }
     
     private void showResidentsPanel() {
-        showPanel(createPlaceholderPanel("Quản Lý Cư Dân", "\u265B"), "Quản Lý Cư Dân", btnResidents);
+        showPanel(new ResidentManagementPanel(), "Quản Lý Cư Dân", btnResidents);
     }
     
     private void showContractsPanel() {
-        showPanel(createPlaceholderPanel("Quản Lý Hợp Đồng", "\u2709"), "Quản Lý Hợp Đồng", btnContracts);
+        showPanel(new ContractManagementPanel(), "Quản Lý Hợp Đồng", btnContracts);
     }
     
     private void showServicesPanel() {
-        showPanel(createPlaceholderPanel("Quản Lý Dịch Vụ", "\u26A1"), "Quản Lý Dịch Vụ", btnServices);
+        showPanel(new ServiceManagementPanel(), "Quản Lý Dịch Vụ", btnServices);
     }
     
     private void showInvoicesPanel() {
-        showPanel(createPlaceholderPanel("Quản Lý Hóa Đơn", "\u263C"), "Quản Lý Hóa Đơn", btnInvoices);
+        showPanel(new InvoiceManagementPanel(), "Quản Lý Hóa Đơn", btnInvoices);
     }
     
     private void showReportsPanel() {
-        showPanel(createPlaceholderPanel("Báo Cáo Thống Kê", "\u2630"), "Báo Cáo", btnReports);
+        showPanel(new ReportPanel(), "Báo Cáo", btnReports);
     }
     
-    private JPanel createPlaceholderPanel(String title, String icon) {
-        JPanel panel = new JPanel(new GridBagLayout());
-        panel.setBackground(UIConstants.BACKGROUND_COLOR);
-        
-        JPanel card = new JPanel();
-        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        card.setBackground(Color.WHITE);
-        card.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(50, 50, 50, 50)
-        ));
-        
-        JLabel iconLabel = new JLabel(icon);
-        iconLabel.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 80));
-        iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        JLabel titleLabel = new JLabel(title);
-        titleLabel.setFont(UIConstants.FONT_TITLE);
-        titleLabel.setForeground(UIConstants.TEXT_PRIMARY);
-        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        JLabel subtitleLabel = new JLabel("Chức năng đang được phát triển");
-        subtitleLabel.setFont(UIConstants.FONT_REGULAR);
-        subtitleLabel.setForeground(UIConstants.TEXT_SECONDARY);
-        subtitleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        card.add(iconLabel);
-        card.add(Box.createVerticalStrut(20));
-        card.add(titleLabel);
-        card.add(Box.createVerticalStrut(10));
-        card.add(subtitleLabel);
-        
-        panel.add(card);
-        return panel;
-    }
-    
-   private void testDatabaseConnection() {
-    try {
-        if (Db_connection.getConnection() != null) {
-            System.out.println("✅ Database connection successful!");
-        } else {
+    private void testDatabaseConnection() {
+        try {
+            if (Db_connection.getConnection() != null) {
+                System.out.println("✅ Database connection successful!");
+            } else {
+                JOptionPane.showMessageDialog(this,
+                    "Không thể kết nối đến cơ sở dữ liệu!\nVui lòng kiểm tra MySQL server.",
+                    "Lỗi Kết Nối",
+                    JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (Exception e) {
             JOptionPane.showMessageDialog(this,
                 "Không thể kết nối đến cơ sở dữ liệu!\nVui lòng kiểm tra MySQL server.",
                 "Lỗi Kết Nối",
                 JOptionPane.ERROR_MESSAGE);
+            e.printStackTrace();
         }
-    } catch (Exception e) {
-        JOptionPane.showMessageDialog(this,
-            "Không thể kết nối đến cơ sở dữ liệu!\nVui lòng kiểm tra MySQL server.",
-            "Lỗi Kết Nối",
-            JOptionPane.ERROR_MESSAGE);
-        e.printStackTrace();
     }
-}
     
     public static void main(String[] args) {
         try {

@@ -83,6 +83,48 @@ public class InvoiceDAO {
         return null;
     }
     
+    // ===== ADDED FOR PANEL COMPATIBILITY =====
+    
+    /**
+     * Get invoices by month and year
+     */
+    public List<Invoice> getInvoicesByMonth(int month, int year) {
+        List<Invoice> invoices = new ArrayList<>();
+        String sql = "SELECT * FROM invoices WHERE month = ? AND year = ? AND is_deleted = 0 ORDER BY id DESC";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setInt(1, month);
+            pstmt.setInt(2, year);
+            ResultSet rs = pstmt.executeQuery();
+            
+            while (rs.next()) {
+                Invoice invoice = new Invoice();
+                invoice.setId(rs.getLong("id"));
+                invoice.setContractId(rs.getLong("contract_id"));
+                invoice.setMonth(rs.getInt("month"));
+                invoice.setYear(rs.getInt("year"));
+                invoice.setTotalAmount(rs.getBigDecimal("total_amount"));
+                invoice.setStatus(rs.getString("status"));
+                // Fix: Convert java.sql.Timestamp to java.util.Date
+                Timestamp createdAt = rs.getTimestamp("created_at");
+                if (createdAt != null) {
+                    invoice.setCreatedAt(new java.util.Date(createdAt.getTime()));
+                }
+                Timestamp paymentDate = rs.getTimestamp("payment_date");
+                if (paymentDate != null) {
+                    invoice.setPaymentDate(new java.util.Date(paymentDate.getTime()));
+                }
+                invoice.setDeleted(rs.getBoolean("is_deleted"));
+                invoices.add(invoice);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return invoices;
+    }
+    
     // Get unpaid invoices
     public List<Invoice> getUnpaidInvoices() {
         List<Invoice> invoices = new ArrayList<>();

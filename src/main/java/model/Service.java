@@ -1,7 +1,5 @@
 package model;
-
 import java.math.BigDecimal;
-
 /**
  * Service Entity
  * Represents a service (electricity, water, management fee, etc.)
@@ -11,6 +9,7 @@ public class Service {
     private String serviceName;
     private BigDecimal unitPrice;
     private String unitType; // KWH, KHOI, THANG, XE
+    private String description; // Added for compatibility
     private boolean isMandatory;
     private boolean isDeleted;
     
@@ -83,6 +82,50 @@ public class Service {
     
     public void setDeleted(boolean deleted) {
         isDeleted = deleted;
+    }
+    
+    // ===== ALIAS METHODS FOR PANEL COMPATIBILITY =====
+    
+    /**
+     * Alias for getServiceName() - for panel compatibility
+     */
+    public String getName() {
+        return this.serviceName;
+    }
+    
+    /**
+     * Alias for setServiceName() - for panel compatibility
+     */
+    public void setName(String name) {
+        this.serviceName = name;
+    }
+    
+    /**
+     * Alias for getUnitType() - for panel compatibility
+     */
+    public String getUnit() {
+        return this.unitType;
+    }
+    
+    /**
+     * Alias for setUnitType() - for panel compatibility
+     */
+    public void setUnit(String unit) {
+        this.unitType = unit;
+    }
+    
+    /**
+     * Get service description
+     */
+    public String getDescription() {
+        return this.description;
+    }
+    
+    /**
+     * Set service description
+     */
+    public void setDescription(String description) {
+        this.description = description;
     }
     
     @Override

@@ -1,7 +1,5 @@
 package model;
-
 import java.math.BigDecimal;
-
 /**
  * Apartment Entity
  * Represents an apartment/unit in a floor
@@ -15,6 +13,7 @@ public class Apartment {
     private BigDecimal basePrice;
     private String description;
     private boolean isDeleted;
+    private Integer bedrooms; // Added for compatibility
     
     // For display purposes
     private String floorName;
@@ -22,6 +21,7 @@ public class Apartment {
     
     // Constructors
     public Apartment() {
+        this.bedrooms = 1; // Default value
     }
     
     public Apartment(Long id, Long floorId, String roomNumber, Double area, String status, 
@@ -34,6 +34,7 @@ public class Apartment {
         this.basePrice = basePrice;
         this.description = description;
         this.isDeleted = isDeleted;
+        this.bedrooms = 1; // Default value
     }
     
     public Apartment(Long floorId, String roomNumber, Double area, String status, BigDecimal basePrice) {
@@ -43,6 +44,7 @@ public class Apartment {
         this.status = status;
         this.basePrice = basePrice;
         this.isDeleted = false;
+        this.bedrooms = 1; // Default value
     }
     
     // Getters and Setters
@@ -76,6 +78,11 @@ public class Apartment {
     
     public void setArea(Double area) {
         this.area = area;
+    }
+    
+    // Overload for BigDecimal compatibility
+    public void setArea(BigDecimal area) {
+        this.area = area != null ? area.doubleValue() : null;
     }
     
     public String getStatus() {
@@ -126,6 +133,30 @@ public class Apartment {
         this.floorName = floorName;
     }
     
+    public Integer getBedrooms() {
+        return bedrooms;
+    }
+    
+    public void setBedrooms(Integer bedrooms) {
+        this.bedrooms = bedrooms;
+    }
+    
+    // ===== ALIAS METHODS FOR PANEL COMPATIBILITY =====
+    
+    /**
+     * Alias for getRoomNumber() - for panel compatibility
+     */
+    public String getApartmentNumber() {
+        return this.roomNumber;
+    }
+    
+    /**
+     * Alias for setRoomNumber() - for panel compatibility
+     */
+    public void setApartmentNumber(String apartmentNumber) {
+        this.roomNumber = apartmentNumber;
+    }
+    
     @Override
     public String toString() {
         return "Apartment{" +
@@ -134,6 +165,7 @@ public class Apartment {
                 ", area=" + area +
                 ", status='" + status + '\'' +
                 ", basePrice=" + basePrice +
+                ", bedrooms=" + bedrooms +
                 '}';
     }
 }

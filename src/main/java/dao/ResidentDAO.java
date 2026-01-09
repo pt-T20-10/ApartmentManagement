@@ -76,6 +76,44 @@ public class ResidentDAO {
         return null;
     }
     
+    // ===== ADDED FOR PANEL COMPATIBILITY =====
+    
+    /**
+     * Search residents by name (LIKE query)
+     */
+    public List<Resident> searchResidentsByName(String keyword) {
+        List<Resident> residents = new ArrayList<>();
+        String sql = "SELECT * FROM residents WHERE full_name LIKE ? AND is_deleted = 0 ORDER BY full_name";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, "%" + keyword + "%");
+            ResultSet rs = pstmt.executeQuery();
+            
+            while (rs.next()) {
+                Resident resident = new Resident();
+                resident.setId(rs.getLong("id"));
+                resident.setFullName(rs.getString("full_name"));
+                resident.setPhone(rs.getString("phone"));
+                resident.setEmail(rs.getString("email"));
+                resident.setIdentityCard(rs.getString("identity_card"));
+                resident.setGender(rs.getString("gender"));
+                // Fix: Convert java.sql.Date to java.util.Date
+                java.sql.Date sqlDate = rs.getDate("dob");
+                if (sqlDate != null) {
+                    resident.setDob(new java.util.Date(sqlDate.getTime()));
+                }
+                resident.setHometown(rs.getString("hometown"));
+                resident.setDeleted(rs.getBoolean("is_deleted"));
+                residents.add(resident);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return residents;
+    }
+    
     // Insert new resident
     public boolean insertResident(Resident resident) {
         String sql = "INSERT INTO residents (full_name, phone, email, identity_card, gender, dob, hometown, is_deleted) " +
