@@ -10,23 +10,18 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import java.awt.*;
-import java.math.BigDecimal;
 import java.util.List;
 
+/**
+ * Service Management Panel
+ * Full CRUD operations with popup dialog
+ */
 public class ServiceManagementPanel extends JPanel {
     
     private ServiceDAO serviceDAO;
     private JTable serviceTable;
     private DefaultTableModel tableModel;
     private JTextField searchField;
-    
-    private JTextField nameField;
-    private JTextField unitField;
-    private JTextField unitPriceField;
-    private JCheckBox isMandatoryCheckbox;
-    private JTextArea descriptionArea;
-    
-    private Service selectedService = null;
     
     public ServiceManagementPanel() {
         this.serviceDAO = new ServiceDAO();
@@ -37,7 +32,8 @@ public class ServiceManagementPanel extends JPanel {
         
         createHeader();
         createTablePanel();
-        createFormPanel();
+        createActionPanel();
+        
         loadServices();
     }
     
@@ -46,13 +42,14 @@ public class ServiceManagementPanel extends JPanel {
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         headerPanel.setBorder(new EmptyBorder(0, 0, 20, 0));
         
+        // Title
         JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         titlePanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
-        JLabel iconLabel = new JLabel("[S]");
-        iconLabel.setFont(new Font("Arial", Font.BOLD, 32));
+        JLabel iconLabel = new JLabel("⚡");
+        iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 32));
         
-        JLabel titleLabel = new JLabel("Quan Ly Dich Vu");
+        JLabel titleLabel = new JLabel("Quản Lý Dịch Vụ");
         titleLabel.setFont(UIConstants.FONT_TITLE);
         titleLabel.setForeground(UIConstants.TEXT_PRIMARY);
         
@@ -60,6 +57,7 @@ public class ServiceManagementPanel extends JPanel {
         titlePanel.add(Box.createHorizontalStrut(10));
         titlePanel.add(titleLabel);
         
+        // Search panel
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         searchPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
@@ -69,12 +67,16 @@ public class ServiceManagementPanel extends JPanel {
             BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
             new EmptyBorder(8, 12, 8, 12)
         ));
+        searchField.addActionListener(e -> searchServices());
         
-        ModernButton searchButton = new ModernButton("[T] Tim Kiem", UIConstants.INFO_COLOR);
+        ModernButton searchButton = new ModernButton("🔍 Tìm Kiếm", UIConstants.INFO_COLOR);
         searchButton.addActionListener(e -> searchServices());
         
-        ModernButton refreshButton = new ModernButton("[R] Lam Moi", UIConstants.SUCCESS_COLOR);
-        refreshButton.addActionListener(e -> { searchField.setText(""); loadServices(); });
+        ModernButton refreshButton = new ModernButton("🔄 Làm Mới", UIConstants.SUCCESS_COLOR);
+        refreshButton.addActionListener(e -> {
+            searchField.setText("");
+            loadServices();
+        });
         
         searchPanel.add(searchField);
         searchPanel.add(searchButton);
@@ -91,136 +93,76 @@ public class ServiceManagementPanel extends JPanel {
         tablePanel.setBackground(Color.WHITE);
         tablePanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
         
-        String[] columns = {"ID", "Ten Dich Vu", "Don Vi", "Don Gia", "Bat Buoc", "Mo Ta"};
+        // Table model
+        String[] columns = {"ID", "Tên Dịch Vụ", "Đơn Vị", "Đơn Giá", "Bắt Buộc", "Mô Tả"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
-            public boolean isCellEditable(int row, int column) { return false; }
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
         
         serviceTable = new JTable(tableModel);
         serviceTable.setFont(UIConstants.FONT_REGULAR);
-        serviceTable.setRowHeight(40);
+        serviceTable.setRowHeight(45);
         serviceTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         serviceTable.setShowGrid(true);
         serviceTable.setGridColor(UIConstants.BORDER_COLOR);
-        serviceTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) loadSelectedService();
+        
+        // Double-click to edit
+        serviceTable.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                if (evt.getClickCount() == 2) {
+                    editService();
+                }
+            }
         });
         
+        // Table header
         JTableHeader header = serviceTable.getTableHeader();
         header.setFont(UIConstants.FONT_HEADING);
         header.setBackground(UIConstants.BACKGROUND_COLOR);
         header.setForeground(UIConstants.TEXT_PRIMARY);
+        header.setBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, UIConstants.BORDER_COLOR));
+        
+        // Column widths
+        serviceTable.getColumnModel().getColumn(0).setPreferredWidth(50);
+        serviceTable.getColumnModel().getColumn(1).setPreferredWidth(200);
+        serviceTable.getColumnModel().getColumn(2).setPreferredWidth(100);
+        serviceTable.getColumnModel().getColumn(3).setPreferredWidth(120);
+        serviceTable.getColumnModel().getColumn(4).setPreferredWidth(100);
+        serviceTable.getColumnModel().getColumn(5).setPreferredWidth(250);
         
         JScrollPane scrollPane = new JScrollPane(serviceTable);
         scrollPane.setBorder(null);
+        
         tablePanel.add(scrollPane, BorderLayout.CENTER);
         
         add(tablePanel, BorderLayout.CENTER);
     }
     
-    private void createFormPanel() {
-        JPanel formContainer = new JPanel(new BorderLayout());
-        formContainer.setBackground(UIConstants.BACKGROUND_COLOR);
-        formContainer.setPreferredSize(new Dimension(400, 0));
+    private void createActionPanel() {
+        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        actionPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        actionPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
         
-        JPanel formPanel = new JPanel();
-        formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
-        formPanel.setBackground(Color.WHITE);
-        formPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(20, 20, 20, 20)
-        ));
-        
-        JLabel formTitle = new JLabel("Thong Tin Dich Vu");
-        formTitle.setFont(UIConstants.FONT_SUBTITLE);
-        formTitle.setForeground(UIConstants.TEXT_PRIMARY);
-        formTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
-        formPanel.add(formTitle);
-        formPanel.add(Box.createVerticalStrut(20));
-        
-        formPanel.add(createFieldLabel("Ten Dich Vu *"));
-        nameField = createTextField();
-        formPanel.add(nameField);
-        formPanel.add(Box.createVerticalStrut(15));
-        
-        formPanel.add(createFieldLabel("Don Vi (kWh, m3, thang) *"));
-        unitField = createTextField();
-        formPanel.add(unitField);
-        formPanel.add(Box.createVerticalStrut(15));
-        
-        formPanel.add(createFieldLabel("Don Gia *"));
-        unitPriceField = createTextField();
-        formPanel.add(unitPriceField);
-        formPanel.add(Box.createVerticalStrut(15));
-        
-        isMandatoryCheckbox = new JCheckBox("Bat buoc?");
-        isMandatoryCheckbox.setFont(UIConstants.FONT_REGULAR);
-        isMandatoryCheckbox.setBackground(Color.WHITE);
-        isMandatoryCheckbox.setAlignmentX(Component.LEFT_ALIGNMENT);
-        formPanel.add(isMandatoryCheckbox);
-        formPanel.add(Box.createVerticalStrut(15));
-        
-        formPanel.add(createFieldLabel("Mo Ta"));
-        descriptionArea = new JTextArea(4, 20);
-        descriptionArea.setFont(UIConstants.FONT_REGULAR);
-        descriptionArea.setLineWrap(true);
-        descriptionArea.setWrapStyleWord(true);
-        descriptionArea.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(8, 12, 8, 12)
-        ));
-        JScrollPane descScrollPane = new JScrollPane(descriptionArea);
-        descScrollPane.setAlignmentX(Component.LEFT_ALIGNMENT);
-        descScrollPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
-        formPanel.add(descScrollPane);
-        formPanel.add(Box.createVerticalStrut(20));
-        
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        buttonPanel.setBackground(Color.WHITE);
-        buttonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        buttonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
-        
-        ModernButton addButton = new ModernButton("[+] Them", UIConstants.SUCCESS_COLOR);
+        ModernButton addButton = new ModernButton("➕ Thêm Dịch Vụ", UIConstants.SUCCESS_COLOR);
+        addButton.setPreferredSize(new Dimension(150, 45));
         addButton.addActionListener(e -> addService());
         
-        ModernButton updateButton = new ModernButton("[E] Sua", UIConstants.WARNING_COLOR);
-        updateButton.addActionListener(e -> updateService());
+        ModernButton editButton = new ModernButton("✏️ Sửa", UIConstants.WARNING_COLOR);
+        editButton.setPreferredSize(new Dimension(120, 45));
+        editButton.addActionListener(e -> editService());
         
-        ModernButton deleteButton = new ModernButton("[X] Xoa", UIConstants.DANGER_COLOR);
+        ModernButton deleteButton = new ModernButton("🗑️ Xóa", UIConstants.DANGER_COLOR);
+        deleteButton.setPreferredSize(new Dimension(120, 45));
         deleteButton.addActionListener(e -> deleteService());
         
-        ModernButton clearButton = new ModernButton("[R] Lam Moi", UIConstants.TEXT_SECONDARY);
-        clearButton.addActionListener(e -> clearForm());
+        actionPanel.add(addButton);
+        actionPanel.add(editButton);
+        actionPanel.add(deleteButton);
         
-        buttonPanel.add(addButton);
-        buttonPanel.add(updateButton);
-        buttonPanel.add(deleteButton);
-        buttonPanel.add(clearButton);
-        
-        formPanel.add(buttonPanel);
-        formContainer.add(formPanel, BorderLayout.NORTH);
-        add(formContainer, BorderLayout.EAST);
-    }
-    
-    private JLabel createFieldLabel(String text) {
-        JLabel label = new JLabel(text);
-        label.setFont(UIConstants.FONT_REGULAR);
-        label.setForeground(UIConstants.TEXT_PRIMARY);
-        label.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return label;
-    }
-    
-    private JTextField createTextField() {
-        JTextField field = new JTextField();
-        field.setFont(UIConstants.FONT_REGULAR);
-        field.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(8, 12, 8, 12)
-        ));
-        field.setAlignmentX(Component.LEFT_ALIGNMENT);
-        field.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-        return field;
+        add(actionPanel, BorderLayout.SOUTH);
     }
     
     private void loadServices() {
@@ -233,94 +175,127 @@ public class ServiceManagementPanel extends JPanel {
                 service.getName(),
                 service.getUnit(),
                 service.getUnitPrice(),
-                service.isMandatory() ? "Yes" : "No",
-                service.getDescription()
+                service.isMandatory() ? "Có" : "Không",
+                service.getDescription() != null ? service.getDescription() : ""
             };
             tableModel.addRow(row);
         }
     }
     
-    private void loadSelectedService() {
-        int selectedRow = serviceTable.getSelectedRow();
-        if (selectedRow >= 0) {
-            Long id = (Long) tableModel.getValueAt(selectedRow, 0);
-            selectedService = serviceDAO.getServiceById(id);
+    private void addService() {
+        // Get parent frame
+        JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
+        
+        // Show dialog
+        ServiceDialog dialog = new ServiceDialog(parentFrame);
+        dialog.setVisible(true);
+        
+        // Check if confirmed
+        if (dialog.isConfirmed()) {
+            Service service = dialog.getService();
             
-            if (selectedService != null) {
-                nameField.setText(selectedService.getName());
-                unitField.setText(selectedService.getUnit());
-                unitPriceField.setText(selectedService.getUnitPrice().toString());
-                isMandatoryCheckbox.setSelected(selectedService.isMandatory());
-                descriptionArea.setText(selectedService.getDescription());
+            if (serviceDAO.insertService(service)) {
+                JOptionPane.showMessageDialog(this, 
+                    "Thêm dịch vụ thành công!", 
+                    "Thành Công", 
+                    JOptionPane.INFORMATION_MESSAGE);
+                loadServices();
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    "Thêm dịch vụ thất bại!", 
+                    "Lỗi", 
+                    JOptionPane.ERROR_MESSAGE);
             }
         }
     }
     
-    private void addService() {
-        if (!validateForm()) return;
+    private void editService() {
+        int selectedRow = serviceTable.getSelectedRow();
         
-        Service service = new Service();
-        service.setName(nameField.getText().trim());
-        service.setUnit(unitField.getText().trim());
-        service.setUnitPrice(new BigDecimal(unitPriceField.getText().trim()));
-        service.setMandatory(isMandatoryCheckbox.isSelected());
-        service.setDescription(descriptionArea.getText().trim());
-        
-        if (serviceDAO.insertService(service)) {
-            JOptionPane.showMessageDialog(this, "Them dich vu thanh cong!");
-            clearForm();
-            loadServices();
-        } else {
-            JOptionPane.showMessageDialog(this, "Them that bai!", "Loi", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-    
-    private void updateService() {
-        if (selectedService == null) {
-            JOptionPane.showMessageDialog(this, "Vui long chon dich vu can sua!");
+        if (selectedRow < 0) {
+            JOptionPane.showMessageDialog(this, 
+                "Vui lòng chọn dịch vụ cần sửa!", 
+                "Cảnh Báo", 
+                JOptionPane.WARNING_MESSAGE);
             return;
         }
         
-        if (!validateForm()) return;
+        Long id = (Long) tableModel.getValueAt(selectedRow, 0);
+        Service service = serviceDAO.getServiceById(id);
         
-        selectedService.setName(nameField.getText().trim());
-        selectedService.setUnit(unitField.getText().trim());
-        selectedService.setUnitPrice(new BigDecimal(unitPriceField.getText().trim()));
-        selectedService.setMandatory(isMandatoryCheckbox.isSelected());
-        selectedService.setDescription(descriptionArea.getText().trim());
+        if (service == null) {
+            JOptionPane.showMessageDialog(this, 
+                "Không tìm thấy dịch vụ!", 
+                "Lỗi", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
         
-        if (serviceDAO.updateService(selectedService)) {
-            JOptionPane.showMessageDialog(this, "Cap nhat thanh cong!");
-            clearForm();
-            loadServices();
-        } else {
-            JOptionPane.showMessageDialog(this, "Cap nhat that bai!", "Loi", JOptionPane.ERROR_MESSAGE);
+        // Get parent frame
+        JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
+        
+        // Show dialog with existing service
+        ServiceDialog dialog = new ServiceDialog(parentFrame, service);
+        dialog.setVisible(true);
+        
+        // Check if confirmed
+        if (dialog.isConfirmed()) {
+            Service updatedService = dialog.getService();
+            
+            if (serviceDAO.updateService(updatedService)) {
+                JOptionPane.showMessageDialog(this, 
+                    "Cập nhật dịch vụ thành công!", 
+                    "Thành Công", 
+                    JOptionPane.INFORMATION_MESSAGE);
+                loadServices();
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    "Cập nhật dịch vụ thất bại!", 
+                    "Lỗi", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
     
     private void deleteService() {
-        if (selectedService == null) {
-            JOptionPane.showMessageDialog(this, "Vui long chon dich vu can xoa!");
+        int selectedRow = serviceTable.getSelectedRow();
+        
+        if (selectedRow < 0) {
+            JOptionPane.showMessageDialog(this, 
+                "Vui lòng chọn dịch vụ cần xóa!", 
+                "Cảnh Báo", 
+                JOptionPane.WARNING_MESSAGE);
             return;
         }
         
+        Long id = (Long) tableModel.getValueAt(selectedRow, 0);
+        String serviceName = (String) tableModel.getValueAt(selectedRow, 1);
+        
         int confirm = JOptionPane.showConfirmDialog(this,
-            "Ban co chac chan muon xoa dich vu '" + selectedService.getName() + "'?",
-            "Xac Nhan Xoa", JOptionPane.YES_NO_OPTION);
+            "Bạn có chắc chắn muốn xóa dịch vụ '" + serviceName + "'?",
+            "Xác Nhận Xóa",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE);
         
         if (confirm == JOptionPane.YES_OPTION) {
-            if (serviceDAO.deleteService(selectedService.getId())) {
-                JOptionPane.showMessageDialog(this, "Xoa thanh cong!");
-                clearForm();
+            if (serviceDAO.deleteService(id)) {
+                JOptionPane.showMessageDialog(this, 
+                    "Xóa dịch vụ thành công!", 
+                    "Thành Công", 
+                    JOptionPane.INFORMATION_MESSAGE);
                 loadServices();
             } else {
-                JOptionPane.showMessageDialog(this, "Xoa that bai!", "Loi", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, 
+                    "Xóa dịch vụ thất bại!", 
+                    "Lỗi", 
+                    JOptionPane.ERROR_MESSAGE);
             }
         }
     }
     
     private void searchServices() {
         String keyword = searchField.getText().trim().toLowerCase();
+        
         if (keyword.isEmpty()) {
             loadServices();
             return;
@@ -332,65 +307,24 @@ public class ServiceManagementPanel extends JPanel {
         for (Service service : services) {
             if (service.getName().toLowerCase().contains(keyword) ||
                 service.getUnit().toLowerCase().contains(keyword)) {
+                
                 Object[] row = {
                     service.getId(),
                     service.getName(),
                     service.getUnit(),
                     service.getUnitPrice(),
-                    service.isMandatory() ? "Yes" : "No",
-                    service.getDescription()
+                    service.isMandatory() ? "Có" : "Không",
+                    service.getDescription() != null ? service.getDescription() : ""
                 };
                 tableModel.addRow(row);
             }
         }
         
         if (tableModel.getRowCount() == 0) {
-            JOptionPane.showMessageDialog(this, "Khong tim thay dich vu nao!");
+            JOptionPane.showMessageDialog(this, 
+                "Không tìm thấy dịch vụ nào!", 
+                "Thông Báo", 
+                JOptionPane.INFORMATION_MESSAGE);
         }
-    }
-    
-    private void clearForm() {
-        nameField.setText("");
-        unitField.setText("");
-        unitPriceField.setText("");
-        isMandatoryCheckbox.setSelected(false);
-        descriptionArea.setText("");
-        selectedService = null;
-        serviceTable.clearSelection();
-    }
-    
-    private boolean validateForm() {
-        if (nameField.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui long nhap ten dich vu!");
-            nameField.requestFocus();
-            return false;
-        }
-        
-        if (unitField.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui long nhap don vi!");
-            unitField.requestFocus();
-            return false;
-        }
-        
-        if (unitPriceField.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui long nhap don gia!");
-            unitPriceField.requestFocus();
-            return false;
-        }
-        
-        try {
-            BigDecimal price = new BigDecimal(unitPriceField.getText().trim());
-            if (price.compareTo(BigDecimal.ZERO) <= 0) {
-                JOptionPane.showMessageDialog(this, "Don gia phai lon hon 0!");
-                unitPriceField.requestFocus();
-                return false;
-            }
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Don gia khong hop le!");
-            unitPriceField.requestFocus();
-            return false;
-        }
-        
-        return true;
     }
 }

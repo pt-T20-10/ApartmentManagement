@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * Floor Management Panel
- * Full CRUD operations for floors
+ * Full CRUD operations with popup dialog
  */
 public class FloorManagementPanel extends JPanel {
     
@@ -25,13 +25,6 @@ public class FloorManagementPanel extends JPanel {
     private JTable floorTable;
     private DefaultTableModel tableModel;
     private JTextField searchField;
-    
-    // Form fields
-    private JComboBox<Building> buildingCombo;
-    private JTextField floorNumberField;
-    private JTextArea descriptionArea;
-    
-    private Floor selectedFloor = null;
     
     public FloorManagementPanel() {
         this.floorDAO = new FloorDAO();
@@ -43,9 +36,8 @@ public class FloorManagementPanel extends JPanel {
         
         createHeader();
         createTablePanel();
-        createFormPanel();
+        createActionPanel();
         
-        loadBuildings();
         loadFloors();
     }
     
@@ -58,10 +50,10 @@ public class FloorManagementPanel extends JPanel {
         JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         titlePanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
-        JLabel iconLabel = new JLabel("[F]");
-        iconLabel.setFont(new Font("Arial", Font.BOLD, 32));
+        JLabel iconLabel = new JLabel("🏢");
+        iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 32));
         
-        JLabel titleLabel = new JLabel("Quan Ly Tang");
+        JLabel titleLabel = new JLabel("Quản Lý Tầng");
         titleLabel.setFont(UIConstants.FONT_TITLE);
         titleLabel.setForeground(UIConstants.TEXT_PRIMARY);
         
@@ -79,11 +71,12 @@ public class FloorManagementPanel extends JPanel {
             BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
             new EmptyBorder(8, 12, 8, 12)
         ));
+        searchField.addActionListener(e -> searchFloors());
         
-        ModernButton searchButton = new ModernButton("[T] Tim Kiem", UIConstants.INFO_COLOR);
+        ModernButton searchButton = new ModernButton("🔍 Tìm Kiếm", UIConstants.INFO_COLOR);
         searchButton.addActionListener(e -> searchFloors());
         
-        ModernButton refreshButton = new ModernButton("[R] Lam Moi", UIConstants.SUCCESS_COLOR);
+        ModernButton refreshButton = new ModernButton("🔄 Làm Mới", UIConstants.SUCCESS_COLOR);
         refreshButton.addActionListener(e -> {
             searchField.setText("");
             loadFloors();
@@ -105,7 +98,7 @@ public class FloorManagementPanel extends JPanel {
         tablePanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
         
         // Table model
-        String[] columns = {"ID", "Toa Nha", "So Tang", "Mo Ta"};
+        String[] columns = {"ID", "Tòa Nhà", "Số Tầng", "Mô Tả"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
@@ -115,13 +108,17 @@ public class FloorManagementPanel extends JPanel {
         
         floorTable = new JTable(tableModel);
         floorTable.setFont(UIConstants.FONT_REGULAR);
-        floorTable.setRowHeight(40);
+        floorTable.setRowHeight(45);
         floorTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         floorTable.setShowGrid(true);
         floorTable.setGridColor(UIConstants.BORDER_COLOR);
-        floorTable.getSelectionModel().addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) {
-                loadSelectedFloor();
+        
+        // Double-click to edit
+        floorTable.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                if (evt.getClickCount() == 2) {
+                    editFloor();
+                }
             }
         });
         
@@ -134,9 +131,9 @@ public class FloorManagementPanel extends JPanel {
         
         // Column widths
         floorTable.getColumnModel().getColumn(0).setPreferredWidth(50);
-        floorTable.getColumnModel().getColumn(1).setPreferredWidth(200);
+        floorTable.getColumnModel().getColumn(1).setPreferredWidth(250);
         floorTable.getColumnModel().getColumn(2).setPreferredWidth(100);
-        floorTable.getColumnModel().getColumn(3).setPreferredWidth(300);
+        floorTable.getColumnModel().getColumn(3).setPreferredWidth(400);
         
         JScrollPane scrollPane = new JScrollPane(floorTable);
         scrollPane.setBorder(null);
@@ -146,117 +143,28 @@ public class FloorManagementPanel extends JPanel {
         add(tablePanel, BorderLayout.CENTER);
     }
     
-    private void createFormPanel() {
-        JPanel formContainer = new JPanel(new BorderLayout());
-        formContainer.setBackground(UIConstants.BACKGROUND_COLOR);
-        formContainer.setPreferredSize(new Dimension(400, 0));
+    private void createActionPanel() {
+        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+        actionPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        actionPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
         
-        JPanel formPanel = new JPanel();
-        formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
-        formPanel.setBackground(Color.WHITE);
-        formPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(20, 20, 20, 20)
-        ));
-        
-        // Form title
-        JLabel formTitle = new JLabel("Thong Tin Tang");
-        formTitle.setFont(UIConstants.FONT_SUBTITLE);
-        formTitle.setForeground(UIConstants.TEXT_PRIMARY);
-        formTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
-        
-        formPanel.add(formTitle);
-        formPanel.add(Box.createVerticalStrut(20));
-        
-        // Building field
-        formPanel.add(createFieldLabel("Toa Nha *"));
-        buildingCombo = new JComboBox<>();
-        buildingCombo.setFont(UIConstants.FONT_REGULAR);
-        buildingCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-        buildingCombo.setAlignmentX(Component.LEFT_ALIGNMENT);
-        formPanel.add(buildingCombo);
-        formPanel.add(Box.createVerticalStrut(15));
-        
-        // Floor number field
-        formPanel.add(createFieldLabel("So Tang *"));
-        floorNumberField = createTextField();
-        formPanel.add(floorNumberField);
-        formPanel.add(Box.createVerticalStrut(15));
-        
-        // Description field
-        formPanel.add(createFieldLabel("Mo Ta"));
-        descriptionArea = new JTextArea(4, 20);
-        descriptionArea.setFont(UIConstants.FONT_REGULAR);
-        descriptionArea.setLineWrap(true);
-        descriptionArea.setWrapStyleWord(true);
-        descriptionArea.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(8, 12, 8, 12)
-        ));
-        JScrollPane descScrollPane = new JScrollPane(descriptionArea);
-        descScrollPane.setAlignmentX(Component.LEFT_ALIGNMENT);
-        descScrollPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
-        formPanel.add(descScrollPane);
-        formPanel.add(Box.createVerticalStrut(20));
-        
-        // Buttons panel
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        buttonPanel.setBackground(Color.WHITE);
-        buttonPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
-        buttonPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
-        
-        ModernButton addButton = new ModernButton("[+] Them", UIConstants.SUCCESS_COLOR);
+        ModernButton addButton = new ModernButton("➕ Thêm Tầng", UIConstants.SUCCESS_COLOR);
+        addButton.setPreferredSize(new Dimension(150, 45));
         addButton.addActionListener(e -> addFloor());
         
-        ModernButton updateButton = new ModernButton("[E] Sua", UIConstants.WARNING_COLOR);
-        updateButton.addActionListener(e -> updateFloor());
+        ModernButton editButton = new ModernButton("✏️ Sửa", UIConstants.WARNING_COLOR);
+        editButton.setPreferredSize(new Dimension(120, 45));
+        editButton.addActionListener(e -> editFloor());
         
-        ModernButton deleteButton = new ModernButton("[X] Xoa", UIConstants.DANGER_COLOR);
+        ModernButton deleteButton = new ModernButton("🗑️ Xóa", UIConstants.DANGER_COLOR);
+        deleteButton.setPreferredSize(new Dimension(120, 45));
         deleteButton.addActionListener(e -> deleteFloor());
         
-        ModernButton clearButton = new ModernButton("[R] Lam Moi", UIConstants.TEXT_SECONDARY);
-        clearButton.addActionListener(e -> clearForm());
+        actionPanel.add(addButton);
+        actionPanel.add(editButton);
+        actionPanel.add(deleteButton);
         
-        buttonPanel.add(addButton);
-        buttonPanel.add(updateButton);
-        buttonPanel.add(deleteButton);
-        buttonPanel.add(clearButton);
-        
-        formPanel.add(buttonPanel);
-        
-        formContainer.add(formPanel, BorderLayout.NORTH);
-        add(formContainer, BorderLayout.EAST);
-    }
-    
-    private JLabel createFieldLabel(String text) {
-        JLabel label = new JLabel(text);
-        label.setFont(UIConstants.FONT_REGULAR);
-        label.setForeground(UIConstants.TEXT_PRIMARY);
-        label.setAlignmentX(Component.LEFT_ALIGNMENT);
-        return label;
-    }
-    
-    private JTextField createTextField() {
-        JTextField field = new JTextField();
-        field.setFont(UIConstants.FONT_REGULAR);
-        field.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(8, 12, 8, 12)
-        ));
-        field.setAlignmentX(Component.LEFT_ALIGNMENT);
-        field.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
-        return field;
-    }
-    
-    private void loadBuildings() {
-        DefaultComboBoxModel<Building> model = new DefaultComboBoxModel<>();
-        List<Building> buildings = buildingDAO.getAllBuildings();
-        
-        for (Building building : buildings) {
-            model.addElement(building);
-        }
-        
-        buildingCombo.setModel(model);
+        add(actionPanel, BorderLayout.SOUTH);
     }
     
     private void loadFloors() {
@@ -271,133 +179,119 @@ public class FloorManagementPanel extends JPanel {
                 floor.getId(),
                 buildingName,
                 floor.getFloorNumber(),
-                floor.getDescription()
+                floor.getDescription() != null ? floor.getDescription() : ""
             };
             tableModel.addRow(row);
         }
     }
     
-    private void loadSelectedFloor() {
-        int selectedRow = floorTable.getSelectedRow();
-        if (selectedRow >= 0) {
-            Long id = (Long) tableModel.getValueAt(selectedRow, 0);
-            selectedFloor = floorDAO.getFloorById(id);
+    private void addFloor() {
+        // Get parent frame
+        JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
+        
+        // Show dialog
+        FloorDialog dialog = new FloorDialog(parentFrame);
+        dialog.setVisible(true);
+        
+        // Check if confirmed
+        if (dialog.isConfirmed()) {
+            Floor floor = dialog.getFloor();
             
-            if (selectedFloor != null) {
-                // Select building in combo
-                Building building = buildingDAO.getBuildingById(selectedFloor.getBuildingId());
-                if (building != null) {
-                    buildingCombo.setSelectedItem(building);
-                }
-                
-                floorNumberField.setText(String.valueOf(selectedFloor.getFloorNumber()));
-                descriptionArea.setText(selectedFloor.getDescription());
+            if (floorDAO.insertFloor(floor)) {
+                JOptionPane.showMessageDialog(this, 
+                    "Thêm tầng thành công!", 
+                    "Thành Công", 
+                    JOptionPane.INFORMATION_MESSAGE);
+                loadFloors();
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    "Thêm tầng thất bại!", 
+                    "Lỗi", 
+                    JOptionPane.ERROR_MESSAGE);
             }
         }
     }
     
-    private void addFloor() {
-        if (!validateForm()) {
-            return;
-        }
+    private void editFloor() {
+        int selectedRow = floorTable.getSelectedRow();
         
-        Building selectedBuilding = (Building) buildingCombo.getSelectedItem();
-        if (selectedBuilding == null) {
+        if (selectedRow < 0) {
             JOptionPane.showMessageDialog(this, 
-                "Vui long chon toa nha!", 
-                "Canh Bao", 
+                "Vui lòng chọn tầng cần sửa!", 
+                "Cảnh Báo", 
                 JOptionPane.WARNING_MESSAGE);
             return;
         }
         
-        Floor floor = new Floor();
-        floor.setBuildingId(selectedBuilding.getId());
-        floor.setFloorNumber(Integer.parseInt(floorNumberField.getText().trim()));
-        floor.setDescription(descriptionArea.getText().trim());
+        Long id = (Long) tableModel.getValueAt(selectedRow, 0);
+        Floor floor = floorDAO.getFloorById(id);
         
-        if (floorDAO.insertFloor(floor)) {
+        if (floor == null) {
             JOptionPane.showMessageDialog(this, 
-                "Them tang thanh cong!", 
-                "Thanh Cong", 
-                JOptionPane.INFORMATION_MESSAGE);
-            clearForm();
-            loadFloors();
-        } else {
-            JOptionPane.showMessageDialog(this, 
-                "Them tang that bai!", 
-                "Loi", 
+                "Không tìm thấy tầng!", 
+                "Lỗi", 
                 JOptionPane.ERROR_MESSAGE);
-        }
-    }
-    
-    private void updateFloor() {
-        if (selectedFloor == null) {
-            JOptionPane.showMessageDialog(this, 
-                "Vui long chon tang can sua!", 
-                "Canh Bao", 
-                JOptionPane.WARNING_MESSAGE);
             return;
         }
         
-        if (!validateForm()) {
-            return;
-        }
+        // Get parent frame
+        JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
         
-        Building selectedBuilding = (Building) buildingCombo.getSelectedItem();
-        if (selectedBuilding == null) {
-            JOptionPane.showMessageDialog(this, 
-                "Vui long chon toa nha!", 
-                "Canh Bao", 
-                JOptionPane.WARNING_MESSAGE);
-            return;
-        }
+        // Show dialog with existing floor
+        FloorDialog dialog = new FloorDialog(parentFrame, floor);
+        dialog.setVisible(true);
         
-        selectedFloor.setBuildingId(selectedBuilding.getId());
-        selectedFloor.setFloorNumber(Integer.parseInt(floorNumberField.getText().trim()));
-        selectedFloor.setDescription(descriptionArea.getText().trim());
-        
-        if (floorDAO.updateFloor(selectedFloor)) {
-            JOptionPane.showMessageDialog(this, 
-                "Cap nhat tang thanh cong!", 
-                "Thanh Cong", 
-                JOptionPane.INFORMATION_MESSAGE);
-            clearForm();
-            loadFloors();
-        } else {
-            JOptionPane.showMessageDialog(this, 
-                "Cap nhat tang that bai!", 
-                "Loi", 
-                JOptionPane.ERROR_MESSAGE);
+        // Check if confirmed
+        if (dialog.isConfirmed()) {
+            Floor updatedFloor = dialog.getFloor();
+            
+            if (floorDAO.updateFloor(updatedFloor)) {
+                JOptionPane.showMessageDialog(this, 
+                    "Cập nhật tầng thành công!", 
+                    "Thành Công", 
+                    JOptionPane.INFORMATION_MESSAGE);
+                loadFloors();
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                    "Cập nhật tầng thất bại!", 
+                    "Lỗi", 
+                    JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
     
     private void deleteFloor() {
-        if (selectedFloor == null) {
+        int selectedRow = floorTable.getSelectedRow();
+        
+        if (selectedRow < 0) {
             JOptionPane.showMessageDialog(this, 
-                "Vui long chon tang can xoa!", 
-                "Canh Bao", 
+                "Vui lòng chọn tầng cần xóa!", 
+                "Cảnh Báo", 
                 JOptionPane.WARNING_MESSAGE);
             return;
         }
         
+        Long id = (Long) tableModel.getValueAt(selectedRow, 0);
+        String buildingName = (String) tableModel.getValueAt(selectedRow, 1);
+        int floorNumber = (Integer) tableModel.getValueAt(selectedRow, 2);
+        
         int confirm = JOptionPane.showConfirmDialog(this,
-            "Ban co chac chan muon xoa tang " + selectedFloor.getFloorNumber() + "?",
-            "Xac Nhan Xoa",
+            "Bạn có chắc chắn muốn xóa tầng " + floorNumber + " của " + buildingName + "?",
+            "Xác Nhận Xóa",
             JOptionPane.YES_NO_OPTION,
             JOptionPane.WARNING_MESSAGE);
         
         if (confirm == JOptionPane.YES_OPTION) {
-            if (floorDAO.deleteFloor(selectedFloor.getId())) {
+            if (floorDAO.deleteFloor(id)) {
                 JOptionPane.showMessageDialog(this, 
-                    "Xoa tang thanh cong!", 
-                    "Thanh Cong", 
+                    "Xóa tầng thành công!", 
+                    "Thành Công", 
                     JOptionPane.INFORMATION_MESSAGE);
-                clearForm();
                 loadFloors();
             } else {
                 JOptionPane.showMessageDialog(this, 
-                    "Xoa tang that bai!", 
-                    "Loi", 
+                    "Xóa tầng thất bại!", 
+                    "Lỗi", 
                     JOptionPane.ERROR_MESSAGE);
             }
         }
@@ -405,6 +299,7 @@ public class FloorManagementPanel extends JPanel {
     
     private void searchFloors() {
         String keyword = searchField.getText().trim();
+        
         if (keyword.isEmpty()) {
             loadFloors();
             return;
@@ -424,7 +319,7 @@ public class FloorManagementPanel extends JPanel {
                     floor.getId(),
                     buildingName,
                     floor.getFloorNumber(),
-                    floor.getDescription()
+                    floor.getDescription() != null ? floor.getDescription() : ""
                 };
                 tableModel.addRow(row);
             }
@@ -432,51 +327,9 @@ public class FloorManagementPanel extends JPanel {
         
         if (tableModel.getRowCount() == 0) {
             JOptionPane.showMessageDialog(this, 
-                "Khong tim thay tang nao!", 
-                "Thong Bao", 
+                "Không tìm thấy tầng nào!", 
+                "Thông Báo", 
                 JOptionPane.INFORMATION_MESSAGE);
         }
-    }
-    
-    private void clearForm() {
-        floorNumberField.setText("");
-        descriptionArea.setText("");
-        selectedFloor = null;
-        floorTable.clearSelection();
-        if (buildingCombo.getItemCount() > 0) {
-            buildingCombo.setSelectedIndex(0);
-        }
-    }
-    
-    private boolean validateForm() {
-        if (floorNumberField.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, 
-                "Vui long nhap so tang!", 
-                "Canh Bao", 
-                JOptionPane.WARNING_MESSAGE);
-            floorNumberField.requestFocus();
-            return false;
-        }
-        
-        try {
-            int floorNumber = Integer.parseInt(floorNumberField.getText().trim());
-            if (floorNumber < 0) {
-                JOptionPane.showMessageDialog(this, 
-                    "So tang phai lon hon hoac bang 0!", 
-                    "Canh Bao", 
-                    JOptionPane.WARNING_MESSAGE);
-                floorNumberField.requestFocus();
-                return false;
-            }
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, 
-                "So tang phai la so nguyen!", 
-                "Canh Bao", 
-                JOptionPane.WARNING_MESSAGE);
-            floorNumberField.requestFocus();
-            return false;
-        }
-        
-        return true;
     }
 }
