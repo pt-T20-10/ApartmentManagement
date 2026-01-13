@@ -4,6 +4,7 @@ import dao.BuildingDAO;
 import model.Building;
 import util.UIConstants;
 import util.ModernButton;
+import util.PermissionManager;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -13,18 +14,28 @@ import java.awt.*;
 import java.util.List;
 
 /**
- * Building Management Panel
- * Full CRUD operations with popup dialog
+ * Building Management Panel with RBAC
+ * Permissions:
+ * - ADMIN: Full CRUD
+ * - STAFF: View only
+ * - ACCOUNTANT: View only
  */
 public class BuildingManagementPanel extends JPanel {
     
     private BuildingDAO buildingDAO;
+    private PermissionManager permissionManager;
     private JTable buildingTable;
     private DefaultTableModel tableModel;
     private JTextField searchField;
     
+    // Action buttons (stored as fields for RBAC control)
+    private ModernButton addButton;
+    private ModernButton editButton;
+    private ModernButton deleteButton;
+    
     public BuildingManagementPanel() {
         this.buildingDAO = new BuildingDAO();
+        this.permissionManager = PermissionManager.getInstance();
         
         setLayout(new BorderLayout(20, 20));
         setBackground(UIConstants.BACKGROUND_COLOR);
@@ -33,8 +44,47 @@ public class BuildingManagementPanel extends JPanel {
         createHeader();
         createTablePanel();
         createActionPanel();
+        applyPermissions(); // Apply RBAC
         
         loadBuildings();
+    }
+    
+    /**
+     * Apply role-based permissions to UI elements
+     */
+    private void applyPermissions() {
+        boolean canAdd = permissionManager.canAdd(PermissionManager.MODULE_BUILDINGS);
+        boolean canEdit = permissionManager.canEdit(PermissionManager.MODULE_BUILDINGS);
+        boolean canDelete = permissionManager.canDelete(PermissionManager.MODULE_BUILDINGS);
+        
+        // Hide/disable buttons based on permissions
+        if (addButton != null) addButton.setVisible(canAdd);
+        if (editButton != null) editButton.setVisible(canEdit);
+        if (deleteButton != null) deleteButton.setVisible(canDelete);
+        
+        // Disable double-click edit if no edit permission
+        if (!canEdit) {
+            // Remove mouse listener for double-click edit
+            java.awt.event.MouseListener[] listeners = buildingTable.getMouseListeners();
+            for (java.awt.event.MouseListener listener : listeners) {
+                buildingTable.removeMouseListener(listener);
+            }
+        }
+        
+        // Show permission indicator
+        showPermissionIndicator();
+    }
+    
+    /**
+     * Show permission level indicator in header
+     */
+    private void showPermissionIndicator() {
+        String permission = permissionManager.getPermissionDescription(PermissionManager.MODULE_BUILDINGS);
+        
+        if (!permissionManager.isAdmin()) {
+            // Add a subtle permission indicator
+            // This is already shown in the title area, so we can skip or add a tooltip
+        }
     }
     
     private void createHeader() {
@@ -56,6 +106,16 @@ public class BuildingManagementPanel extends JPanel {
         titlePanel.add(iconLabel);
         titlePanel.add(Box.createHorizontalStrut(10));
         titlePanel.add(titleLabel);
+        
+        // Add permission indicator
+        String permission = permissionManager.getPermissionDescription(PermissionManager.MODULE_BUILDINGS);
+        if (!permissionManager.isAdmin()) {
+            JLabel permLabel = new JLabel("(" + permission + ")");
+            permLabel.setFont(new Font("Segoe UI", Font.ITALIC, 12));
+            permLabel.setForeground(UIConstants.TEXT_SECONDARY);
+            titlePanel.add(Box.createHorizontalStrut(10));
+            titlePanel.add(permLabel);
+        }
         
         // Search panel
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
@@ -109,7 +169,7 @@ public class BuildingManagementPanel extends JPanel {
         buildingTable.setShowGrid(true);
         buildingTable.setGridColor(UIConstants.BORDER_COLOR);
         
-        // Double-click to edit
+        // Double-click to edit (will be removed if no edit permission)
         buildingTable.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
                 if (evt.getClickCount() == 2) {
@@ -145,15 +205,15 @@ public class BuildingManagementPanel extends JPanel {
         actionPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         actionPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
         
-        ModernButton addButton = new ModernButton("➕ Thêm Tòa Nhà", UIConstants.SUCCESS_COLOR);
+        addButton = new ModernButton("➕ Thêm Tòa Nhà", UIConstants.SUCCESS_COLOR);
         addButton.setPreferredSize(new Dimension(150, 45));
         addButton.addActionListener(e -> addBuilding());
         
-        ModernButton editButton = new ModernButton("✏️ Sửa", UIConstants.WARNING_COLOR);
+        editButton = new ModernButton("✏️ Sửa", UIConstants.WARNING_COLOR);
         editButton.setPreferredSize(new Dimension(120, 45));
         editButton.addActionListener(e -> editBuilding());
         
-        ModernButton deleteButton = new ModernButton("🗑️ Xóa", UIConstants.DANGER_COLOR);
+        deleteButton = new ModernButton("🗑️ Xóa", UIConstants.DANGER_COLOR);
         deleteButton.setPreferredSize(new Dimension(120, 45));
         deleteButton.addActionListener(e -> deleteBuilding());
         
@@ -181,6 +241,12 @@ public class BuildingManagementPanel extends JPanel {
     }
     
     private void addBuilding() {
+        // Check permission
+        if (!permissionManager.canAdd(PermissionManager.MODULE_BUILDINGS)) {
+            permissionManager.showAccessDeniedMessage(this, "thêm tòa nhà");
+            return;
+        }
+        
         // Get parent frame
         JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
         
@@ -208,6 +274,12 @@ public class BuildingManagementPanel extends JPanel {
     }
     
     private void editBuilding() {
+        // Check permission
+        if (!permissionManager.canEdit(PermissionManager.MODULE_BUILDINGS)) {
+            permissionManager.showAccessDeniedMessage(this, "sửa tòa nhà");
+            return;
+        }
+        
         int selectedRow = buildingTable.getSelectedRow();
         
         if (selectedRow < 0) {
@@ -256,6 +328,12 @@ public class BuildingManagementPanel extends JPanel {
     }
     
     private void deleteBuilding() {
+        // Check permission
+        if (!permissionManager.canDelete(PermissionManager.MODULE_BUILDINGS)) {
+            permissionManager.showAccessDeniedMessage(this, "xóa tòa nhà");
+            return;
+        }
+        
         int selectedRow = buildingTable.getSelectedRow();
         
         if (selectedRow < 0) {
