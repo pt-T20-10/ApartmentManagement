@@ -1,168 +1,392 @@
--- 1. Tạo Database
+
 CREATE DATABASE IF NOT EXISTS DB_QuanLyChungCu CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+
 USE DB_QuanLyChungCu;
 
--- =======================================================
--- PHẦN 1: CẤU TRÚC TÒA NHÀ (Building -> Floor -> Apartment)
--- =======================================================
 
--- 2. Bảng Tòa Nhà (Buildings)
-CREATE TABLE buildings (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,         -- Tên tòa (VD: Landmark 81, Tòa S1)
-    address VARCHAR(255),               -- Địa chỉ
-    manager_name VARCHAR(100),          -- Tên quản lý tòa nhà
-    description TEXT,
-    is_deleted BOOLEAN DEFAULT FALSE    -- Xóa mềm
-);
 
--- 3. Bảng Tầng (Floors)
-CREATE TABLE floors (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    building_id BIGINT NOT NULL,        -- Thuộc tòa nào
-    floor_number INT NOT NULL,          -- Số tầng (1, 2, 13...)
-    name VARCHAR(50),                   -- Tên hiển thị (Tầng trệt, Tầng thượng)
-    is_deleted BOOLEAN DEFAULT FALSE,   -- Xóa mềm
-    
-    FOREIGN KEY (building_id) REFERENCES buildings(id) ON UPDATE CASCADE ON DELETE RESTRICT
-);
 
--- 4. Bảng Căn Hộ (Apartments)
-CREATE TABLE apartments (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    floor_id BIGINT NOT NULL,           -- Thuộc tầng nào
-    room_number VARCHAR(20) NOT NULL,   -- Số phòng (P101, P205)
-    area DOUBLE,                        -- Diện tích (m2)
-    status VARCHAR(20) DEFAULT 'AVAILABLE', -- Trạng thái: AVAILABLE (Trống), RENTED (Đã thuê), MAINTAINING (Bảo trì)
-    base_price DECIMAL(15, 2),          -- Giá thuê cơ bản
-    description TEXT,
-    is_deleted BOOLEAN DEFAULT FALSE,   -- Xóa mềm
-    
-    FOREIGN KEY (floor_id) REFERENCES floors(id) ON UPDATE CASCADE ON DELETE RESTRICT
-);
 
--- =======================================================
--- PHẦN 2: CƯ DÂN & HỢP ĐỒNG
--- =======================================================
+SET SQL_MODE = "NO_AUTO_VALUE_ON_ZERO";
+START TRANSACTION;
+SET time_zone = "+00:00";
 
--- 5. Bảng Cư Dân (Residents)
-CREATE TABLE residents (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    full_name VARCHAR(100) NOT NULL,
-    phone VARCHAR(20) NOT NULL,
-    email VARCHAR(100),
-    identity_card VARCHAR(20) NOT NULL, -- CCCD/CMND
-    gender VARCHAR(10),                 -- Nam/Nữ
-    dob DATE,                           -- Ngày sinh
-    hometown VARCHAR(255),              -- Quê quán
-    is_deleted BOOLEAN DEFAULT FALSE    -- Xóa mềm
-);
 
--- 6. Bảng Hợp Đồng (Contracts)
-CREATE TABLE contracts (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    apartment_id BIGINT NOT NULL,
-    resident_id BIGINT NOT NULL,
-    start_date DATE NOT NULL,           -- Ngày bắt đầu thuê
-    end_date DATE,                      -- Ngày kết thúc (NULL nếu thuê dài hạn)
-    deposit_amount DECIMAL(15, 2),      -- Tiền cọc
-    status VARCHAR(20) DEFAULT 'ACTIVE',-- ACTIVE, EXPIRED, TERMINATED
-    is_deleted BOOLEAN DEFAULT FALSE,   -- Xóa mềm
-    
-    FOREIGN KEY (apartment_id) REFERENCES apartments(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    FOREIGN KEY (resident_id) REFERENCES residents(id) ON UPDATE CASCADE ON DELETE RESTRICT
-);
 
--- =======================================================
--- PHẦN 3: DỊCH VỤ & HÓA ĐƠN
--- =======================================================
+CREATE TABLE `apartments` (
+  `id` bigint NOT NULL,
+  `floor_id` bigint NOT NULL,
+  `room_number` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `area` double DEFAULT NULL,
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'AVAILABLE',
+  `base_price` decimal(15,2) DEFAULT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `is_deleted` tinyint(1) DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- 7. Bảng Danh Mục Dịch Vụ (Services)
-CREATE TABLE services (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    service_name VARCHAR(100) NOT NULL, -- VD: Điện, Nước, Internet
-    unit_price DECIMAL(15, 2) NOT NULL, -- Đơn giá hiện tại
-    unit_type VARCHAR(20),              -- Đơn vị: KWH, KHOI, THANG
-    is_mandatory BOOLEAN DEFAULT FALSE, -- Bắt buộc? (Điện/Nước là bắt buộc)
-    is_deleted BOOLEAN DEFAULT FALSE    -- Xóa mềm
-);
 
--- 8. Bảng Ghi Chỉ Số Sử Dụng (Service Usage) - Log hàng tháng
-CREATE TABLE service_usage (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    contract_id BIGINT NOT NULL,
-    service_id BIGINT NOT NULL,
-    month INT NOT NULL,
-    year INT NOT NULL,
-    
-    old_index DOUBLE DEFAULT 0,         -- Chỉ số cũ
-    new_index DOUBLE DEFAULT 0,         -- Chỉ số mới
-    actual_usage DOUBLE,                -- Số lượng dùng = Mới - Cũ
-    
-    FOREIGN KEY (contract_id) REFERENCES contracts(id) ON UPDATE CASCADE ON DELETE RESTRICT,
-    FOREIGN KEY (service_id) REFERENCES services(id) ON UPDATE CASCADE ON DELETE RESTRICT
-);
+INSERT INTO `apartments` (`id`, `floor_id`, `room_number`, `area`, `status`, `base_price`, `description`, `is_deleted`) VALUES
+(1, 2, 'P201', 55.5, 'RENTED', 5000000.00, NULL, 0),
+(2, 2, 'P202', 70, 'AVAILABLE', 7500000.00, NULL, 1),
+(3, 1, 'P201', 55.5, 'Available', NULL, NULL, 0),
+(4, 1, '5', 14, 'Available', NULL, NULL, 0);
 
--- 9. Bảng Hóa Đơn Tổng (Invoices)
-CREATE TABLE invoices (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    contract_id BIGINT NOT NULL,
-    month INT NOT NULL,
-    year INT NOT NULL,
-    total_amount DECIMAL(15, 2) DEFAULT 0, -- Tổng tiền phải trả
-    status VARCHAR(20) DEFAULT 'UNPAID',   -- UNPAID, PAID, PARTIAL
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    payment_date TIMESTAMP NULL,           -- Ngày khách trả tiền
-    is_deleted BOOLEAN DEFAULT FALSE,      -- Hủy hóa đơn (Xóa mềm)
-    
-    FOREIGN KEY (contract_id) REFERENCES contracts(id) ON UPDATE CASCADE ON DELETE RESTRICT
-);
+-- --------------------------------------------------------
 
--- 10. Bảng Chi Tiết Hóa Đơn (Invoice Details)
--- Lưu bản chụp (Snapshot) giá tại thời điểm tạo hóa đơn
-CREATE TABLE invoice_details (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    invoice_id BIGINT NOT NULL,
-    service_name VARCHAR(100),          -- Lưu cứng tên dịch vụ
-    unit_price DECIMAL(15, 2),          -- Lưu cứng đơn giá lúc đó
-    quantity DOUBLE,                    -- Số lượng dùng
-    amount DECIMAL(15, 2),              -- Thành tiền = Giá * Số lượng
-    
-    FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON UPDATE CASCADE ON DELETE CASCADE
-);
+CREATE TABLE `buildings` (
+  `id` bigint NOT NULL,
+  `name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `address` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `manager_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `description` text COLLATE utf8mb4_unicode_ci,
+  `is_deleted` tinyint(1) DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- =======================================================
--- PHẦN 4: DỮ LIỆU MẪU (SEED DATA) - Để test ngay
--- =======================================================
 
--- Tạo Tòa nhà
-INSERT INTO buildings (name, address, manager_name) VALUES 
-('Tòa S1 - Sunshine', '123 Đường A, Quận Ninh Kiều', 'Nguyễn Văn Quản Lý');
 
--- Tạo Tầng (Tòa S1 có 2 tầng mẫu)
-INSERT INTO floors (building_id, floor_number, name) VALUES 
-(1, 1, 'Tầng 1 - Thương mại'),
-(1, 2, 'Tầng 2 - Căn hộ');
+INSERT INTO `buildings` (`id`, `name`, `address`, `manager_name`, `description`, `is_deleted`) VALUES
+(1, 'Sunshine Riverside', '123 Đường 3/2, Q. Ninh Kiều, Cần Thơ', 'Nguyễn Văn Quản Lý', 'Tòa nhà cao cấp view sông Hậu, đầy đủ tiện ích.', 0),
+(2, 'VinHomes Central Park', '208 Nguyễn Hữu Cảnh, Bình Thạnh, TP.HCM', 'Phạm Thị Ban Quản Trị', 'Khu phức hợp căn hộ và công viên ven sông.', 0),
+(3, 'Chung Cư Hưng Phú', 'Khu Dân Cư Hưng Phú 1, Q. Cái Răng', 'Lê Văn Bảo Vệ', 'Chung cư nhà ở xã hội, an ninh tốt.', 0),
+(4, 'Tòa Nhà FPT Plaza', 'Đường Võ Chí Công, Q. Ngũ Hành Sơn', 'Trần Kỹ Thuật', 'Căn hộ dành cho nhân viên công nghệ.', 0);
 
--- Tạo Phòng (Tầng 2 có 2 phòng)
-INSERT INTO apartments (floor_id, room_number, area, base_price, status) VALUES 
-(2, 'P201', 55.5, 5000000, 'AVAILABLE'),
-(2, 'P202', 70.0, 7500000, 'AVAILABLE');
 
--- Tạo Dịch vụ cơ bản
-INSERT INTO services (service_name, unit_price, unit_type, is_mandatory) VALUES 
-('Tiền Điện', 3500, 'KWH', TRUE),
-('Tiền Nước', 15000, 'KHOI', TRUE),
-('Phí Quản Lý', 200000, 'THANG', TRUE),
-('Gửi Xe Máy', 100000, 'XE', FALSE);
 
--- Tạo Cư dân mẫu
-INSERT INTO residents (full_name, phone, identity_card, gender) VALUES 
-('Trần Văn Khách', '0909123456', '0123456789', 'Nam');
+CREATE TABLE `contracts` (
+  `id` bigint NOT NULL,
+  `apartment_id` bigint NOT NULL,
+  `resident_id` bigint NOT NULL,
+  `start_date` date NOT NULL,
+  `end_date` date DEFAULT NULL,
+  `deposit_amount` decimal(15,2) DEFAULT NULL,
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'ACTIVE',
+  `is_deleted` tinyint(1) DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Tạo Hợp đồng thuê (Khách thuê phòng P201)
-INSERT INTO contracts (apartment_id, resident_id, start_date, deposit_amount, status) VALUES 
-(1, 1, CURDATE(), 5000000, 'ACTIVE');
 
--- Cập nhật trạng thái phòng thành Đã thuê
-UPDATE apartments SET status = 'RENTED' WHERE id = 1;
+
+INSERT INTO `contracts` (`id`, `apartment_id`, `resident_id`, `start_date`, `end_date`, `deposit_amount`, `status`, `is_deleted`) VALUES
+(1, 1, 1, '2026-01-09', NULL, 5000000.00, 'ACTIVE', 0);
+
+
+CREATE TABLE `floors` (
+  `id` bigint NOT NULL,
+  `building_id` bigint NOT NULL,
+  `floor_number` int NOT NULL,
+  `name` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_deleted` tinyint(1) DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+
+INSERT INTO `floors` (`id`, `building_id`, `floor_number`, `name`, `is_deleted`) VALUES
+-- Tòa 1: Sunshine Riverside
+(1, 1, 1, 'Tầng 1 - Sảnh Thương Mại', 0),
+(2, 1, 2, 'Tầng 2 - Khu Căn Hộ Cao Cấp', 0),
+(3, 1, 3, 'Tầng 3 - Khu Căn Hộ Cao Cấp', 0),
+
+-- Tòa 2: VinHomes Central Park
+(4, 2, 1, 'Tầng G - Shophouse', 0),
+(5, 2, 2, 'Tầng 2 - Căn Hộ View Sông', 0),
+(6, 2, 3, 'Tầng 3 - Căn Hộ View Sông', 0),
+
+-- Tòa 3: Chung Cư Hưng Phú
+(7, 3, 1, 'Tầng Trệt - Nhà Xe & Kỹ Thuật', 0),
+(8, 3, 2, 'Tầng 2 - Căn Hộ Giá Rẻ', 0);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `invoices`
+--
+
+CREATE TABLE `invoices` (
+  `id` bigint NOT NULL,
+  `contract_id` bigint NOT NULL,
+  `month` int NOT NULL,
+  `year` int NOT NULL,
+  `total_amount` decimal(15,2) DEFAULT '0.00',
+  `status` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'UNPAID',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `payment_date` timestamp NULL DEFAULT NULL,
+  `is_deleted` tinyint(1) DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+structure for table `invoice_details`
+--
+
+CREATE TABLE `invoice_details` (
+  `id` bigint NOT NULL,
+  `invoice_id` bigint NOT NULL,
+  `service_name` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `unit_price` decimal(15,2) DEFAULT NULL,
+  `quantity` double DEFAULT NULL,
+  `amount` decimal(15,2) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `residents`
+--
+
+CREATE TABLE `residents` (
+  `id` bigint NOT NULL,
+  `full_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `phone` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `email` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `identity_card` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `gender` varchar(10) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `dob` date DEFAULT NULL,
+  `hometown` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_deleted` tinyint(1) DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `residents`
+--
+
+INSERT INTO `residents` (`id`, `full_name`, `phone`, `email`, `identity_card`, `gender`, `dob`, `hometown`, `is_deleted`) VALUES
+(1, 'Trần Văn Khánh', '0909123456', NULL, '0123456789', 'Nam', NULL, NULL, 0);
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `services`
+--
+
+CREATE TABLE `services` (
+  `id` bigint NOT NULL,
+  `service_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `unit_price` decimal(15,2) NOT NULL,
+  `unit_type` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `is_mandatory` tinyint(1) DEFAULT '0',
+  `is_deleted` tinyint(1) DEFAULT '0'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci; 
+
+
+
+INSERT INTO `services` (`id`, `service_name`, `unit_price`, `unit_type`, `is_mandatory`, `is_deleted`) VALUES
+(1, 'Tiền Điện Sinh Hoạt', 3500.00, 'KWH', 1, 0),        -- Bắt buộc
+(2, 'Tiền Nước Sạch', 18000.00, 'KHOI', 1, 0),          -- Bắt buộc
+(3, 'Phí Quản Lý Chung Cư', 250000.00, 'THANG', 1, 0),  -- Bắt buộc
+(4, 'Phí Gửi Xe Máy', 120000.00, 'XE', 0, 0),           -- Không bắt buộc
+(5, 'Phí Gửi Ô Tô', 1500000.00, 'XE', 0, 0),            -- Không bắt buộc
+(6, 'Internet Viettel', 220000.00, 'THANG', 0, 0),      -- Không bắt buộc
+(7, 'Vệ Sinh Căn Hộ', 50000.00, 'GIO', 0, 0);           -- Dịch vụ thêm
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `service_usage`
+--
+
+CREATE TABLE `service_usage` (
+  `id` bigint NOT NULL,
+  `contract_id` bigint NOT NULL,
+  `service_id` bigint NOT NULL,
+  `month` int NOT NULL,
+  `year` int NOT NULL,
+  `old_index` double DEFAULT '0',
+  `new_index` double DEFAULT '0',
+  `actual_usage` double DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `users`
+--
+
+CREATE TABLE `users` (
+  `id` bigint NOT NULL,
+  `username` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `full_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `role` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'STAFF',
+  `is_active` tinyint(1) DEFAULT '1',
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  `last_login` timestamp NULL DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `users`
+--
+
+INSERT INTO `users` (`id`, `username`, `password`, `full_name`, `role`, `is_active`, `created_at`, `last_login`) VALUES
+(1, 'admin', 'admin123', 'Administrator', 'ADMIN', 1, '2026-01-13 08:05:08', '2026-01-13 09:51:15'),
+(3, 'staff', 'staff123', 'Staff Member', 'STAFF', 1, '2026-01-13 09:03:05', '2026-01-13 09:07:15'),
+(4, 'accountant', 'acc123', 'Accountant', 'ACCOUNTANT', 1, '2026-01-13 09:03:05', '2026-01-13 09:08:35');
+
+--
+-- Indexes for dumped tables
+--
+
+--
+-- Indexes for table `apartments`
+--
+ALTER TABLE `apartments`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `floor_id` (`floor_id`);
+
+--
+-- Indexes for table `buildings`
+--
+ALTER TABLE `buildings`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `contracts`
+--
+ALTER TABLE `contracts`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `apartment_id` (`apartment_id`),
+  ADD KEY `resident_id` (`resident_id`);
+
+--
+-- Indexes for table `floors`
+--
+ALTER TABLE `floors`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `building_id` (`building_id`);
+
+--
+-- Indexes for table `invoices`
+--
+ALTER TABLE `invoices`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `contract_id` (`contract_id`);
+
+--
+-- Indexes for table `invoice_details`
+--
+ALTER TABLE `invoice_details`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `invoice_id` (`invoice_id`);
+
+--
+-- Indexes for table `residents`
+--
+ALTER TABLE `residents`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `services`
+--
+ALTER TABLE `services`
+  ADD PRIMARY KEY (`id`);
+
+--
+-- Indexes for table `service_usage`
+--
+ALTER TABLE `service_usage`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `contract_id` (`contract_id`),
+  ADD KEY `service_id` (`service_id`);
+
+--
+-- Indexes for table `users`
+--
+ALTER TABLE `users`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `username` (`username`);
+
+
+--
+ALTER TABLE `apartments`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+-- AUTO_INCREMENT for table `buildings`
+--
+ALTER TABLE `buildings`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
+
+--
+-- AUTO_INCREMENT for table `contracts`
+--
+ALTER TABLE `contracts`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `floors`
+--
+ALTER TABLE `floors`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
+-- AUTO_INCREMENT for table `invoices`
+--
+ALTER TABLE `invoices`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `invoice_details`
+--
+ALTER TABLE `invoice_details`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `residents`
+--
+ALTER TABLE `residents`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
+
+--
+-- AUTO_INCREMENT for table `services`
+--
+ALTER TABLE `services`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+-- AUTO_INCREMENT for table `service_usage`
+--
+ALTER TABLE `service_usage`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `users`
+--
+ALTER TABLE `users`
+  MODIFY `id` bigint NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
+
+--
+ALTER TABLE `apartments`
+  ADD CONSTRAINT `apartments_ibfk_1` FOREIGN KEY (`floor_id`) REFERENCES `floors` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+--
+-- Constraints for table `contracts`
+--
+ALTER TABLE `contracts`
+  ADD CONSTRAINT `contracts_ibfk_1` FOREIGN KEY (`apartment_id`) REFERENCES `apartments` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  ADD CONSTRAINT `contracts_ibfk_2` FOREIGN KEY (`resident_id`) REFERENCES `residents` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+--
+-- Constraints for table `floors`
+--
+ALTER TABLE `floors`
+  ADD CONSTRAINT `floors_ibfk_1` FOREIGN KEY (`building_id`) REFERENCES `buildings` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+--
+-- Constraints for table `invoices`
+--
+ALTER TABLE `invoices`
+  ADD CONSTRAINT `invoices_ibfk_1` FOREIGN KEY (`contract_id`) REFERENCES `contracts` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+--
+-- Constraints for table `invoice_details`
+--
+ALTER TABLE `invoice_details`
+  ADD CONSTRAINT `invoice_details_ibfk_1` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+--
+-- Constraints for table `service_usage`
+--
+ALTER TABLE `service_usage`
+  ADD CONSTRAINT `service_usage_ibfk_1` FOREIGN KEY (`contract_id`) REFERENCES `contracts` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+  ADD CONSTRAINT `service_usage_ibfk_2` FOREIGN KEY (`service_id`) REFERENCES `services` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+COMMIT;
+
