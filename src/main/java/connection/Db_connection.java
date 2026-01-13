@@ -32,7 +32,5 @@ public class Db_connection {
     return conn;
 }
 
-    public static void main(String[] args) {
-        getConnection();
-    }
+  
 }
