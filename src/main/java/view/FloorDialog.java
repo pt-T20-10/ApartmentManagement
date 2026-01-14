@@ -5,15 +5,14 @@ import util.UIConstants;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.LineBorder;
 import java.awt.*;
-import java.awt.geom.Path2D;
 
-public class FloorDialog extends JDialog {
+public class FloorDialog extends JDialog { // Tên class phải là FloorDialog
 
-    private JTextField txtFloorNumber; // Nhập số tầng (1, 2, 3...)
-    private JTextField txtName;        // Nhập tên hiển thị (Tầng 1, Tầng G...)
-    private JTextArea txtDesc;         // Mô tả
+    private JTextField txtFloorNumber; 
+    private JTextField txtName;        
+    private JComboBox<String> cbbStatus; 
+    private JTextArea txtDesc;         
     
     private boolean confirmed = false;
     private Floor floor;
@@ -25,7 +24,7 @@ public class FloorDialog extends JDialog {
         initUI();
         fillData();
         
-        setSize(450, 500); // Kích thước gọn gàng
+        setSize(450, 580); 
         setLocationRelativeTo(owner);
         setResizable(false);
     }
@@ -34,13 +33,11 @@ public class FloorDialog extends JDialog {
         setLayout(new BorderLayout());
         getContentPane().setBackground(Color.WHITE);
 
-        // === 1. HEADER ===
+        // HEADER
         JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 20));
         headerPanel.setBackground(Color.WHITE);
         
-        // Icon Tầng (3 lớp chồng lên nhau)
         JLabel iconLabel = new JLabel(new SimpleIcon("FLOOR_STACK", 45, UIConstants.PRIMARY_COLOR));
-        
         JLabel titleLabel = new JLabel(floor.getId() == null ? "THÊM TẦNG MỚI" : "CẬP NHẬT TẦNG");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
         titleLabel.setForeground(UIConstants.TEXT_PRIMARY);
@@ -49,29 +46,40 @@ public class FloorDialog extends JDialog {
         headerPanel.add(titleLabel);
         add(headerPanel, BorderLayout.NORTH);
 
-        // === 2. FORM ===
+        // BODY
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
         formPanel.setBackground(Color.WHITE);
-        formPanel.setBorder(new EmptyBorder(10, 50, 20, 50)); // Lề 50px
+        formPanel.setBorder(new EmptyBorder(10, 50, 20, 50));
 
         txtFloorNumber = createRoundedField();
         txtName = createRoundedField();
         
+        cbbStatus = new JComboBox<>(new String[]{"Đang hoạt động", "Đang bảo trì", "Đóng cửa"});
+        cbbStatus.setFont(UIConstants.FONT_REGULAR);
+        cbbStatus.setBackground(Color.WHITE);
+        cbbStatus.setAlignmentX(Component.LEFT_ALIGNMENT);
+        cbbStatus.setPreferredSize(new Dimension(100, 35));
+        cbbStatus.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
+        ((JComponent)cbbStatus.getRenderer()).setBorder(new EmptyBorder(5,5,5,5));
+
         txtDesc = new JTextArea(5, 20);
         txtDesc.setFont(UIConstants.FONT_REGULAR);
         txtDesc.setLineWrap(true);
         txtDesc.setWrapStyleWord(true);
         JScrollPane scrollDesc = new JScrollPane(txtDesc);
-        scrollDesc.setBorder(new LineBorder(new Color(150, 150, 150), 1));
         scrollDesc.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        formPanel.add(createLabel("Số Tầng (VD: 1, 2, 0...) (*)"));
+        formPanel.add(createLabel("Số Tầng (VD: 1, 2...) (*)"));
         formPanel.add(txtFloorNumber);
         formPanel.add(Box.createVerticalStrut(15));
         
-        formPanel.add(createLabel("Tên Hiển Thị (VD: Tầng 1, Tầng Trệt) (*)"));
+        formPanel.add(createLabel("Tên Hiển Thị (VD: Tầng 1) (*)"));
         formPanel.add(txtName);
+        formPanel.add(Box.createVerticalStrut(15));
+        
+        formPanel.add(createLabel("Trạng Thái Hoạt Động"));
+        formPanel.add(cbbStatus);
         formPanel.add(Box.createVerticalStrut(15));
         
         formPanel.add(createLabel("Mô Tả / Ghi Chú"));
@@ -79,10 +87,9 @@ public class FloorDialog extends JDialog {
         
         add(formPanel, BorderLayout.CENTER);
 
-        // === 3. BUTTONS ===
+        // FOOTER
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 15));
         buttonPanel.setBackground(new Color(248, 248, 248));
-        buttonPanel.setBorder(new EmptyBorder(10, 20, 10, 20));
 
         JButton btnCancel = new RoundedButton("Hủy Bỏ", 10);
         btnCancel.setBackground(new Color(225, 225, 225));
@@ -93,7 +100,6 @@ public class FloorDialog extends JDialog {
         JButton btnSave = new RoundedButton("Lưu Lại", 10);
         btnSave.setBackground(UIConstants.PRIMARY_COLOR);
         btnSave.setForeground(Color.WHITE);
-        btnSave.setIcon(new SimpleIcon("CHECK", 14, Color.WHITE));
         btnSave.setPreferredSize(new Dimension(120, 38));
         btnSave.addActionListener(e -> onSave());
 
@@ -106,7 +112,9 @@ public class FloorDialog extends JDialog {
         if (floor.getId() != null) {
             txtFloorNumber.setText(String.valueOf(floor.getFloorNumber()));
             txtName.setText(floor.getName());
-            txtDesc.setText(floor.getDescription()); // Giả sử model Floor đã có field description
+            if (floor.getStatus() != null) {
+                cbbStatus.setSelectedItem(floor.getStatus());
+            }
         }
     }
 
@@ -128,7 +136,7 @@ public class FloorDialog extends JDialog {
         }
 
         floor.setName(name);
-        // floor.setDescription(txtDesc.getText().trim()); // Bỏ comment nếu model có description
+        floor.setStatus((String) cbbStatus.getSelectedItem());
         
         confirmed = true;
         dispose();
@@ -137,7 +145,7 @@ public class FloorDialog extends JDialog {
     public boolean isConfirmed() { return confirmed; }
     public Floor getFloor() { return floor; }
 
-    // --- Helpers UI ---
+    // Helpers UI
     private JLabel createLabel(String text) {
         JLabel l = new JLabel(text);
         l.setFont(new Font("Segoe UI", Font.BOLD, 13));
@@ -156,7 +164,7 @@ public class FloorDialog extends JDialog {
         return f;
     }
 
-    // --- Inner Classes (Styles) ---
+    // Styles
     private static class RoundedTextField extends JTextField {
         private int arc;
         public RoundedTextField(int arc) { this.arc = arc; setOpaque(false); setBorder(new EmptyBorder(5, 12, 5, 12)); }
@@ -182,17 +190,15 @@ public class FloorDialog extends JDialog {
         @Override public void paintIcon(Component c, Graphics g, int x, int y) {
             Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
             g2.setColor(color); g2.translate(x, y);
-            if ("FLOOR_STACK".equals(type)) { // Icon 3 lớp chồng lên nhau
+            if ("FLOOR_STACK".equals(type)) {
                 int h = size/4; int w = size*2/3; int cx = (size-w)/2;
-                g2.fillRoundRect(cx, size-h, w, h, 4, 4); // Tầng 1
+                g2.fillRoundRect(cx, size-h, w, h, 4, 4);
                 g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 180));
-                g2.fillRoundRect(cx, size-h*2+4, w, h, 4, 4); // Tầng 2
+                g2.fillRoundRect(cx, size-h*2+4, w, h, 4, 4);
                 g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 100));
-                g2.fillRoundRect(cx, size-h*3+8, w, h, 4, 4); // Tầng 3
-            } else if ("CHECK".equals(type)) {
-                g2.setStroke(new BasicStroke(2.5f)); Path2D p = new Path2D.Float();
-                p.moveTo(2, size/2); p.lineTo(size/2 - 2, size - 3); p.lineTo(size - 2, 3); g2.draw(p);
-            } g2.dispose();
+                g2.fillRoundRect(cx, size-h*3+8, w, h, 4, 4);
+            }
+            g2.dispose();
         }
         @Override public int getIconWidth() { return size; } @Override public int getIconHeight() { return size; }
     }

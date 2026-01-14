@@ -11,6 +11,20 @@ import java.util.List;
  */
 public class FloorDAO {
     
+    // --- HELPER: Mapping dữ liệu từ ResultSet sang Model (Cho gọn code) ---
+    private Floor mapResultSetToFloor(ResultSet rs) throws SQLException {
+        Floor floor = new Floor();
+        floor.setId(rs.getLong("id"));
+        floor.setBuildingId(rs.getLong("building_id"));
+        floor.setFloorNumber(rs.getInt("floor_number"));
+        floor.setName(rs.getString("name"));
+        // --- LẤY STATUS (MỚI) ---
+        floor.setStatus(rs.getString("status"));
+        // ------------------------
+        floor.setDeleted(rs.getBoolean("is_deleted"));
+        return floor;
+    }
+
     // Get all floors
     public List<Floor> getAllFloors() {
         List<Floor> floors = new ArrayList<>();
@@ -21,13 +35,7 @@ public class FloorDAO {
              ResultSet rs = stmt.executeQuery(sql)) {
             
             while (rs.next()) {
-                Floor floor = new Floor();
-                floor.setId(rs.getLong("id"));
-                floor.setBuildingId(rs.getLong("building_id"));
-                floor.setFloorNumber(rs.getInt("floor_number"));
-                floor.setName(rs.getString("name"));
-                floor.setDeleted(rs.getBoolean("is_deleted"));
-                floors.add(floor);
+                floors.add(mapResultSetToFloor(rs));
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -47,13 +55,7 @@ public class FloorDAO {
             ResultSet rs = pstmt.executeQuery();
             
             while (rs.next()) {
-                Floor floor = new Floor();
-                floor.setId(rs.getLong("id"));
-                floor.setBuildingId(rs.getLong("building_id"));
-                floor.setFloorNumber(rs.getInt("floor_number"));
-                floor.setName(rs.getString("name"));
-                floor.setDeleted(rs.getBoolean("is_deleted"));
-                floors.add(floor);
+                floors.add(mapResultSetToFloor(rs));
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -72,13 +74,7 @@ public class FloorDAO {
             ResultSet rs = pstmt.executeQuery();
             
             if (rs.next()) {
-                Floor floor = new Floor();
-                floor.setId(rs.getLong("id"));
-                floor.setBuildingId(rs.getLong("building_id"));
-                floor.setFloorNumber(rs.getInt("floor_number"));
-                floor.setName(rs.getString("name"));
-                floor.setDeleted(rs.getBoolean("is_deleted"));
-                return floor;
+                return mapResultSetToFloor(rs);
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -86,9 +82,10 @@ public class FloorDAO {
         return null;
     }
     
-    // Insert new floor
+    // Insert new floor (CẬP NHẬT STATUS)
     public boolean insertFloor(Floor floor) {
-        String sql = "INSERT INTO floors (building_id, floor_number, name, is_deleted) VALUES (?, ?, ?, 0)";
+        // Thêm cột status vào SQL
+        String sql = "INSERT INTO floors (building_id, floor_number, name, status, is_deleted) VALUES (?, ?, ?, ?, 0)";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -96,6 +93,10 @@ public class FloorDAO {
             pstmt.setLong(1, floor.getBuildingId());
             pstmt.setInt(2, floor.getFloorNumber());
             pstmt.setString(3, floor.getName());
+            
+            // Set Status (Nếu null thì mặc định)
+            String status = (floor.getStatus() == null || floor.getStatus().isEmpty()) ? "Đang hoạt động" : floor.getStatus();
+            pstmt.setString(4, status);
             
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -104,16 +105,21 @@ public class FloorDAO {
         return false;
     }
     
-    // Update floor
+    // Update floor (CẬP NHẬT STATUS)
     public boolean updateFloor(Floor floor) {
-        String sql = "UPDATE floors SET building_id = ?, floor_number = ?, name = ? WHERE id = ?";
+        // Thêm cột status vào SQL
+        String sql = "UPDATE floors SET floor_number = ?, name = ?, status = ? WHERE id = ?";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             
-            pstmt.setLong(1, floor.getBuildingId());
-            pstmt.setInt(2, floor.getFloorNumber());
-            pstmt.setString(3, floor.getName());
+            pstmt.setInt(1, floor.getFloorNumber());
+            pstmt.setString(2, floor.getName());
+            
+            // Set Status
+            String status = (floor.getStatus() == null || floor.getStatus().isEmpty()) ? "Đang hoạt động" : floor.getStatus();
+            pstmt.setString(3, status);
+            
             pstmt.setLong(4, floor.getId());
             
             return pstmt.executeUpdate() > 0;
@@ -137,6 +143,28 @@ public class FloorDAO {
         }
         return false;
     }
+
+    // Check duplicate name
+    public boolean isFloorNameExists(Long buildingId, String name) {
+        String sql = "SELECT COUNT(*) FROM floors WHERE building_id = ? AND name = ? AND is_deleted = 0";
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setLong(1, buildingId);
+            pstmt.setString(2, name);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0; 
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+    
+    // Statistics Inner Class
     public static class FloorStats {
         public int totalApartments = 0;
         public int rentedApartments = 0;
@@ -150,20 +178,12 @@ public class FloorDAO {
     public FloorStats getFloorStatistics(Long floorId) {
         FloorStats stats = new FloorStats();
         
-        // 1. Đếm tổng số căn hộ trong tầng
         String sqlTotal = "SELECT COUNT(*) FROM apartments WHERE floor_id = ? AND is_deleted = 0";
-        
-        // 2. Đếm số căn hộ ĐANG THUÊ (Giả sử dựa vào bảng contracts hoặc trạng thái apartment)
-        // Cách 1: Nếu bảng apartments có cột status ('RENTED', 'AVAILABLE')
-        // String sqlRented = "SELECT COUNT(*) FROM apartments WHERE floor_id = ? AND status = 'RENTED' AND is_deleted = 0";
-        
-        // Cách 2: Nếu phải join bảng contracts (Chính xác hơn nếu quản lý theo hợp đồng)
         String sqlRented = "SELECT COUNT(DISTINCT a.id) FROM apartments a " +
                            "JOIN contracts c ON a.id = c.apartment_id " +
                            "WHERE a.floor_id = ? AND c.status = 'ACTIVE' AND c.is_deleted = 0";
 
         try (Connection conn = Db_connection.getConnection()) {
-            // Query Tổng
             try (PreparedStatement pst1 = conn.prepareStatement(sqlTotal)) {
                 pst1.setLong(1, floorId);
                 try (ResultSet rs = pst1.executeQuery()) {
@@ -171,7 +191,6 @@ public class FloorDAO {
                 }
             }
             
-            // Query Đang thuê
             try (PreparedStatement pst2 = conn.prepareStatement(sqlRented)) {
                 pst2.setLong(1, floorId);
                 try (ResultSet rs = pst2.executeQuery()) {

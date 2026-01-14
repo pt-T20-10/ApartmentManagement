@@ -8,159 +8,101 @@ import java.util.List;
 
 public class BuildingDAO {
     
-    // Get all buildings
+    private Building mapResultSetToBuilding(ResultSet rs) throws SQLException {
+        Building building = new Building();
+        building.setId(rs.getLong("id"));
+        building.setName(rs.getString("name"));
+        building.setAddress(rs.getString("address"));
+        building.setManagerName(rs.getString("manager_name"));
+        building.setDescription(rs.getString("description"));
+        // Đã XÓA dòng lấy num_floors
+        building.setStatus(rs.getString("status"));
+        building.setOperationDate(rs.getDate("operation_date"));
+        building.setDeleted(rs.getBoolean("is_deleted"));
+        return building;
+    }
+
     public List<Building> getAllBuildings() {
         List<Building> buildings = new ArrayList<>();
-        String sql = "SELECT * FROM buildings WHERE is_deleted = 0";
-        
+        String sql = "SELECT * FROM buildings WHERE is_deleted = 0 ORDER BY id DESC";
         try (Connection conn = Db_connection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-            
-            while (rs.next()) {
-                Building building = new Building();
-                building.setId(rs.getLong("id"));
-                building.setName(rs.getString("name"));
-                building.setAddress(rs.getString("address"));
-                building.setManagerName(rs.getString("manager_name"));
-                building.setDescription(rs.getString("description"));
-                building.setDeleted(rs.getBoolean("is_deleted"));
-                buildings.add(building);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+            while (rs.next()) buildings.add(mapResultSetToBuilding(rs));
+        } catch (SQLException e) { e.printStackTrace(); }
         return buildings;
     }
     
-    // Get building by ID
     public Building getBuildingById(Long id) {
         String sql = "SELECT * FROM buildings WHERE id = ? AND is_deleted = 0";
-        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setLong(1, id);
             ResultSet rs = pstmt.executeQuery();
-            
-            if (rs.next()) {
-                Building building = new Building();
-                building.setId(rs.getLong("id"));
-                building.setName(rs.getString("name"));
-                building.setAddress(rs.getString("address"));
-                building.setManagerName(rs.getString("manager_name"));
-                building.setDescription(rs.getString("description"));
-                building.setDeleted(rs.getBoolean("is_deleted"));
-                return building;
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+            if (rs.next()) return mapResultSetToBuilding(rs);
+        } catch (SQLException e) { e.printStackTrace(); }
         return null;
     }
-    
-    // Insert new building (KHÔNG CÓ ẢNH)
+
     public boolean insertBuilding(Building building) {
-        String sql = "INSERT INTO buildings (name, address, manager_name, description, is_deleted) VALUES (?, ?, ?, ?, 0)";
-        
+        // XÓA num_floors khỏi SQL
+        String sql = "INSERT INTO buildings (name, address, manager_name, description, status, operation_date, is_deleted) VALUES (?, ?, ?, ?, ?, ?, 0)";
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setString(1, building.getName());
             pstmt.setString(2, building.getAddress());
             pstmt.setString(3, building.getManagerName());
             pstmt.setString(4, building.getDescription());
-            
+            pstmt.setString(5, building.getStatus());
+            pstmt.setDate(6, building.getOperationDate());
             return pstmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } catch (SQLException e) { e.printStackTrace(); }
         return false;
     }
     
-    // Update building (KHÔNG CÓ ẢNH)
     public boolean updateBuilding(Building building) {
-        String sql = "UPDATE buildings SET name = ?, address = ?, manager_name = ?, description = ? WHERE id = ?";
-        
+        // XÓA num_floors khỏi SQL
+        String sql = "UPDATE buildings SET name=?, address=?, manager_name=?, description=?, status=?, operation_date=? WHERE id=?";
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setString(1, building.getName());
             pstmt.setString(2, building.getAddress());
             pstmt.setString(3, building.getManagerName());
             pstmt.setString(4, building.getDescription());
-            pstmt.setLong(5, building.getId());
-            
+            pstmt.setString(5, building.getStatus());
+            pstmt.setDate(6, building.getOperationDate());
+            pstmt.setLong(7, building.getId());
             return pstmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } catch (SQLException e) { e.printStackTrace(); }
         return false;
     }
     
-    // Soft delete building
     public boolean deleteBuilding(Long id) {
         String sql = "UPDATE buildings SET is_deleted = 1 WHERE id = ?";
-        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setLong(1, id);
             return pstmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+        } catch (SQLException e) { e.printStackTrace(); }
         return false;
-    }
-    
-    // Count total buildings
-    public int countBuildings() {
-        String sql = "SELECT COUNT(*) FROM buildings WHERE is_deleted = 0";
-        try (Connection conn = Db_connection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            if (rs.next()) return rs.getInt(1);
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return 0;
     }
     
     public boolean addBuilding(Building building) { return insertBuilding(building); }
     
-    // Search buildings by name
     public List<Building> searchBuildingsByName(String keyword) {
-    List<Building> buildings = new ArrayList<>();
-    // SỬA SQL: Tìm trong name HOẶC address
-    String sql = "SELECT * FROM buildings WHERE (name LIKE ? OR address LIKE ?) AND is_deleted = 0";
-    
-    try (Connection conn = Db_connection.getConnection();
-         PreparedStatement pstmt = conn.prepareStatement(sql)) {
-        
-        String query = "%" + keyword + "%";
-        pstmt.setString(1, query); // Cho name
-        pstmt.setString(2, query); // Cho address
-        
-        ResultSet rs = pstmt.executeQuery();
-        
-        while (rs.next()) {
-            Building building = new Building();
-            building.setId(rs.getLong("id"));
-            building.setName(rs.getString("name"));
-            building.setAddress(rs.getString("address"));
-            building.setManagerName(rs.getString("manager_name"));
-            building.setDescription(rs.getString("description"));
-            // building.setImagePath(rs.getString("image_path")); // Bỏ dòng này nếu bạn đã xóa cột ảnh
-            building.setDeleted(rs.getBoolean("is_deleted"));
-            buildings.add(building);
-        }
-    } catch (SQLException e) {
-        e.printStackTrace();
+        List<Building> buildings = new ArrayList<>();
+        String sql = "SELECT * FROM buildings WHERE (name LIKE ? OR address LIKE ?) AND is_deleted = 0";
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            String query = "%" + keyword + "%";
+            pstmt.setString(1, query); pstmt.setString(2, query);
+            ResultSet rs = pstmt.executeQuery();
+            while (rs.next()) buildings.add(mapResultSetToBuilding(rs));
+        } catch (SQLException e) { e.printStackTrace(); }
+        return buildings;
     }
-    return buildings;
-}
 
-    // --- THỐNG KÊ (GIỮ NGUYÊN) ---
+    // --- THỐNG KÊ (QUAN TRỌNG: Đây là nơi đếm số tầng thực tế) ---
     public static class BuildingStats {
         public int totalFloors = 0;
         public int totalApartments = 0;
@@ -170,12 +112,11 @@ public class BuildingDAO {
             return (rentedApartments * 100) / totalApartments;
         }
     }
-
     public BuildingStats getBuildingStatistics(Long buildingId) {
         BuildingStats stats = new BuildingStats();
+        // Đếm số tầng từ bảng floors (Dựa trên thực tế)
         String sqlFloors = "SELECT COUNT(*) FROM floors WHERE building_id = ? AND is_deleted = 0";
         String sqlApts = "SELECT COUNT(*) FROM apartments a JOIN floors f ON a.floor_id = f.id WHERE f.building_id = ? AND a.is_deleted = 0";
-        // Giả sử status = 'ACTIVE'
         String sqlRented = "SELECT COUNT(DISTINCT c.apartment_id) FROM contracts c JOIN apartments a ON c.apartment_id = a.id JOIN floors f ON a.floor_id = f.id WHERE f.building_id = ? AND c.status = 'ACTIVE' AND c.is_deleted = 0";
 
         try (Connection conn = Db_connection.getConnection()) {
@@ -193,5 +134,16 @@ public class BuildingDAO {
             }
         } catch (SQLException e) { e.printStackTrace(); }
         return stats;
+    }
+    public int countBuildings() {
+        String sql = "SELECT COUNT(*) FROM buildings WHERE is_deleted = 0";
+        try (Connection conn = Db_connection.getConnection();
+             Statement stmt = conn.createStatement();
+             ResultSet rs = stmt.executeQuery(sql)) {
+            if (rs.next()) return rs.getInt(1);
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
     }
 }
