@@ -3,399 +3,264 @@ package view;
 import dao.BuildingDAO;
 import model.Building;
 import util.UIConstants;
-import util.ModernButton;
-import util.PermissionManager;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.JTableHeader;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.util.List;
 
 /**
- * Building Management Panel with RBAC
- * Permissions:
- * - ADMIN: Full CRUD
- * - STAFF: View only
- * - ACCOUNTANT: View only
+ * Màn hình Quản lý Tòa nhà
+ * - Thiết kế: Modern Standard (Bo góc 15px)
+ * - Đồng bộ với giao diện Card bên dưới.
  */
 public class BuildingManagementPanel extends JPanel {
     
     private BuildingDAO buildingDAO;
-    private PermissionManager permissionManager;
-    private JTable buildingTable;
-    private DefaultTableModel tableModel;
+    private JPanel cardsContainer; 
     private JTextField searchField;
-    
-    // Action buttons (stored as fields for RBAC control)
-    private ModernButton addButton;
-    private ModernButton editButton;
-    private ModernButton deleteButton;
     
     public BuildingManagementPanel() {
         this.buildingDAO = new BuildingDAO();
-        this.permissionManager = PermissionManager.getInstance();
         
         setLayout(new BorderLayout(20, 20));
         setBackground(UIConstants.BACKGROUND_COLOR);
-        setBorder(new EmptyBorder(30, 30, 30, 30));
+        setBorder(new EmptyBorder(20, 30, 20, 30));
         
         createHeader();
-        createTablePanel();
-        createActionPanel();
-        applyPermissions(); // Apply RBAC
+        createContentArea();
         
-        loadBuildings();
-    }
-    
-    /**
-     * Apply role-based permissions to UI elements
-     */
-    private void applyPermissions() {
-        boolean canAdd = permissionManager.canAdd(PermissionManager.MODULE_BUILDINGS);
-        boolean canEdit = permissionManager.canEdit(PermissionManager.MODULE_BUILDINGS);
-        boolean canDelete = permissionManager.canDelete(PermissionManager.MODULE_BUILDINGS);
-        
-        // Hide/disable buttons based on permissions
-        if (addButton != null) addButton.setVisible(canAdd);
-        if (editButton != null) editButton.setVisible(canEdit);
-        if (deleteButton != null) deleteButton.setVisible(canDelete);
-        
-        // Disable double-click edit if no edit permission
-        if (!canEdit) {
-            // Remove mouse listener for double-click edit
-            java.awt.event.MouseListener[] listeners = buildingTable.getMouseListeners();
-            for (java.awt.event.MouseListener listener : listeners) {
-                buildingTable.removeMouseListener(listener);
-            }
-        }
-        
-        // Show permission indicator
-        showPermissionIndicator();
-    }
-    
-    /**
-     * Show permission level indicator in header
-     */
-    private void showPermissionIndicator() {
-        String permission = permissionManager.getPermissionDescription(PermissionManager.MODULE_BUILDINGS);
-        
-        if (!permissionManager.isAdmin()) {
-            // Add a subtle permission indicator
-            // This is already shown in the title area, so we can skip or add a tooltip
-        }
+        loadBuildings(); // Load dữ liệu ban đầu
     }
     
     private void createHeader() {
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        headerPanel.setBorder(new EmptyBorder(0, 0, 20, 0));
         
-        // Title
-        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        titlePanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        
-        JLabel iconLabel = new JLabel("🏗️");
-        iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 32));
-        
-        JLabel titleLabel = new JLabel("Quản Lý Tòa Nhà");
+        // 1. TIÊU ĐỀ
+        JLabel titleLabel = new JLabel("Danh sách Tòa nhà / Chung cư");
         titleLabel.setFont(UIConstants.FONT_TITLE);
         titleLabel.setForeground(UIConstants.TEXT_PRIMARY);
         
-        titlePanel.add(iconLabel);
-        titlePanel.add(Box.createHorizontalStrut(10));
-        titlePanel.add(titleLabel);
+        // 2. KHU VỰC TÁC VỤ (Action Panel)
+        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        actionPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
-        // Add permission indicator
-        String permission = permissionManager.getPermissionDescription(PermissionManager.MODULE_BUILDINGS);
-        if (!permissionManager.isAdmin()) {
-            JLabel permLabel = new JLabel("(" + permission + ")");
-            permLabel.setFont(new Font("Segoe UI", Font.ITALIC, 12));
-            permLabel.setForeground(UIConstants.TEXT_SECONDARY);
-            titlePanel.add(Box.createHorizontalStrut(10));
-            titlePanel.add(permLabel);
-        }
-        
-        // Search panel
-        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        searchPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        
-        searchField = new JTextField(20);
+        // A. Ô TÌM KIẾM (Bo góc 15px - Đồng bộ với Card)
+        searchField = new RoundedSearchField("Tìm tên hoặc địa chỉ...", 15);
+        searchField.setPreferredSize(new Dimension(320, 40)); // Chiều cao 40px chuẩn
         searchField.setFont(UIConstants.FONT_REGULAR);
-        searchField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(8, 12, 8, 12)
-        ));
-        searchField.addActionListener(e -> searchBuildings());
-        
-        ModernButton searchButton = new ModernButton("🔍 Tìm Kiếm", UIConstants.INFO_COLOR);
-        searchButton.addActionListener(e -> searchBuildings());
-        
-        ModernButton refreshButton = new ModernButton("🔄 Làm Mới", UIConstants.SUCCESS_COLOR);
-        refreshButton.addActionListener(e -> {
-            searchField.setText("");
-            loadBuildings();
+        searchField.setForeground(UIConstants.TEXT_PRIMARY);
+
+        // Tính năng Live Search
+        searchField.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { search(); }
+            @Override public void removeUpdate(DocumentEvent e) { search(); }
+            @Override public void changedUpdate(DocumentEvent e) { search(); }
+            private void search() { loadBuildings(searchField.getText()); }
         });
         
-        searchPanel.add(searchField);
-        searchPanel.add(searchButton);
-        searchPanel.add(refreshButton);
+        // B. NÚT THÊM MỚI (Bo góc 15px - Đồng bộ)
+        JButton btnAdd = new RoundedButton(" Thêm Tòa Nhà Mới", 15);
+        btnAdd.setIcon(new SimpleIcon("PLUS", 14, Color.WHITE)); // Icon dấu cộng nhỏ gọn
+        btnAdd.setPreferredSize(new Dimension(200, 40)); // Kích thước bằng ô tìm kiếm
+        btnAdd.setBackground(UIConstants.PRIMARY_COLOR);
+        btnAdd.setForeground(Color.WHITE);
+        btnAdd.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btnAdd.addActionListener(e -> showAddDialog());
         
-        headerPanel.add(titlePanel, BorderLayout.WEST);
-        headerPanel.add(searchPanel, BorderLayout.EAST);
+        // Thêm vào panel (Khoảng cách 15px giữa 2 phần tử)
+        actionPanel.add(searchField);
+        actionPanel.add(Box.createHorizontalStrut(15)); 
+        actionPanel.add(btnAdd);
+        
+        headerPanel.add(titleLabel, BorderLayout.WEST);
+        headerPanel.add(actionPanel, BorderLayout.EAST);
         
         add(headerPanel, BorderLayout.NORTH);
     }
     
-    private void createTablePanel() {
-        JPanel tablePanel = new JPanel(new BorderLayout());
-        tablePanel.setBackground(Color.WHITE);
-        tablePanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
+    private void createContentArea() {
+        // Wrapper để tránh card bị giãn khi ít phần tử
+        JPanel wrapperPanel = new JPanel(new BorderLayout());
+        wrapperPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
-        // Table model
-        String[] columns = {"ID", "Tên Tòa Nhà", "Địa Chỉ", "Người Quản Lý", "Mô Tả"};
-        tableModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
-            }
-        };
+        cardsContainer = new JPanel(new GridLayout(0, 2, 20, 20)); 
+        cardsContainer.setBackground(UIConstants.BACKGROUND_COLOR);
+        cardsContainer.setBorder(new EmptyBorder(10, 0, 10, 0));
         
-        buildingTable = new JTable(tableModel);
-        buildingTable.setFont(UIConstants.FONT_REGULAR);
-        buildingTable.setRowHeight(45);
-        buildingTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        buildingTable.setShowGrid(true);
-        buildingTable.setGridColor(UIConstants.BORDER_COLOR);
+        wrapperPanel.add(cardsContainer, BorderLayout.NORTH);
         
-        // Double-click to edit (will be removed if no edit permission)
-        buildingTable.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseClicked(java.awt.event.MouseEvent evt) {
-                if (evt.getClickCount() == 2) {
-                    editBuilding();
-                }
-            }
-        });
-        
-        // Table header
-        JTableHeader header = buildingTable.getTableHeader();
-        header.setFont(UIConstants.FONT_HEADING);
-        header.setBackground(UIConstants.BACKGROUND_COLOR);
-        header.setForeground(UIConstants.TEXT_PRIMARY);
-        header.setBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, UIConstants.BORDER_COLOR));
-        
-        // Column widths
-        buildingTable.getColumnModel().getColumn(0).setPreferredWidth(50);
-        buildingTable.getColumnModel().getColumn(1).setPreferredWidth(200);
-        buildingTable.getColumnModel().getColumn(2).setPreferredWidth(250);
-        buildingTable.getColumnModel().getColumn(3).setPreferredWidth(150);
-        buildingTable.getColumnModel().getColumn(4).setPreferredWidth(250);
-        
-        JScrollPane scrollPane = new JScrollPane(buildingTable);
+        JScrollPane scrollPane = new JScrollPane(wrapperPanel);
         scrollPane.setBorder(null);
+        scrollPane.setBackground(UIConstants.BACKGROUND_COLOR);
+        scrollPane.getViewport().setBackground(UIConstants.BACKGROUND_COLOR);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(20); // Cuộn mượt hơn
         
-        tablePanel.add(scrollPane, BorderLayout.CENTER);
-        
-        add(tablePanel, BorderLayout.CENTER);
-    }
-    
-    private void createActionPanel() {
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        actionPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        actionPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
-        
-        addButton = new ModernButton("➕ Thêm Tòa Nhà", UIConstants.SUCCESS_COLOR);
-        addButton.setPreferredSize(new Dimension(150, 45));
-        addButton.addActionListener(e -> addBuilding());
-        
-        editButton = new ModernButton("✏️ Sửa", UIConstants.WARNING_COLOR);
-        editButton.setPreferredSize(new Dimension(120, 45));
-        editButton.addActionListener(e -> editBuilding());
-        
-        deleteButton = new ModernButton("🗑️ Xóa", UIConstants.DANGER_COLOR);
-        deleteButton.setPreferredSize(new Dimension(120, 45));
-        deleteButton.addActionListener(e -> deleteBuilding());
-        
-        actionPanel.add(addButton);
-        actionPanel.add(editButton);
-        actionPanel.add(deleteButton);
-        
-        add(actionPanel, BorderLayout.SOUTH);
+        add(scrollPane, BorderLayout.CENTER);
     }
     
     private void loadBuildings() {
-        tableModel.setRowCount(0);
-        List<Building> buildings = buildingDAO.getAllBuildings();
+        loadBuildings(null);
+    }
+
+    private void loadBuildings(String keyword) {
+        cardsContainer.removeAll();
         
-        for (Building building : buildings) {
-            Object[] row = {
-                building.getId(),
-                building.getName(),
-                building.getAddress(),
-                building.getManagerName() != null ? building.getManagerName() : "",
-                building.getDescription() != null ? building.getDescription() : ""
-            };
-            tableModel.addRow(row);
+        List<Building> list;
+        if (keyword == null || keyword.trim().isEmpty()) {
+            list = buildingDAO.getAllBuildings();
+        } else {
+            list = buildingDAO.searchBuildingsByName(keyword.trim());
         }
+        
+        for (Building b : list) {
+            BuildingDAO.BuildingStats stats = buildingDAO.getBuildingStatistics(b.getId());
+            BuildingCard card = new BuildingCard(b, stats, 
+                this::showEditDialog, 
+                this::deleteBuilding
+            );
+            cardsContainer.add(card);
+        }
+        
+        cardsContainer.revalidate();
+        cardsContainer.repaint();
     }
     
-    private void addBuilding() {
-        // Check permission
-        if (!permissionManager.canAdd(PermissionManager.MODULE_BUILDINGS)) {
-            permissionManager.showAccessDeniedMessage(this, "thêm tòa nhà");
-            return;
-        }
-        
-        // Get parent frame
-        JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        
-        // Show dialog
-        BuildingDialog dialog = new BuildingDialog(parentFrame);
+    // --- CÁC HÀM CRUD ---
+    private void showAddDialog() {
+        JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+        BuildingDialog dialog = new BuildingDialog(parent, null);
         dialog.setVisible(true);
-        
-        // Check if confirmed
         if (dialog.isConfirmed()) {
-            Building building = dialog.getBuilding();
-            
-            if (buildingDAO.addBuilding(building)) {
-                JOptionPane.showMessageDialog(this, 
-                    "Thêm tòa nhà thành công!", 
-                    "Thành Công", 
-                    JOptionPane.INFORMATION_MESSAGE);
+            if (buildingDAO.addBuilding(dialog.getBuilding())) {
+                JOptionPane.showMessageDialog(this, "Thêm mới thành công!");
                 loadBuildings();
-            } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Thêm tòa nhà thất bại!", 
-                    "Lỗi", 
-                    JOptionPane.ERROR_MESSAGE);
             }
         }
     }
     
-    private void editBuilding() {
-        // Check permission
-        if (!permissionManager.canEdit(PermissionManager.MODULE_BUILDINGS)) {
-            permissionManager.showAccessDeniedMessage(this, "sửa tòa nhà");
-            return;
-        }
-        
-        int selectedRow = buildingTable.getSelectedRow();
-        
-        if (selectedRow < 0) {
-            JOptionPane.showMessageDialog(this, 
-                "Vui lòng chọn tòa nhà cần sửa!", 
-                "Cảnh Báo", 
-                JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        
-        Long id = (Long) tableModel.getValueAt(selectedRow, 0);
-        Building building = buildingDAO.getBuildingById(id);
-        
-        if (building == null) {
-            JOptionPane.showMessageDialog(this, 
-                "Không tìm thấy tòa nhà!", 
-                "Lỗi", 
-                JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        
-        // Get parent frame
-        JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        
-        // Show dialog with existing building
-        BuildingDialog dialog = new BuildingDialog(parentFrame, building);
+    private void showEditDialog(Building building) {
+        JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+        BuildingDialog dialog = new BuildingDialog(parent, building);
         dialog.setVisible(true);
-        
-        // Check if confirmed
         if (dialog.isConfirmed()) {
-            Building updatedBuilding = dialog.getBuilding();
-            
-            if (buildingDAO.updateBuilding(updatedBuilding)) {
-                JOptionPane.showMessageDialog(this, 
-                    "Cập nhật tòa nhà thành công!", 
-                    "Thành Công", 
-                    JOptionPane.INFORMATION_MESSAGE);
+            if (buildingDAO.updateBuilding(dialog.getBuilding())) {
+                JOptionPane.showMessageDialog(this, "Cập nhật thành công!");
                 loadBuildings();
-            } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Cập nhật tòa nhà thất bại!", 
-                    "Lỗi", 
-                    JOptionPane.ERROR_MESSAGE);
             }
         }
     }
     
-    private void deleteBuilding() {
-        // Check permission
-        if (!permissionManager.canDelete(PermissionManager.MODULE_BUILDINGS)) {
-            permissionManager.showAccessDeniedMessage(this, "xóa tòa nhà");
-            return;
-        }
-        
-        int selectedRow = buildingTable.getSelectedRow();
-        
-        if (selectedRow < 0) {
-            JOptionPane.showMessageDialog(this, 
-                "Vui lòng chọn tòa nhà cần xóa!", 
-                "Cảnh Báo", 
-                JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        
-        Long id = (Long) tableModel.getValueAt(selectedRow, 0);
-        String name = (String) tableModel.getValueAt(selectedRow, 1);
-        
-        int confirm = JOptionPane.showConfirmDialog(this,
-            "Bạn có chắc chắn muốn xóa tòa nhà '" + name + "'?",
-            "Xác Nhận Xóa",
-            JOptionPane.YES_NO_OPTION,
-            JOptionPane.WARNING_MESSAGE);
-        
+    private void deleteBuilding(Building building) {
+        int confirm = JOptionPane.showConfirmDialog(this, 
+            "Bạn có chắc muốn xóa tòa nhà: " + building.getName() + "?",
+            "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
-            if (buildingDAO.deleteBuilding(id)) {
-                JOptionPane.showMessageDialog(this, 
-                    "Xóa tòa nhà thành công!", 
-                    "Thành Công", 
-                    JOptionPane.INFORMATION_MESSAGE);
+            if (buildingDAO.deleteBuilding(building.getId())) {
                 loadBuildings();
             } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Xóa tòa nhà thất bại!", 
-                    "Lỗi", 
-                    JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Có lỗi xảy ra khi xóa!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
-    
-    private void searchBuildings() {
-        String keyword = searchField.getText().trim();
-        
-        if (keyword.isEmpty()) {
-            loadBuildings();
-            return;
+
+    // =================================================================
+    // 1. CUSTOM: Ô TÌM KIẾM BO GÓC (Đồng bộ style Card)
+    // =================================================================
+    private static class RoundedSearchField extends JTextField {
+        private String placeholder;
+        private int arc;
+        public RoundedSearchField(String placeholder, int arc) {
+            this.placeholder = placeholder;
+            this.arc = arc;
+            setOpaque(false);
+            // Padding vừa phải, không quá sâu
+            setBorder(new EmptyBorder(5, 15, 5, 15)); 
         }
-        
-        tableModel.setRowCount(0);
-        List<Building> buildings = buildingDAO.searchBuildingsByName(keyword);
-        
-        for (Building building : buildings) {
-            Object[] row = {
-                building.getId(),
-                building.getName(),
-                building.getAddress(),
-                building.getManagerName() != null ? building.getManagerName() : "",
-                building.getDescription() != null ? building.getDescription() : ""
-            };
-            tableModel.addRow(row);
+        @Override protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            
+            // Nền trắng
+            g2.setColor(Color.WHITE);
+            g2.fillRoundRect(0, 0, getWidth()-1, getHeight()-1, arc, arc);
+            
+            // Viền xám nhạt (Màu này giống viền Card BuildingCard)
+            g2.setColor(new Color(220, 220, 220)); 
+            g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, arc, arc);
+            
+            super.paintComponent(g); // Vẽ text
+
+            // Placeholder
+            if (getText().isEmpty()) {
+                g2.setColor(Color.GRAY);
+                g2.setFont(getFont().deriveFont(Font.ITALIC));
+                g2.drawString(placeholder, getInsets().left, (getHeight() + g2.getFontMetrics().getAscent())/2 - 2);
+            }
+            g2.dispose();
         }
-        
-        if (buildings.isEmpty()) {
-            JOptionPane.showMessageDialog(this, 
-                "Không tìm thấy tòa nhà nào!", 
-                "Thông Báo", 
-                JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // =================================================================
+    // 2. CUSTOM: NÚT BẤM BO GÓC (Đồng bộ style)
+    // =================================================================
+    private static class RoundedButton extends JButton {
+        private int arc;
+
+        public RoundedButton(String text, int arc) {
+            super(text);
+            this.arc = arc;
+            setContentAreaFilled(false);
+            setFocusPainted(false);
+            setBorderPainted(false);
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
         }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+            // Hiệu ứng nhấn
+            if (getModel().isArmed()) {
+                g2.setColor(getBackground().darker());
+            } else {
+                g2.setColor(getBackground());
+            }
+
+            // Vẽ nền bo tròn
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc);
+            g2.dispose();
+            
+            super.paintComponent(g); 
+        }
+    }
+
+    // --- CLASS VẼ ICON (PLUS) ---
+    private static class SimpleIcon implements Icon {
+        private String type;
+        private int size;
+        private Color color;
+        public SimpleIcon(String type, int size, Color color) {
+            this.type = type; this.size = size; this.color = color;
+        }
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color);
+            g2.setStroke(new BasicStroke(2.0f)); // Nét mảnh hơn chút cho tinh tế
+            g2.translate(x, y);
+            if ("PLUS".equals(type)) {
+                int m = size / 2;
+                g2.drawLine(2, m, size-2, m); // Ngang
+                g2.drawLine(m, 2, m, size-2); // Dọc
+            }
+            g2.dispose();
+        }
+        @Override public int getIconWidth() { return size; }
+        @Override public int getIconHeight() { return size; }
     }
 }

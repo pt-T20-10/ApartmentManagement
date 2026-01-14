@@ -137,4 +137,51 @@ public class FloorDAO {
         }
         return false;
     }
+    public static class FloorStats {
+        public int totalApartments = 0;
+        public int rentedApartments = 0;
+        
+        public int getOccupancyRate() {
+            if (totalApartments == 0) return 0;
+            return (rentedApartments * 100) / totalApartments;
+        }
+    }
+
+    public FloorStats getFloorStatistics(Long floorId) {
+        FloorStats stats = new FloorStats();
+        
+        // 1. Đếm tổng số căn hộ trong tầng
+        String sqlTotal = "SELECT COUNT(*) FROM apartments WHERE floor_id = ? AND is_deleted = 0";
+        
+        // 2. Đếm số căn hộ ĐANG THUÊ (Giả sử dựa vào bảng contracts hoặc trạng thái apartment)
+        // Cách 1: Nếu bảng apartments có cột status ('RENTED', 'AVAILABLE')
+        // String sqlRented = "SELECT COUNT(*) FROM apartments WHERE floor_id = ? AND status = 'RENTED' AND is_deleted = 0";
+        
+        // Cách 2: Nếu phải join bảng contracts (Chính xác hơn nếu quản lý theo hợp đồng)
+        String sqlRented = "SELECT COUNT(DISTINCT a.id) FROM apartments a " +
+                           "JOIN contracts c ON a.id = c.apartment_id " +
+                           "WHERE a.floor_id = ? AND c.status = 'ACTIVE' AND c.is_deleted = 0";
+
+        try (Connection conn = Db_connection.getConnection()) {
+            // Query Tổng
+            try (PreparedStatement pst1 = conn.prepareStatement(sqlTotal)) {
+                pst1.setLong(1, floorId);
+                try (ResultSet rs = pst1.executeQuery()) {
+                    if (rs.next()) stats.totalApartments = rs.getInt(1);
+                }
+            }
+            
+            // Query Đang thuê
+            try (PreparedStatement pst2 = conn.prepareStatement(sqlRented)) {
+                pst2.setLong(1, floorId);
+                try (ResultSet rs = pst2.executeQuery()) {
+                    if (rs.next()) stats.rentedApartments = rs.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        return stats;
+    }
 }

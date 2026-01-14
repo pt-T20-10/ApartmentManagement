@@ -2,287 +2,217 @@ package view;
 
 import model.Building;
 import util.UIConstants;
-import util.ModernButton;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
 import java.awt.*;
+import java.awt.geom.Path2D;
 
-/**
- * Building Dialog - Popup for Add/Edit Building
- * Modern design with validation
- */
 public class BuildingDialog extends JDialog {
+
+    private JTextField txtName;
+    private JTextField txtAddress;
+    private JTextField txtManager;
+    private JTextArea txtDesc;
     
-    private JTextField nameField;
-    private JTextField addressField;
-    private JTextField managerField;
-    private JTextArea descriptionArea;
-    
-    private Building building;
     private boolean confirmed = false;
-    
-    /**
-     * Constructor for Add mode
-     */
-    public BuildingDialog(JFrame parent) {
-        this(parent, null);
-    }
-    
-    /**
-     * Constructor for Edit mode
-     */
-    public BuildingDialog(JFrame parent, Building building) {
-        super(parent, building == null ? "Thêm Tòa Nhà" : "Sửa Tòa Nhà", true);
-        this.building = building;
+    private Building building;
+
+    public BuildingDialog(Frame owner, Building building) {
+        super(owner, building == null ? "Thêm Tòa Nhà Mới" : "Cập Nhật Thông Tin", true);
+        this.building = (building == null) ? new Building() : building;
         
-        initializeDialog();
-        createContent();
+        initUI();
+        fillData();
         
-        if (building != null) {
-            loadBuildingData();
-        }
-        
-        pack();
-        setLocationRelativeTo(parent);
-    }
-    
-    private void initializeDialog() {
-        setSize(500, 550);
+        setSize(500, 680); // Tăng chiều cao xíu cho thoải mái
+        setLocationRelativeTo(owner);
         setResizable(false);
-        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        getContentPane().setBackground(UIConstants.BACKGROUND_COLOR);
     }
-    
-    private void createContent() {
-        JPanel mainPanel = new JPanel(new BorderLayout(0, 20));
-        mainPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        mainPanel.setBorder(new EmptyBorder(25, 30, 25, 30));
+
+    private void initUI() {
+        setLayout(new BorderLayout());
+        getContentPane().setBackground(Color.WHITE);
+
+        // === 1. HEADER ===
+        JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 20));
+        headerPanel.setBackground(Color.WHITE);
         
-        // Header
-        mainPanel.add(createHeader(), BorderLayout.NORTH);
-        
-        // Form
-        mainPanel.add(createForm(), BorderLayout.CENTER);
-        
-        // Buttons
-        mainPanel.add(createButtonPanel(), BorderLayout.SOUTH);
-        
-        setContentPane(mainPanel);
-    }
-    
-    private JPanel createHeader() {
-        JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        
-        JLabel iconLabel = new JLabel(building == null ? "➕" : "✏️");
-        iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 36));
-        
-        JLabel titleLabel = new JLabel(building == null ? "Thêm Tòa Nhà Mới" : "Sửa Thông Tin Tòa Nhà");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        JLabel iconLabel = new JLabel(new SimpleIcon("BUILDING_BIG", 45, UIConstants.PRIMARY_COLOR));
+        JLabel titleLabel = new JLabel(building.getId() == null ? "THÊM TÒA NHÀ MỚI" : "CẬP NHẬT TÒA NHÀ");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 22));
         titleLabel.setForeground(UIConstants.TEXT_PRIMARY);
         
         headerPanel.add(iconLabel);
-        headerPanel.add(Box.createHorizontalStrut(10));
         headerPanel.add(titleLabel);
-        
-        return headerPanel;
-    }
-    
-    private JPanel createForm() {
+        add(headerPanel, BorderLayout.NORTH);
+
+        // === 2. FORM NHẬP LIỆU (CHIA 2 PHẦN) ===
         JPanel formPanel = new JPanel();
         formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
         formPanel.setBackground(Color.WHITE);
-        formPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(25, 25, 25, 25)
-        ));
+        formPanel.setBorder(new EmptyBorder(10, 40, 20, 40)); // Lề chung: 40px
+
+        // --- PHẦN A: THÔNG TIN CHÍNH (Thụt vào trong) ---
+        JPanel topGroup = new JPanel();
+        topGroup.setLayout(new BoxLayout(topGroup, BoxLayout.Y_AXIS));
+        topGroup.setBackground(Color.WHITE);
+        // QUAN TRỌNG: Thêm lề 30px mỗi bên để các ô này "thụt vào" so với mô tả
+        topGroup.setBorder(new EmptyBorder(0, 30, 0, 30)); 
+
+        txtName = createRoundedField();
+        txtAddress = createRoundedField();
+        txtManager = createRoundedField();
+
+        topGroup.add(createLabel("Tên Tòa Nhà (*)"));
+        topGroup.add(txtName);
+        topGroup.add(Box.createVerticalStrut(12));
         
-        // Name field
-        formPanel.add(createFieldLabel("Tên Tòa Nhà *"));
-        nameField = createTextField();
-        formPanel.add(nameField);
-        formPanel.add(Box.createVerticalStrut(15));
+        topGroup.add(createLabel("Địa Chỉ (*)"));
+        topGroup.add(txtAddress);
+        topGroup.add(Box.createVerticalStrut(12));
+
+        topGroup.add(createLabel("Người Quản Lý"));
+        topGroup.add(txtManager);
         
-        // Address field
-        formPanel.add(createFieldLabel("Địa Chỉ *"));
-        addressField = createTextField();
-        formPanel.add(addressField);
-        formPanel.add(Box.createVerticalStrut(15));
+        formPanel.add(topGroup);
+        formPanel.add(Box.createVerticalStrut(20)); // Khoảng cách giữa 2 phần
+
+        // --- PHẦN B: MÔ TẢ (Rộng hơn - Không thụt lề thêm) ---
+        JPanel descGroup = new JPanel();
+        descGroup.setLayout(new BoxLayout(descGroup, BoxLayout.Y_AXIS));
+        descGroup.setBackground(Color.WHITE);
+        // Không set EmptyBorder thêm -> Nó sẽ rộng hơn phần trên
         
-        // Manager field
-        formPanel.add(createFieldLabel("Người Quản Lý"));
-        managerField = createTextField();
-        formPanel.add(managerField);
-        formPanel.add(Box.createVerticalStrut(15));
+        txtDesc = new JTextArea(8, 20); // 8 dòng -> Cao hơn
+        txtDesc.setFont(UIConstants.FONT_REGULAR);
+        txtDesc.setLineWrap(true);
+        txtDesc.setWrapStyleWord(true);
         
-        // Description field
-        formPanel.add(createFieldLabel("Mô Tả"));
-        descriptionArea = new JTextArea(4, 20);
-        descriptionArea.setFont(UIConstants.FONT_REGULAR);
-        descriptionArea.setLineWrap(true);
-        descriptionArea.setWrapStyleWord(true);
-        descriptionArea.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(10, 12, 10, 12)
-        ));
+        JScrollPane scrollDesc = new JScrollPane(txtDesc);
+        scrollDesc.setBorder(new LineBorder(new Color(150, 150, 150), 1)); 
+        scrollDesc.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        descGroup.add(createLabel("Mô Tả / Ghi Chú (Chi tiết)"));
+        descGroup.add(scrollDesc);
         
-        JScrollPane scrollPane = new JScrollPane(descriptionArea);
-        scrollPane.setAlignmentX(Component.LEFT_ALIGNMENT);
-        scrollPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
-        scrollPane.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
-        formPanel.add(scrollPane);
+        formPanel.add(descGroup);
         
-        return formPanel;
+        add(formPanel, BorderLayout.CENTER);
+
+        // === 3. BUTTONS ===
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 15));
+        buttonPanel.setBackground(new Color(248, 248, 248));
+        buttonPanel.setBorder(new EmptyBorder(10, 20, 10, 20));
+
+        JButton btnCancel = new RoundedButton("Hủy Bỏ", 10);
+        btnCancel.setBackground(new Color(225, 225, 225));
+        btnCancel.setForeground(Color.BLACK);
+        btnCancel.setPreferredSize(new Dimension(100, 38));
+        btnCancel.addActionListener(e -> dispose());
+
+        JButton btnSave = new RoundedButton("Lưu Lại", 10);
+        btnSave.setBackground(UIConstants.PRIMARY_COLOR);
+        btnSave.setForeground(Color.WHITE);
+        btnSave.setIcon(new SimpleIcon("CHECK", 14, Color.WHITE));
+        btnSave.setPreferredSize(new Dimension(120, 38));
+        btnSave.addActionListener(e -> onSave());
+
+        buttonPanel.add(btnCancel);
+        buttonPanel.add(btnSave);
+
+        add(buttonPanel, BorderLayout.SOUTH);
     }
-    
-    private JPanel createButtonPanel() {
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        buttonPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        
-        ModernButton cancelButton = new ModernButton("Hủy", UIConstants.TEXT_SECONDARY);
-        cancelButton.setPreferredSize(new Dimension(100, 40));
-        cancelButton.addActionListener(e -> {
-            confirmed = false;
-            dispose();
-        });
-        
-        ModernButton saveButton = new ModernButton(
-            building == null ? "Thêm" : "Lưu", 
-            UIConstants.SUCCESS_COLOR
-        );
-        saveButton.setPreferredSize(new Dimension(100, 40));
-        saveButton.addActionListener(e -> saveBuilding());
-        
-        buttonPanel.add(cancelButton);
-        buttonPanel.add(saveButton);
-        
-        return buttonPanel;
-    }
-    
-    private JLabel createFieldLabel(String text) {
+
+    private JLabel createLabel(String text) {
         JLabel label = new JLabel(text);
-        label.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        label.setForeground(UIConstants.TEXT_PRIMARY);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        label.setForeground(new Color(60, 60, 60));
         label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        label.setBorder(new EmptyBorder(0, 0, 5, 0)); 
         return label;
     }
-    
-    private JTextField createTextField() {
-        JTextField field = new JTextField();
+
+    private JTextField createRoundedField() {
+        JTextField field = new RoundedTextField(10); 
         field.setFont(UIConstants.FONT_REGULAR);
-        field.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(10, 12, 10, 12)
-        ));
+        field.setPreferredSize(new Dimension(100, 38)); 
+        field.setMaximumSize(new Dimension(Integer.MAX_VALUE, 38));
         field.setAlignmentX(Component.LEFT_ALIGNMENT);
-        field.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
-        
-        // Add focus border effect
-        field.addFocusListener(new java.awt.event.FocusAdapter() {
-            public void focusGained(java.awt.event.FocusEvent evt) {
-                field.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(UIConstants.PRIMARY_COLOR, 2),
-                    new EmptyBorder(9, 11, 9, 11)
-                ));
-            }
-            public void focusLost(java.awt.event.FocusEvent evt) {
-                field.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-                    new EmptyBorder(10, 12, 10, 12)
-                ));
-            }
-        });
-        
         return field;
     }
-    
-    private void loadBuildingData() {
-        if (building != null) {
-            nameField.setText(building.getName());
-            addressField.setText(building.getAddress());
-            managerField.setText(building.getManagerName());
-            descriptionArea.setText(building.getDescription());
+
+    private void fillData() {
+        if (building.getId() != null) {
+            txtName.setText(building.getName());
+            txtAddress.setText(building.getAddress());
+            txtManager.setText(building.getManagerName());
+            txtDesc.setText(building.getDescription());
         }
     }
-    
-    private void saveBuilding() {
-        if (!validateForm()) {
+
+    private void onSave() {
+        String name = txtName.getText().trim();
+        String addr = txtAddress.getText().trim();
+
+        if (name.isEmpty() || addr.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập Tên và Địa chỉ!", "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        
-        if (building == null) {
-            // Create new building
-            building = new Building(
-                nameField.getText().trim(),
-                addressField.getText().trim(),
-                managerField.getText().trim(),
-                descriptionArea.getText().trim()
-            );
-        } else {
-            // Update existing building
-            building.setName(nameField.getText().trim());
-            building.setAddress(addressField.getText().trim());
-            building.setManagerName(managerField.getText().trim());
-            building.setDescription(descriptionArea.getText().trim());
-        }
-        
+
+        building.setName(name);
+        building.setAddress(addr);
+        building.setManagerName(txtManager.getText().trim());
+        building.setDescription(txtDesc.getText().trim());
+        if (building.getId() == null) building.setDeleted(false); 
+
         confirmed = true;
         dispose();
     }
-    
-    private boolean validateForm() {
-        // Name validation
-        if (nameField.getText().trim().isEmpty()) {
-            showError("Vui lòng nhập tên tòa nhà!");
-            nameField.requestFocus();
-            return false;
+
+    public boolean isConfirmed() { return confirmed; }
+    public Building getBuilding() { return building; }
+
+    // --- CÁC CLASS CON (GIỮ NGUYÊN) ---
+    private static class RoundedTextField extends JTextField {
+        private int arc;
+        public RoundedTextField(int arc) { this.arc = arc; setOpaque(false); setBorder(new EmptyBorder(5, 12, 5, 12)); }
+        @Override protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(Color.WHITE); g2.fillRoundRect(1, 1, getWidth()-2, getHeight()-2, arc, arc);
+            g2.setColor(new Color(150, 150, 150)); g2.setStroke(new BasicStroke(1.2f)); g2.drawRoundRect(1, 1, getWidth()-3, getHeight()-3, arc, arc);
+            super.paintComponent(g); g2.dispose();
         }
-        
-        // Address validation
-        if (addressField.getText().trim().isEmpty()) {
-            showError("Vui lòng nhập địa chỉ!");
-            addressField.requestFocus();
-            return false;
-        }
-        
-        // Name length validation
-        if (nameField.getText().trim().length() < 2) {
-            showError("Tên tòa nhà phải có ít nhất 2 ký tự!");
-            nameField.requestFocus();
-            return false;
-        }
-        
-        // Address length validation
-        if (addressField.getText().trim().length() < 5) {
-            showError("Địa chỉ phải có ít nhất 5 ký tự!");
-            addressField.requestFocus();
-            return false;
-        }
-        
-        return true;
     }
-    
-    private void showError(String message) {
-        JOptionPane.showMessageDialog(
-            this,
-            message,
-            "Cảnh Báo",
-            JOptionPane.WARNING_MESSAGE
-        );
+
+    private static class RoundedButton extends JButton {
+        private int arc;
+        public RoundedButton(String text, int arc) {
+            super(text); this.arc = arc; setContentAreaFilled(false); setFocusPainted(false); setBorderPainted(false); setCursor(new Cursor(Cursor.HAND_CURSOR)); setFont(new Font("Segoe UI", Font.BOLD, 13));
+        }
+        @Override protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            if (getModel().isArmed()) g2.setColor(getBackground().darker()); else g2.setColor(getBackground());
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc); super.paintComponent(g); g2.dispose();
+        }
     }
-    
-    /**
-     * Check if user confirmed the dialog
-     */
-    public boolean isConfirmed() {
-        return confirmed;
-    }
-    
-    /**
-     * Get the building (new or updated)
-     */
-    public Building getBuilding() {
-        return building;
+
+    private static class SimpleIcon implements Icon {
+        private String type; private int size; private Color color;
+        public SimpleIcon(String type, int size, Color color) { this.type = type; this.size = size; this.color = color; }
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
+            Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(color); g2.setStroke(new BasicStroke(1.5f)); g2.translate(x, y);
+            if ("BUILDING_BIG".equals(type)) { 
+                int baseY = size - 4; int midW = size * 36 / 100; int midH = size * 80 / 100; int midX = (size - midW) / 2; g2.fillRect(midX, baseY - midH, midW, midH);
+                int leftW = size * 15 / 100; int leftH = size * 40 / 100; int leftX = midX - leftW - 2; g2.drawRect(leftX, baseY - leftH, leftW, leftH); g2.fillRect(leftX + leftW, baseY - leftH + 5, 2, leftH - 5);
+                int rightW = size * 18 / 100; int rightH = size * 60 / 100; int rightX = midX + midW + 2; g2.drawRect(rightX, baseY - rightH, rightW, rightH);
+                g2.setColor(Color.WHITE); int winSize = size/12; int gap = size/16; int startWX = midX + (midW - (3*winSize + 2*gap))/2; int startWY = baseY - midH + size/6;
+                for(int r=0; r<4; r++) for(int c1=0; c1<3; c1++) g2.fillRect(startWX + c1*(winSize+gap), startWY + r*(winSize+gap), winSize, winSize);
+            } else if ("CHECK".equals(type)) { g2.setStroke(new BasicStroke(2.5f)); Path2D p = new Path2D.Float(); p.moveTo(2, size/2); p.lineTo(size/2 - 2, size - 3); p.lineTo(size - 2, 3); g2.draw(p); } g2.dispose();
+        }
+        @Override public int getIconWidth() { return size; } @Override public int getIconHeight() { return size; }
     }
 }
