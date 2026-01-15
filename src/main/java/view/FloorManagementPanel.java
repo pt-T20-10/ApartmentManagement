@@ -9,6 +9,9 @@ import util.UIConstants;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.geom.Path2D;
+import java.awt.geom.RoundRectangle2D;
 import java.util.List;
 
 public class FloorManagementPanel extends JPanel {
@@ -19,7 +22,7 @@ public class FloorManagementPanel extends JPanel {
     private Building currentBuilding; 
     
     private JComboBox<Building> cbbBuilding;
-    private JLabel lblMaintenanceWarning;
+    private JPanel overlayPanel; 
     private JButton btnBatchAdd;
     private JButton btnAdd;
 
@@ -85,14 +88,6 @@ public class FloorManagementPanel extends JPanel {
         JPanel rightHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         rightHeader.setBackground(UIConstants.BACKGROUND_COLOR);
 
-        // --- SỬA LỖI ICON CẢNH BÁO TẠI ĐÂY ---
-        lblMaintenanceWarning = new JLabel(" Tòa nhà đang bảo trì - Tạm khóa chỉnh sửa");
-        // Dùng HeaderIcon vẽ hình tam giác thay vì ký tự text
-        lblMaintenanceWarning.setIcon(new HeaderIcon("WARNING", 16, new Color(211, 47, 47))); 
-        lblMaintenanceWarning.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        lblMaintenanceWarning.setForeground(new Color(211, 47, 47)); 
-        lblMaintenanceWarning.setVisible(false);
-
         btnBatchAdd = new RoundedButton(" Thêm Hàng Loạt", 15);
         btnBatchAdd.setIcon(new HeaderIcon("LAYER_PLUS", 14, Color.WHITE));
         btnBatchAdd.setPreferredSize(new Dimension(160, 40));
@@ -109,7 +104,6 @@ public class FloorManagementPanel extends JPanel {
         btnAdd.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btnAdd.addActionListener(e -> showAddDialog());
 
-        rightHeader.add(lblMaintenanceWarning);
         rightHeader.add(btnBatchAdd);
         rightHeader.add(btnAdd);
 
@@ -117,7 +111,19 @@ public class FloorManagementPanel extends JPanel {
         headerPanel.add(rightHeader, BorderLayout.EAST);
         add(headerPanel, BorderLayout.NORTH);
 
-        // === 2. CONTENT ===
+        // === 2. CONTENT WITH OVERLAY (STACKING) ===
+        JPanel stackPanel = new JPanel();
+        stackPanel.setLayout(new OverlayLayout(stackPanel));
+        stackPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+
+        // -- LAYER 1: OVERLAY BẢO TRÌ (Nằm trên cùng) --
+        overlayPanel = createMaintenanceOverlay();
+        overlayPanel.setVisible(false); 
+        overlayPanel.setAlignmentX(0.5f);
+        overlayPanel.setAlignmentY(0.5f);
+        stackPanel.add(overlayPanel);
+
+        // -- LAYER 2: DANH SÁCH TẦNG (Nằm dưới) --
         JPanel wrapperPanel = new JPanel(new BorderLayout());
         wrapperPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         cardsContainer = new JPanel(new GridLayout(0, 3, 20, 20));
@@ -130,14 +136,96 @@ public class FloorManagementPanel extends JPanel {
         scrollPane.setBackground(UIConstants.BACKGROUND_COLOR);
         scrollPane.getViewport().setBackground(UIConstants.BACKGROUND_COLOR);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-        add(scrollPane, BorderLayout.CENTER);
+        
+        scrollPane.setAlignmentX(0.5f);
+        scrollPane.setAlignmentY(0.5f);
+        
+        stackPanel.add(scrollPane);
+
+        add(stackPanel, BorderLayout.CENTER);
+    }
+    
+    // --- [NEW] GIAO DIỆN THÔNG BÁO ĐẸP MẮT ---
+    private JPanel createMaintenanceOverlay() {
+        // 1. Panel nền bán trong suốt (Dimmed Background)
+        JPanel overlay = new JPanel(new GridBagLayout()) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setColor(new Color(0, 0, 0, 120)); // Màu đen mờ (Opacity 120/255)
+                g2.fillRect(0, 0, getWidth(), getHeight());
+                super.paintComponent(g);
+            }
+        };
+        overlay.setOpaque(false);
+        // Chặn click chuột xuống lớp dưới
+        overlay.addMouseListener(new MouseAdapter() {}); 
+
+        // 2. Thẻ thông báo (Card)
+        JPanel cardPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                
+                // Vẽ bóng đổ (Shadow)
+                g2.setColor(new Color(0, 0, 0, 50));
+                g2.fillRoundRect(5, 5, getWidth()-10, getHeight()-10, 25, 25);
+                
+                // Vẽ nền trắng
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(0, 0, getWidth()-10, getHeight()-10, 25, 25);
+                
+                // Vẽ thanh accent màu cam ở trên cùng
+                g2.setColor(new Color(255, 112, 67)); // Cam đậm
+                // Cắt góc trên cho khớp với bo tròn
+                RoundRectangle2D topRect = new RoundRectangle2D.Float(0, 0, getWidth()-10, 10, 25, 25);
+                g2.setClip(topRect);
+                g2.fillRect(0, 0, getWidth()-10, 10);
+                g2.setClip(null);
+
+                g2.dispose();
+            }
+        };
+        cardPanel.setOpaque(false);
+        cardPanel.setLayout(new BoxLayout(cardPanel, BoxLayout.Y_AXIS));
+        cardPanel.setBorder(new EmptyBorder(30, 40, 30, 40)); // Padding nội dung
+
+        // 3. Nội dung bên trong
+        JLabel lblIcon = new JLabel(new HeaderIcon("MAINTENANCE_ART", 64, new Color(255, 112, 67)));
+        lblIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        JLabel lblTitle = new JLabel("HỆ THỐNG BẢO TRÌ");
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        lblTitle.setForeground(new Color(66, 66, 66));
+        lblTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        JLabel lblDesc1 = new JLabel("Tòa nhà hiện đang trong trạng thái bảo trì.");
+        lblDesc1.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        lblDesc1.setForeground(new Color(100, 100, 100));
+        lblDesc1.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        JLabel lblDesc2 = new JLabel("Chức năng chỉnh sửa tạm thời bị khóa.");
+        lblDesc2.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        lblDesc2.setForeground(new Color(100, 100, 100));
+        lblDesc2.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        cardPanel.add(lblIcon);
+        cardPanel.add(Box.createVerticalStrut(20));
+        cardPanel.add(lblTitle);
+        cardPanel.add(Box.createVerticalStrut(10));
+        cardPanel.add(lblDesc1);
+        cardPanel.add(lblDesc2);
+        
+        overlay.add(cardPanel);
+        return overlay;
     }
 
     private void loadBuildingData() {
         List<Building> buildings = buildingDAO.getAllBuildings();
         cbbBuilding.removeAllItems();
         if (buildings.isEmpty()) {
-            cbbBuilding.addItem(new Building(null, "Chưa có tòa nhà nào", "", "", "", "Đang hoạt động", null, false));
+            cbbBuilding.addItem(new Building(null, "Chưa có tòa nhà nào", "", "", "", "Đang hoạt động", false));
         } else {
             for (Building b : buildings) cbbBuilding.addItem(b);
             if (currentBuilding != null) {
@@ -160,7 +248,6 @@ public class FloorManagementPanel extends JPanel {
             else {
                 for (Floor f : list) {
                     dao.FloorDAO.FloorStats stats = floorDAO.getFloorStatistics(f.getId());
-                    // SỬ DỤNG CLASS FloorCard ĐÃ TÁCH RA (Đảm bảo bạn đã có file FloorCard.java)
                     FloorCard card = new FloorCard(f, stats, isMaintenance, this::editFloor, this::deleteFloor);
                     cardsContainer.add(card);
                 }
@@ -173,7 +260,7 @@ public class FloorManagementPanel extends JPanel {
     }
     
     private void updateMaintenanceUI(boolean isMaintenance) {
-        lblMaintenanceWarning.setVisible(isMaintenance);
+        overlayPanel.setVisible(isMaintenance); // Hiện/Ẩn overlay
         btnBatchAdd.setEnabled(!isMaintenance);
         btnAdd.setEnabled(!isMaintenance);
         if(isMaintenance) {
@@ -239,7 +326,7 @@ public class FloorManagementPanel extends JPanel {
         }
     }
 
-    // --- Helpers cho Panel (Nút & Icon ở Header) ---
+    // --- Helpers UI ---
     private static class RoundedButton extends JButton { private int arc; public RoundedButton(String text, int arc) { super(text); this.arc = arc; setContentAreaFilled(false); setFocusPainted(false); setBorderPainted(false); setCursor(new Cursor(Cursor.HAND_CURSOR)); } @Override protected void paintComponent(Graphics g) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(getBackground()); g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc); super.paintComponent(g); g2.dispose(); } }
     
     private static class HeaderIcon implements Icon {
@@ -253,13 +340,25 @@ public class FloorManagementPanel extends JPanel {
                 g2.drawRoundRect(4, size/2-4, w, h, 3,3); g2.drawRoundRect(4, size/2+4, w, h, 3,3); 
                 g2.drawLine(size/2, 2, size/2, 10); g2.drawLine(size/2-4, 6, size/2+4, 6); 
             }
-            else if ("WARNING".equals(type)) { // --- CODE VẼ TAM GIÁC CẢNH BÁO ---
-                int[] xPoints = {size/2, 0, size};
-                int[] yPoints = {0, size, size};
-                g2.fillPolygon(xPoints, yPoints, 3);
-                g2.setColor(Color.WHITE);
-                g2.fillRect(size/2 - 1, 4, 2, size - 8); // Dấu chấm than
-                g2.fillRect(size/2 - 1, size - 3, 2, 2);
+            else if ("MAINTENANCE_ART".equals(type)) { 
+                // Vẽ icon "Bánh răng" cách điệu nghệ thuật hơn
+                int cx = size/2; int cy = size/2; int r = size/3;
+                g2.setStroke(new BasicStroke(3.0f));
+                g2.drawOval(cx-r, cy-r, r*2, r*2); // Vòng tròn
+                g2.setStroke(new BasicStroke(4.0f));
+                // Các răng cưa
+                for(int i=0; i<8; i++) {
+                    double angle = Math.toRadians(i * 45);
+                    int x1 = cx + (int)(Math.cos(angle) * (r-2));
+                    int y1 = cy + (int)(Math.sin(angle) * (r-2));
+                    int x2 = cx + (int)(Math.cos(angle) * (r+6));
+                    int y2 = cy + (int)(Math.sin(angle) * (r+6));
+                    g2.drawLine(x1, y1, x2, y2);
+                }
+                // Cờ lê chéo
+                g2.setColor(new Color(90, 90, 90));
+                g2.setStroke(new BasicStroke(3.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawLine(size/4, size-size/4, size-size/4, size/4);
             }
             g2.dispose(); 
         } 

@@ -15,9 +15,8 @@ public class BuildingDAO {
         building.setAddress(rs.getString("address"));
         building.setManagerName(rs.getString("manager_name"));
         building.setDescription(rs.getString("description"));
-        // Đã XÓA dòng lấy num_floors
         building.setStatus(rs.getString("status"));
-        building.setOperationDate(rs.getDate("operation_date"));
+        // Đã XÓA hoàn toàn operation_date
         building.setDeleted(rs.getBoolean("is_deleted"));
         return building;
     }
@@ -45,8 +44,8 @@ public class BuildingDAO {
     }
 
     public boolean insertBuilding(Building building) {
-        // XÓA num_floors khỏi SQL
-        String sql = "INSERT INTO buildings (name, address, manager_name, description, status, operation_date, is_deleted) VALUES (?, ?, ?, ?, ?, ?, 0)";
+        // XÓA operation_date khỏi câu lệnh SQL
+        String sql = "INSERT INTO buildings (name, address, manager_name, description, status, is_deleted) VALUES (?, ?, ?, ?, ?, 0)";
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, building.getName());
@@ -54,15 +53,15 @@ public class BuildingDAO {
             pstmt.setString(3, building.getManagerName());
             pstmt.setString(4, building.getDescription());
             pstmt.setString(5, building.getStatus());
-            pstmt.setDate(6, building.getOperationDate());
+            // Bỏ dòng setDate
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) { e.printStackTrace(); }
         return false;
     }
     
     public boolean updateBuilding(Building building) {
-        // XÓA num_floors khỏi SQL
-        String sql = "UPDATE buildings SET name=?, address=?, manager_name=?, description=?, status=?, operation_date=? WHERE id=?";
+        // XÓA operation_date khỏi câu lệnh SQL
+        String sql = "UPDATE buildings SET name=?, address=?, manager_name=?, description=?, status=? WHERE id=?";
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, building.getName());
@@ -70,8 +69,8 @@ public class BuildingDAO {
             pstmt.setString(3, building.getManagerName());
             pstmt.setString(4, building.getDescription());
             pstmt.setString(5, building.getStatus());
-            pstmt.setDate(6, building.getOperationDate());
-            pstmt.setLong(7, building.getId());
+            // Bỏ dòng setDate, setLong id giờ là tham số thứ 6
+            pstmt.setLong(6, building.getId());
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) { e.printStackTrace(); }
         return false;
@@ -102,7 +101,7 @@ public class BuildingDAO {
         return buildings;
     }
 
-    // --- THỐNG KÊ (QUAN TRỌNG: Đây là nơi đếm số tầng thực tế) ---
+    // --- THỐNG KÊ ---
     public static class BuildingStats {
         public int totalFloors = 0;
         public int totalApartments = 0;
@@ -112,9 +111,9 @@ public class BuildingDAO {
             return (rentedApartments * 100) / totalApartments;
         }
     }
+    
     public BuildingStats getBuildingStatistics(Long buildingId) {
         BuildingStats stats = new BuildingStats();
-        // Đếm số tầng từ bảng floors (Dựa trên thực tế)
         String sqlFloors = "SELECT COUNT(*) FROM floors WHERE building_id = ? AND is_deleted = 0";
         String sqlApts = "SELECT COUNT(*) FROM apartments a JOIN floors f ON a.floor_id = f.id WHERE f.building_id = ? AND a.is_deleted = 0";
         String sqlRented = "SELECT COUNT(DISTINCT c.apartment_id) FROM contracts c JOIN apartments a ON c.apartment_id = a.id JOIN floors f ON a.floor_id = f.id WHERE f.building_id = ? AND c.status = 'ACTIVE' AND c.is_deleted = 0";
@@ -135,6 +134,7 @@ public class BuildingDAO {
         } catch (SQLException e) { e.printStackTrace(); }
         return stats;
     }
+    
     public int countBuildings() {
         String sql = "SELECT COUNT(*) FROM buildings WHERE is_deleted = 0";
         try (Connection conn = Db_connection.getConnection();
