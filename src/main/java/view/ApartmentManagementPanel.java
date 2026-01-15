@@ -11,6 +11,7 @@ import util.UIConstants;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.util.ArrayList;
 import java.util.List;
 
 public class ApartmentManagementPanel extends JPanel {
@@ -61,14 +62,20 @@ public class ApartmentManagementPanel extends JPanel {
     private void initUI() {
         setLayout(new BorderLayout(20, 20));
         setBackground(UIConstants.BACKGROUND_COLOR);
-        setBorder(new EmptyBorder(25, 30, 25, 30));
+        setBorder(new EmptyBorder(20, 30, 20, 30));
 
-        JPanel headerPanel = new JPanel(new BorderLayout());
+        // === HEADER PANEL - SỬA LẠI LAYOUT ===
+        JPanel headerPanel = new JPanel();
+        headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
 
-        JPanel leftHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
-        leftHeader.setBackground(UIConstants.BACKGROUND_COLOR);
-        leftHeader.setPreferredSize(new Dimension(900, 40));
+        // Row 1: Title + Button
+        JPanel row1 = new JPanel(new BorderLayout());
+        row1.setBackground(UIConstants.BACKGROUND_COLOR);
+        row1.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
+
+        JPanel leftRow1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
+        leftRow1.setBackground(UIConstants.BACKGROUND_COLOR);
 
         JButton btnBack = createBackButton();
         btnBack.addActionListener(e -> {
@@ -77,16 +84,39 @@ public class ApartmentManagementPanel extends JPanel {
                 main.showFloorsOfBuilding(currentBuilding);
             }
         });
-        leftHeader.add(btnBack);
+        leftRow1.add(btnBack);
 
-        JLabel lblTitle = new JLabel("Quản Lý Căn Hộ:");
+        JLabel lblTitle = new JLabel("Quản Lý Căn Hộ");
         lblTitle.setFont(UIConstants.FONT_TITLE);
         lblTitle.setForeground(UIConstants.TEXT_PRIMARY);
-        leftHeader.add(lblTitle);
+        leftRow1.add(lblTitle);
+
+        JPanel rightRow1 = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        rightRow1.setBackground(UIConstants.BACKGROUND_COLOR);
+
+        JButton btnAdd = new RoundedButton(" Thêm Căn Hộ", 15);
+        btnAdd.setPreferredSize(new Dimension(160, 40));
+        btnAdd.setBackground(UIConstants.PRIMARY_COLOR);
+        btnAdd.setForeground(Color.WHITE);
+        btnAdd.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btnAdd.addActionListener(e -> showAddDialog());
+        rightRow1.add(btnAdd);
+
+        row1.add(leftRow1, BorderLayout.WEST);
+        row1.add(rightRow1, BorderLayout.EAST);
+
+        // Row 2: Filters
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 10));
+        row2.setBackground(UIConstants.BACKGROUND_COLOR);
+        row2.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
+
+        JLabel lblBuilding = new JLabel("Tòa nhà:");
+        lblBuilding.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblBuilding.setForeground(UIConstants.TEXT_PRIMARY);
+        row2.add(lblBuilding);
 
         cbbBuilding = new JComboBox<>();
-        cbbBuilding.setPreferredSize(new Dimension(260, 35));
-        cbbBuilding.setMaximumSize(new Dimension(260, 35));
+        cbbBuilding.setPreferredSize(new Dimension(250, 35));
         cbbBuilding.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         cbbBuilding.setBackground(Color.WHITE);
         cbbBuilding.setRenderer(new DefaultListCellRenderer() {
@@ -99,10 +129,15 @@ public class ApartmentManagementPanel extends JPanel {
             }
         });
         cbbBuilding.addActionListener(e -> onBuildingChanged());
+        row2.add(cbbBuilding);
+
+        JLabel lblFloor = new JLabel("Tầng:");
+        lblFloor.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblFloor.setForeground(UIConstants.TEXT_PRIMARY);
+        row2.add(lblFloor);
 
         cbbFloor = new JComboBox<>();
         cbbFloor.setPreferredSize(new Dimension(200, 35));
-        cbbFloor.setMaximumSize(new Dimension(200, 35));
         cbbFloor.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         cbbFloor.setBackground(Color.WHITE);
         cbbFloor.setRenderer(new DefaultListCellRenderer() {
@@ -115,46 +150,40 @@ public class ApartmentManagementPanel extends JPanel {
             }
         });
         cbbFloor.addActionListener(e -> loadApartments());
+        row2.add(cbbFloor);
+
+        JLabel lblStatus = new JLabel("Trạng thái:");
+        lblStatus.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblStatus.setForeground(UIConstants.TEXT_PRIMARY);
+        row2.add(lblStatus);
 
         cbbStatusFilter = new JComboBox<>(new String[]{
                 "Tất cả trạng thái", "Trống", "Đã thuê", "Bảo trì"
         });
-        cbbStatusFilter.setPreferredSize(new Dimension(200, 35));
-        cbbStatusFilter.setMaximumSize(new Dimension(200, 35));
+        cbbStatusFilter.setPreferredSize(new Dimension(180, 35));
         cbbStatusFilter.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         cbbStatusFilter.setBackground(Color.WHITE);
         cbbStatusFilter.addActionListener(e -> loadApartments());
+        row2.add(cbbStatusFilter);
 
-        leftHeader.add(cbbBuilding);
-        leftHeader.add(cbbFloor);
-        leftHeader.add(cbbStatusFilter);
+        headerPanel.add(row1);
+        headerPanel.add(Box.createVerticalStrut(10));
+        headerPanel.add(row2);
 
-        JPanel rightHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        rightHeader.setBackground(UIConstants.BACKGROUND_COLOR);
-        rightHeader.setPreferredSize(new Dimension(180, 40));
-
-        JButton btnAdd = new RoundedButton(" Thêm Căn Hộ", 15);
-        btnAdd.setPreferredSize(new Dimension(160, 40));
-        btnAdd.setBackground(UIConstants.PRIMARY_COLOR);
-        btnAdd.setForeground(Color.WHITE);
-        btnAdd.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        btnAdd.addActionListener(e -> showAddDialog());
-
-        rightHeader.add(btnAdd);
-
-        headerPanel.add(leftHeader, BorderLayout.WEST);
-        headerPanel.add(rightHeader, BorderLayout.EAST);
         add(headerPanel, BorderLayout.NORTH);
 
+        // === CONTENT ===
         cardsContainer = new JPanel(new GridLayout(0, 4, 20, 20));
         cardsContainer.setBackground(UIConstants.BACKGROUND_COLOR);
 
         JPanel contentWrapper = new JPanel(new BorderLayout());
-        contentWrapper.setOpaque(false);
+        contentWrapper.setBackground(UIConstants.BACKGROUND_COLOR);
         contentWrapper.add(cardsContainer, BorderLayout.NORTH);
 
         JScrollPane scrollPane = new JScrollPane(contentWrapper);
         scrollPane.setBorder(null);
+        scrollPane.setBackground(UIConstants.BACKGROUND_COLOR);
+        scrollPane.getViewport().setBackground(UIConstants.BACKGROUND_COLOR);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         add(scrollPane, BorderLayout.CENTER);
     }
@@ -179,8 +208,13 @@ public class ApartmentManagementPanel extends JPanel {
 
     private void loadApartments() {
         cardsContainer.removeAll();
-        if (currentBuilding == null) return;
+        if (currentBuilding == null) {
+            cardsContainer.revalidate();
+            cardsContainer.repaint();
+            return;
+        }
 
+        // Lấy danh sách apartments
         List<Apartment> list;
         Floor selectedFloor = (Floor) cbbFloor.getSelectedItem();
         if (selectedFloor != null && selectedFloor.getId() != null) {
@@ -191,22 +225,100 @@ public class ApartmentManagementPanel extends JPanel {
             currentFloor = null;
         }
 
-        for (Apartment apt : list) {
-            cardsContainer.add(new ApartmentCard(apt, this::editApartment, this::deleteApartment));
+        // Filter theo trạng thái
+        String statusFilter = (String) cbbStatusFilter.getSelectedItem();
+        if (statusFilter != null && !statusFilter.equals("Tất cả trạng thái")) {
+            list = filterByStatus(list, statusFilter);
         }
+
+        // Hiển thị cards
+        if (list.isEmpty()) {
+            JLabel emptyLabel = new JLabel("Không có căn hộ nào");
+            emptyLabel.setFont(new Font("Segoe UI", Font.ITALIC, 16));
+            emptyLabel.setForeground(Color.GRAY);
+            emptyLabel.setHorizontalAlignment(SwingConstants.CENTER);
+
+            JPanel emptyPanel = new JPanel(new BorderLayout());
+            emptyPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+            emptyPanel.add(emptyLabel, BorderLayout.CENTER);
+            cardsContainer.add(emptyPanel);
+        } else {
+            for (Apartment apt : list) {
+                cardsContainer.add(new ApartmentCard(apt, this::editApartment, this::deleteApartment));
+            }
+        }
+
         cardsContainer.revalidate();
         cardsContainer.repaint();
     }
 
+    private List<Apartment> filterByStatus(List<Apartment> apartments, String statusFilter) {
+        List<Apartment> filtered = new ArrayList<>();
+
+        for (Apartment apt : apartments) {
+            String aptStatus = apt.getStatus();
+            if (aptStatus == null) aptStatus = "AVAILABLE";
+
+            boolean match = false;
+            switch (statusFilter) {
+                case "Trống":
+                    match = "AVAILABLE".equalsIgnoreCase(aptStatus) ||
+                            "Trống".equalsIgnoreCase(aptStatus);
+                    break;
+                case "Đã thuê":
+                    match = "RENTED".equalsIgnoreCase(aptStatus) ||
+                            "Đã thuê".equalsIgnoreCase(aptStatus);
+                    break;
+                case "Bảo trì":
+                    match = "MAINTENANCE".equalsIgnoreCase(aptStatus) ||
+                            "Bảo trì".equalsIgnoreCase(aptStatus);
+                    break;
+                default:
+                    match = true;
+            }
+
+            if (match) {
+                filtered.add(apt);
+            }
+        }
+
+        return filtered;
+    }
+
     private void showAddDialog() {
-        if (currentBuilding == null) return;
+        if (currentBuilding == null) {
+            JOptionPane.showMessageDialog(this, 
+                "Vui lòng chọn tòa nhà trước!", 
+                "Thông báo", 
+                JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
         Apartment newApt = new Apartment();
         if (currentFloor != null) newApt.setFloorId(currentFloor.getId());
+        
         ApartmentDialog dialog = new ApartmentDialog(parent, newApt, currentBuilding.getId());
         dialog.setVisible(true);
+        
         if (dialog.isConfirmed()) {
-            if (apartmentDAO.insertApartment(dialog.getApartment())) loadApartments();
+            Apartment apt = dialog.getApartment();
+            
+            // VALIDATION: Kiểm tra số phòng trùng
+            if (isRoomNumberExists(apt.getFloorId(), apt.getRoomNumber(), null)) {
+                JOptionPane.showMessageDialog(this,
+                    "Số phòng " + apt.getRoomNumber() + " đã tồn tại trên tầng này!",
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            if (apartmentDAO.insertApartment(apt)) {
+                JOptionPane.showMessageDialog(this, "Thêm căn hộ thành công!");
+                loadApartments();
+            } else {
+                JOptionPane.showMessageDialog(this, "Thêm căn hộ thất bại!");
+            }
         }
     }
 
@@ -214,24 +326,72 @@ public class ApartmentManagementPanel extends JPanel {
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
         ApartmentDialog dialog = new ApartmentDialog(parent, apt, currentBuilding.getId());
         dialog.setVisible(true);
+        
         if (dialog.isConfirmed()) {
-            if (apartmentDAO.updateApartment(dialog.getApartment())) loadApartments();
+            Apartment updated = dialog.getApartment();
+            
+            // VALIDATION: Kiểm tra số phòng trùng (trừ chính nó)
+            if (isRoomNumberExists(updated.getFloorId(), updated.getRoomNumber(), apt.getId())) {
+                JOptionPane.showMessageDialog(this,
+                    "Số phòng " + updated.getRoomNumber() + " đã tồn tại trên tầng này!",
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            if (apartmentDAO.updateApartment(updated)) {
+                JOptionPane.showMessageDialog(this, "Cập nhật căn hộ thành công!");
+                loadApartments();
+            } else {
+                JOptionPane.showMessageDialog(this, "Cập nhật căn hộ thất bại!");
+            }
         }
     }
 
     private void deleteApartment(Apartment apt) {
-        if (JOptionPane.showConfirmDialog(this, "Xóa căn hộ?", "Xác nhận",
-                JOptionPane.YES_NO_OPTION) == 0) {
-            if (apartmentDAO.deleteApartment(apt.getId())) loadApartments();
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Bạn có chắc muốn xóa căn hộ " + apt.getRoomNumber() + "?",
+                "Xác nhận xóa",
+                JOptionPane.YES_NO_OPTION);
+                
+        if (confirm == JOptionPane.YES_OPTION) {
+            if (apartmentDAO.deleteApartment(apt.getId())) {
+                JOptionPane.showMessageDialog(this, "Xóa căn hộ thành công!");
+                loadApartments();
+            } else {
+                JOptionPane.showMessageDialog(this, "Xóa căn hộ thất bại!");
+            }
         }
+    }
+
+    // VALIDATION METHOD: Kiểm tra số phòng trùng
+    private boolean isRoomNumberExists(Long floorId, String roomNumber, Long excludeApartmentId) {
+        if (floorId == null || roomNumber == null || roomNumber.trim().isEmpty()) {
+            return false;
+        }
+        
+        List<Apartment> apartments = apartmentDAO.getApartmentsByFloorId(floorId);
+        for (Apartment apt : apartments) {
+            // Bỏ qua căn hộ đang edit (nếu có)
+            if (excludeApartmentId != null && apt.getId().equals(excludeApartmentId)) {
+                continue;
+            }
+            
+            if (roomNumber.trim().equalsIgnoreCase(apt.getRoomNumber().trim())) {
+                return true;
+            }
+        }
+        
+        return false;
     }
 
     private JButton createBackButton() {
         JButton btn = new JButton(" ← Quay lại");
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 15));
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btn.setForeground(UIConstants.PRIMARY_COLOR);
         btn.setContentAreaFilled(false);
         btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         return btn;
     }
@@ -244,6 +404,8 @@ public class ApartmentManagementPanel extends JPanel {
             this.arc = arc;
             setContentAreaFilled(false);
             setBorderPainted(false);
+            setFocusPainted(false);
+            setCursor(new Cursor(Cursor.HAND_CURSOR));
         }
 
         @Override

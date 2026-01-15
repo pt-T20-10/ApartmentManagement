@@ -252,9 +252,9 @@ public class FloorManagementPanel extends JPanel {
         }
     }
 
-    // *** METHOD loadFloors() ĐÃ ĐƯỢC SỬA VỚI DEBUG ***
+    // *** METHOD loadFloors() ĐÃ ĐƯỢC SỬA TRIỆT ĐỂ ***
     public void loadFloors() {
-        // CRITICAL: Hủy worker cũ nếu đang chạy
+        // Hủy worker cũ nếu đang chạy
         if (currentWorker != null && !currentWorker.isDone()) {
             System.out.println("⚠️ [FLOOR] Cancelling previous worker...");
             currentWorker.cancel(true);
@@ -274,14 +274,19 @@ public class FloorManagementPanel extends JPanel {
         SwingWorker<List<dao.FloorDAO.FloorWithStats>, Void> worker = new SwingWorker<>() {
             @Override
             protected List<dao.FloorDAO.FloorWithStats> doInBackground() {
-                if (isCancelled()) return null; // ✅ DÒNG QUAN TRỌNG
+                if (isCancelled()) return null;
                 System.out.println("📊 [FLOOR] Fetching data from database...");
                 return floorDAO.getFloorsWithStatsByBuildingId(currentBuilding.getId());
             }
 
-
             @Override
             protected void done() {
+                // *** KIỂM TRA STALE WORKER TRƯỚC KHI XỬ LÝ ***
+                if (this != FloorManagementPanel.this.currentWorker) {
+                    System.out.println("⚠️ [FLOOR] Ignored stale worker result");
+                    return;
+                }
+
                 if (isCancelled()) {
                     System.out.println("❌ [FLOOR] Worker was cancelled");
                     return;
@@ -291,7 +296,6 @@ public class FloorManagementPanel extends JPanel {
                     List<dao.FloorDAO.FloorWithStats> data = get();
                     System.out.println("✅ [FLOOR] Received " + data.size() + " floors from database");
                     
-                    // Clear container again to be safe
                     cardsContainer.removeAll();
                     
                     boolean isMaintenance = "Đang bảo trì".equals(currentBuilding.getStatus());
@@ -323,6 +327,12 @@ public class FloorManagementPanel extends JPanel {
                     System.out.println("✅ [FLOOR] UI updated with " + cardsContainer.getComponentCount() + " components");
                     
                 } catch (Exception e) {
+                    // *** KIỂM TRA STALE WORKER TRONG CATCH ***
+                    if (this != FloorManagementPanel.this.currentWorker) {
+                        System.out.println("⚠️ [FLOOR] Ignored stale worker exception");
+                        return;
+                    }
+                    
                     System.err.println("❌ [FLOOR] Error loading floors:");
                     e.printStackTrace();
                     cardsContainer.removeAll();
