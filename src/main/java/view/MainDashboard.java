@@ -4,17 +4,19 @@ import util.UIConstants;
 import util.PermissionManager;
 import connection.Db_connection;
 import dao.UserDAO;
+import model.Building;
+import model.Floor;
+import model.User;
+import util.SessionManager;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.*;
-import util.SessionManager;
-import model.User;
-import util.ModernButton;
 
 /**
- * Main Dashboard with RBAC + User Management + User Dropdown
+ * Main Dashboard với RBAC + User Management + User Dropdown
+ * Hỗ trợ điều hướng công khai cho các Panel con: Tòa Nhà -> Tầng -> Căn Hộ
  */
 public class MainDashboard extends JFrame {
     
@@ -24,15 +26,13 @@ public class MainDashboard extends JFrame {
     
     // Menu buttons
     private JButton btnDashboard;
-    private JButton btnBuildings;
-    private JButton btnFloors;
-    private JButton btnApartments;
+    private JButton btnBuildings; 
     private JButton btnResidents;
     private JButton btnContracts;
     private JButton btnServices;
     private JButton btnInvoices;
     private JButton btnReports;
-    private JButton btnUsers; // NEW: User Management tab
+    private JButton btnUsers;
     
     private JButton currentActiveButton = null;
     
@@ -42,7 +42,7 @@ public class MainDashboard extends JFrame {
         initializeFrame();
         createSidebar();
         applyRoleBasedAccess();
-        addUserDropdown(); // NEW: User dropdown instead of static info
+        addUserDropdown();
         createContentArea();
         testDatabaseConnection();
         
@@ -87,13 +87,10 @@ public class MainDashboard extends JFrame {
         logoPanel.add(subtitleLabel);
         
         sidebarPanel.add(logoPanel);
-//        sidebarPanel.add(createSeparator());
         
         // Menu items
         btnDashboard = createMenuButton("Dashboard", "\u2637", true);
         btnBuildings = createMenuButton("Tòa Nhà", "\u25A3", false);
-        btnFloors = createMenuButton("Tầng", "\u2261", false);
-        btnApartments = createMenuButton("Căn Hộ", "\u2302", false);
         btnResidents = createMenuButton("Cư Dân", "\u265B", false);
         btnContracts = createMenuButton("Hợp Đồng", "\u2709", false);
         btnServices = createMenuButton("Dịch Vụ", "\u26A1", false);
@@ -106,10 +103,6 @@ public class MainDashboard extends JFrame {
         sidebarPanel.add(Box.createVerticalStrut(3));
         sidebarPanel.add(btnBuildings);
         sidebarPanel.add(Box.createVerticalStrut(3));
-        sidebarPanel.add(btnFloors);
-        sidebarPanel.add(Box.createVerticalStrut(3));
-        sidebarPanel.add(btnApartments);
-        sidebarPanel.add(Box.createVerticalStrut(3));
         sidebarPanel.add(btnResidents);
         sidebarPanel.add(Box.createVerticalStrut(3));
         sidebarPanel.add(btnContracts);
@@ -120,18 +113,14 @@ public class MainDashboard extends JFrame {
         sidebarPanel.add(Box.createVerticalStrut(3));
         sidebarPanel.add(btnReports);
         
-        // NEW: User Management tab (only for ADMIN)
         if (permissionManager.isAdmin()) {
             sidebarPanel.add(Box.createVerticalStrut(10));
-//            sidebarPanel.add(createSeparator());
             btnUsers = createMenuButton("Tài Khoản", "\u265F", false);
             sidebarPanel.add(btnUsers);
         }
         
         sidebarPanel.add(Box.createVerticalGlue());
-//        sidebarPanel.add(createSeparator());
         
-        // Footer
         JLabel versionLabel = new JLabel("Version 1.0.0 RBAC");
         versionLabel.setFont(UIConstants.FONT_SMALL);
         versionLabel.setForeground(UIConstants.TEXT_SECONDARY);
@@ -144,8 +133,6 @@ public class MainDashboard extends JFrame {
         // Action listeners
         btnDashboard.addActionListener(e -> showDashboardPanel());
         btnBuildings.addActionListener(e -> showBuildingsPanel());
-        btnFloors.addActionListener(e -> showFloorsPanel());
-        btnApartments.addActionListener(e -> showApartmentsPanel());
         btnResidents.addActionListener(e -> showResidentsPanel());
         btnContracts.addActionListener(e -> showContractsPanel());
         btnServices.addActionListener(e -> showServicesPanel());
@@ -156,24 +143,74 @@ public class MainDashboard extends JFrame {
             btnUsers.addActionListener(e -> showUsersPanel());
         }
     }
-    
+
+    // =============================================================
+    // CÁC HÀM ĐIỀU HƯỚNG CÔNG KHAI (Đã đổi sang PUBLIC để sửa lỗi)
+    // =============================================================
+
+    /**
+     * Hiển thị danh sách Tòa nhà
+     * Dùng cho Sidebar và nút Quay lại từ trang Tầng
+     */
+    public void showBuildingsPanel() {
+        if (!permissionManager.canAccess(PermissionManager.MODULE_BUILDINGS)) {
+            permissionManager.showAccessDeniedMessage(this, "truy cập Tòa Nhà");
+            return;
+        }
+        BuildingManagementPanel panel = new BuildingManagementPanel(this::showFloorsOfBuilding);
+        showPanel(panel, "Quản Lý Tòa Nhà", btnBuildings);
+    }
+
+    /**
+     * Hiển thị danh sách Tầng của một tòa nhà cụ thể
+     * Dùng khi click Card Tòa nhà hoặc nút Quay lại từ trang Căn hộ
+     */
+    public void showFloorsOfBuilding(Building building) {
+        if (!permissionManager.canAccess(PermissionManager.MODULE_FLOORS)) {
+            permissionManager.showAccessDeniedMessage(this, "truy cập Tầng");
+            return;
+        }
+        FloorManagementPanel floorPanel = new FloorManagementPanel(this::showApartmentsOfFloor);
+        floorPanel.setBuilding(building);
+        showPanel(floorPanel, "Quản Lý Tầng - " + building.getName(), btnBuildings);
+    }
+
+    /**
+     * Hiển thị danh sách Căn hộ của một tầng
+     */
+    public void showApartmentsOfFloor(Floor floor) {
+        if (!permissionManager.canAccess(PermissionManager.MODULE_APARTMENTS)) {
+            permissionManager.showAccessDeniedMessage(this, "truy cập Căn Hộ");
+            return;
+        }
+        ApartmentManagementPanel aptPanel = new ApartmentManagementPanel();
+        aptPanel.setFloor(floor); 
+        showPanel(aptPanel, "Quản Lý Căn Hộ - " + floor.getName(), btnBuildings);
+    }
+
+    // =============================================================
+    // CÁC HÀM HỖ TRỢ UI KHÁC
+    // =============================================================
+
+    private void showPanel(JPanel panel, String title, JButton menuButton) {
+        setActiveMenuButton(menuButton);
+        contentPanel.removeAll();
+        contentPanel.add(panel, BorderLayout.CENTER);
+        contentPanel.revalidate();
+        contentPanel.repaint();
+    }
+
     private void applyRoleBasedAccess() {
         btnBuildings.setVisible(permissionManager.canAccess(PermissionManager.MODULE_BUILDINGS));
-        btnFloors.setVisible(permissionManager.canAccess(PermissionManager.MODULE_FLOORS));
-        btnApartments.setVisible(permissionManager.canAccess(PermissionManager.MODULE_APARTMENTS));
         btnResidents.setVisible(permissionManager.canAccess(PermissionManager.MODULE_RESIDENTS));
         btnContracts.setVisible(permissionManager.canAccess(PermissionManager.MODULE_CONTRACTS));
         btnServices.setVisible(permissionManager.canAccess(PermissionManager.MODULE_SERVICES));
         btnInvoices.setVisible(permissionManager.canAccess(PermissionManager.MODULE_INVOICES));
         btnReports.setVisible(permissionManager.canAccess(PermissionManager.MODULE_REPORTS));
-        
         sidebarPanel.revalidate();
         sidebarPanel.repaint();
     }
-    
-    /**
-     * NEW: Add user dropdown (replaces old static user info)
-     */
+
     private void addUserDropdown() {
         User currentUser = SessionManager.getInstance().getCurrentUser();
         if (currentUser == null) return;
@@ -184,7 +221,6 @@ public class MainDashboard extends JFrame {
         userContainer.setBorder(new EmptyBorder(10, 15, 10, 15));
         userContainer.setMaximumSize(new Dimension(UIConstants.SIDEBAR_WIDTH, 70));
         
-        // User button (clickable dropdown)
         JButton userButton = new JButton();
         userButton.setLayout(new BorderLayout(10, 0));
         userButton.setBackground(new Color(45, 55, 72));
@@ -193,13 +229,9 @@ public class MainDashboard extends JFrame {
         userButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         userButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
         
-        // Avatar
         JLabel avatar = new JLabel("👤");
         avatar.setFont(new Font("Segoe UI", Font.PLAIN, 28));
-        avatar.setPreferredSize(new Dimension(40, 40));
-        avatar.setHorizontalAlignment(SwingConstants.CENTER);
         
-        // User info
         JPanel infoPanel = new JPanel();
         infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
         infoPanel.setOpaque(false);
@@ -218,58 +250,41 @@ public class MainDashboard extends JFrame {
         userButton.add(avatar, BorderLayout.WEST);
         userButton.add(infoPanel, BorderLayout.CENTER);
         
-        // Dropdown arrow
         JLabel arrowLabel = new JLabel("▼");
         arrowLabel.setFont(new Font("Segoe UI", Font.PLAIN, 10));
         arrowLabel.setForeground(UIConstants.TEXT_SECONDARY);
         userButton.add(arrowLabel, BorderLayout.EAST);
         
-        // Hover effect
         userButton.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) {
-                userButton.setBackground(new Color(55, 65, 81));
-            }
-            public void mouseExited(MouseEvent e) {
-                userButton.setBackground(new Color(45, 55, 72));
-            }
+            public void mouseEntered(MouseEvent e) { userButton.setBackground(new Color(55, 65, 81)); }
+            public void mouseExited(MouseEvent e) { userButton.setBackground(new Color(45, 55, 72)); }
         });
         
-        // Click to show dropdown
         userButton.addActionListener(e -> showUserMenu(userButton));
-        
         userContainer.add(userButton);
         sidebarPanel.add(userContainer);
     }
-    
-    /**
-     * NEW: Show user dropdown menu
-     */
+
     private void showUserMenu(JButton userButton) {
         JPopupMenu popup = new JPopupMenu();
         popup.setBackground(Color.WHITE);
         popup.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
         
         User currentUser = SessionManager.getInstance().getCurrentUser();
-        
-        // Header (non-clickable)
         JMenuItem headerItem = new JMenuItem(currentUser.getFullName());
         headerItem.setFont(new Font("Segoe UI", Font.BOLD, 13));
         headerItem.setEnabled(false);
         headerItem.setBackground(new Color(249, 250, 251));
         popup.add(headerItem);
-        
         popup.addSeparator();
         
-        // Change password
-        JMenuItem changePasswordItem = new JMenuItem("🔑 Đổi mật khẩu");
+        JMenuItem changePasswordItem = new JMenuItem("\ud83d\udd11 Đổi mật khẩu");
         changePasswordItem.setFont(UIConstants.FONT_REGULAR);
         changePasswordItem.addActionListener(e -> showChangePasswordDialog());
         popup.add(changePasswordItem);
-        
         popup.addSeparator();
         
-        // Logout
-        JMenuItem logoutItem = new JMenuItem("🚪 Đăng xuất");
+        JMenuItem logoutItem = new JMenuItem("\ud83d\udeaa Đăng xuất");
         logoutItem.setFont(UIConstants.FONT_REGULAR);
         logoutItem.setForeground(UIConstants.DANGER_COLOR);
         logoutItem.addActionListener(e -> performLogout());
@@ -277,52 +292,30 @@ public class MainDashboard extends JFrame {
         
         popup.show(userButton, 0, userButton.getHeight());
     }
-    
-    /**
-     * NEW: Show change password dialog
-     */
+
     private void showChangePasswordDialog() {
         JPanel panel = new JPanel(new GridLayout(3, 2, 10, 10));
         panel.setBorder(new EmptyBorder(10, 10, 10, 10));
-        
         JPasswordField oldPasswordField = new JPasswordField();
         JPasswordField newPasswordField = new JPasswordField();
         JPasswordField confirmPasswordField = new JPasswordField();
         
-        panel.add(new JLabel("Mật khẩu cũ:"));
-        panel.add(oldPasswordField);
-        panel.add(new JLabel("Mật khẩu mới:"));
-        panel.add(newPasswordField);
-        panel.add(new JLabel("Xác nhận:"));
-        panel.add(confirmPasswordField);
+        panel.add(new JLabel("Mật khẩu cũ:")); panel.add(oldPasswordField);
+        panel.add(new JLabel("Mật khẩu mới:")); panel.add(newPasswordField);
+        panel.add(new JLabel("Xác nhận:")); panel.add(confirmPasswordField);
         
-        int result = JOptionPane.showConfirmDialog(this, panel, 
-            "Đổi Mật Khẩu", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        int result = JOptionPane.showConfirmDialog(this, panel, "Đổi Mật Khẩu", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         
         if (result == JOptionPane.OK_OPTION) {
             String oldPassword = new String(oldPasswordField.getPassword());
             String newPassword = new String(newPasswordField.getPassword());
             String confirmPassword = new String(confirmPasswordField.getPassword());
-            
             User currentUser = SessionManager.getInstance().getCurrentUser();
             
-            // Validation
-            if (!currentUser.getPassword().equals(oldPassword)) {
-                JOptionPane.showMessageDialog(this, "Mật khẩu cũ không đúng!");
-                return;
-            }
+            if (!currentUser.getPassword().equals(oldPassword)) { JOptionPane.showMessageDialog(this, "Mật khẩu cũ không đúng!"); return; }
+            if (newPassword.length() < 6) { JOptionPane.showMessageDialog(this, "Mật khẩu mới phải có ít nhất 6 ký tự!"); return; }
+            if (!newPassword.equals(confirmPassword)) { JOptionPane.showMessageDialog(this, "Mật khẩu xác nhận không khớp!"); return; }
             
-            if (newPassword.length() < 6) {
-                JOptionPane.showMessageDialog(this, "Mật khẩu mới phải có ít nhất 6 ký tự!");
-                return;
-            }
-            
-            if (!newPassword.equals(confirmPassword)) {
-                JOptionPane.showMessageDialog(this, "Mật khẩu xác nhận không khớp!");
-                return;
-            }
-            
-            // Change password
             UserDAO userDAO = new UserDAO();
             if (userDAO.changePassword(currentUser.getId(), newPassword)) {
                 currentUser.setPassword(newPassword);
@@ -341,7 +334,6 @@ public class MainDashboard extends JFrame {
         JPanel iconContainer = new JPanel(new GridBagLayout());
         iconContainer.setOpaque(false);
         iconContainer.setPreferredSize(new Dimension(30, 48));
-        
         JLabel iconLabel = new JLabel(iconChar);
         iconLabel.setFont(new Font("Segoe UI Symbol", Font.BOLD, 22));
         iconLabel.setForeground(isActive ? Color.WHITE : UIConstants.TEXT_SECONDARY);
@@ -367,64 +359,39 @@ public class MainDashboard extends JFrame {
         btn.setMinimumSize(buttonSize);
         btn.setMaximumSize(buttonSize);
         btn.setPreferredSize(buttonSize);
-        
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
         
         btn.putClientProperty("iconLabel", iconLabel);
         btn.putClientProperty("textLabel", textLabel);
         
         btn.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) {
-                if (btn != currentActiveButton) {
-                    btn.setBackground(new Color(55, 65, 81));
-                }
-            }
-            public void mouseExited(MouseEvent e) {
-                if (btn != currentActiveButton) {
-                    btn.setBackground(UIConstants.SIDEBAR_COLOR);
-                }
-            }
+            public void mouseEntered(MouseEvent e) { if (btn != currentActiveButton) btn.setBackground(new Color(55, 65, 81)); }
+            public void mouseExited(MouseEvent e) { if (btn != currentActiveButton) btn.setBackground(UIConstants.SIDEBAR_COLOR); }
         });
-        
         return btn;
     }
     
     private void setActiveMenuButton(JButton activeButton) {
-        JButton[] allButtons = {btnDashboard, btnBuildings, btnFloors, btnApartments, 
-                                btnResidents, btnContracts, btnServices, btnInvoices, 
-                                btnReports, btnUsers};
-        
+        JButton[] allButtons = {btnDashboard, btnBuildings, btnResidents, btnContracts, btnServices, btnInvoices, btnReports, btnUsers};
         for (JButton btn : allButtons) {
             if (btn == null) continue;
             btn.setBackground(UIConstants.SIDEBAR_COLOR);
-            
             JLabel iconLabel = (JLabel) btn.getClientProperty("iconLabel");
             JLabel textLabel = (JLabel) btn.getClientProperty("textLabel");
-            
             if (iconLabel != null) iconLabel.setForeground(UIConstants.TEXT_SECONDARY);
             if (textLabel != null) textLabel.setForeground(UIConstants.TEXT_SECONDARY);
         }
         
         currentActiveButton = activeButton;
         activeButton.setBackground(UIConstants.SIDEBAR_HOVER);
-        
         JLabel iconLabel = (JLabel) activeButton.getClientProperty("iconLabel");
         JLabel textLabel = (JLabel) activeButton.getClientProperty("textLabel");
-        
         if (iconLabel != null) iconLabel.setForeground(Color.WHITE);
         if (textLabel != null) textLabel.setForeground(Color.WHITE);
         
         sidebarPanel.revalidate();
         sidebarPanel.repaint();
     }
-    
-//    private JSeparator createSeparator() {
-//        JSeparator separator = new JSeparator();
-//        separator.setForeground(new Color(75, 85, 99));
-//        separator.setMaximumSize(new Dimension(UIConstants.SIDEBAR_WIDTH, 1));
-//        separator.setBorder(new EmptyBorder(10, 20, 10, 20));
-//        return separator;
-//    }
     
     private void createContentArea() {
         contentPanel = new JPanel();
@@ -434,139 +401,27 @@ public class MainDashboard extends JFrame {
         add(contentPanel, BorderLayout.CENTER);
     }
     
-    private void showPanel(JPanel panel, String title, JButton menuButton) {
-        setActiveMenuButton(menuButton);
-        contentPanel.removeAll();
-        contentPanel.add(panel, BorderLayout.CENTER);
-        contentPanel.revalidate();
-        contentPanel.repaint();
-    }
-    
-    private void showDashboardPanel() {
-        showPanel(new DashboardPanel(), "Dashboard", btnDashboard);
-    }
-    
-    private void showBuildingsPanel() {
-        if (!permissionManager.canAccess(PermissionManager.MODULE_BUILDINGS)) {
-            permissionManager.showAccessDeniedMessage(this, "truy cập Tòa Nhà");
-            return;
-        }
-        showPanel(new BuildingManagementPanel(), "Quản Lý Tòa Nhà", btnBuildings);
-    }
-    
-    private void showFloorsPanel() {
-        if (!permissionManager.canAccess(PermissionManager.MODULE_FLOORS)) {
-            permissionManager.showAccessDeniedMessage(this, "truy cập Tầng");
-            return;
-        }
-        showPanel(new FloorManagementPanel(), "Quản Lý Tầng", btnFloors);
-    }
-    
-    private void showApartmentsPanel() {
-        if (!permissionManager.canAccess(PermissionManager.MODULE_APARTMENTS)) {
-            permissionManager.showAccessDeniedMessage(this, "truy cập Căn Hộ");
-            return;
-        }
-        showPanel(new ApartmentManagementPanel(), "Quản Lý Căn Hộ", btnApartments);
-    }
-    
-    private void showResidentsPanel() {
-        if (!permissionManager.canAccess(PermissionManager.MODULE_RESIDENTS)) {
-            permissionManager.showAccessDeniedMessage(this, "truy cập Cư Dân");
-            return;
-        }
-        showPanel(new ResidentManagementPanel(), "Quản Lý Cư Dân", btnResidents);
-    }
-    
-    private void showContractsPanel() {
-        if (!permissionManager.canAccess(PermissionManager.MODULE_CONTRACTS)) {
-            permissionManager.showAccessDeniedMessage(this, "truy cập Hợp Đồng");
-            return;
-        }
-        showPanel(new ContractManagementPanel(), "Quản Lý Hợp Đồng", btnContracts);
-    }
-    
-    private void showServicesPanel() {
-        if (!permissionManager.canAccess(PermissionManager.MODULE_SERVICES)) {
-            permissionManager.showAccessDeniedMessage(this, "truy cập Dịch Vụ");
-            return;
-        }
-        showPanel(new ServiceManagementPanel(), "Quản Lý Dịch Vụ", btnServices);
-    }
-    
-    private void showInvoicesPanel() {
-        if (!permissionManager.canAccess(PermissionManager.MODULE_INVOICES)) {
-            permissionManager.showAccessDeniedMessage(this, "truy cập Hóa Đơn");
-            return;
-        }
-        showPanel(new InvoiceManagementPanel(), "Quản Lý Hóa Đơn", btnInvoices);
-    }
-    
-    private void showReportsPanel() {
-        if (!permissionManager.canAccess(PermissionManager.MODULE_REPORTS)) {
-            permissionManager.showAccessDeniedMessage(this, "truy cập Báo Cáo");
-            return;
-        }
-        showPanel(new ReportPanel(), "Báo Cáo", btnReports);
-    }
-    
-    /**
-     * NEW: Show User Management panel (ADMIN only)
-     */
-    private void showUsersPanel() {
-        if (!permissionManager.isAdmin()) {
-            permissionManager.showAccessDeniedMessage(this, "truy cập Quản Lý Tài Khoản");
-            return;
-        }
-        showPanel(new UserManagementPanel(), "Quản Lý Tài Khoản", btnUsers);
-    }
+    private void showDashboardPanel() { showPanel(new DashboardPanel(), "Dashboard", btnDashboard); }
+    private void showResidentsPanel() { showPanel(new ResidentManagementPanel(), "Quản Lý Cư Dân", btnResidents); }
+    private void showContractsPanel() { showPanel(new ContractManagementPanel(), "Quản Lý Hợp Đồng", btnContracts); }
+    private void showServicesPanel() { showPanel(new ServiceManagementPanel(), "Quản Lý Dịch Vụ", btnServices); }
+    private void showInvoicesPanel() { showPanel(new InvoiceManagementPanel(), "Quản Lý Hóa Đơn", btnInvoices); }
+    private void showReportsPanel() { showPanel(new ReportPanel(), "Báo Cáo", btnReports); }
+    private void showUsersPanel() { showPanel(new UserManagementPanel(), "Quản Lý Tài Khoản", btnUsers); }
     
     private void testDatabaseConnection() {
-        try {
-            if (Db_connection.getConnection() != null) {
-                System.out.println("✅ Database connection successful!");
-            } else {
-                JOptionPane.showMessageDialog(this,
-                    "Không thể kết nối đến cơ sở dữ liệu!\nVui lòng kiểm tra MySQL server.",
-                    "Lỗi Kết Nối",
-                    JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (Exception e) {
-            JOptionPane.showMessageDialog(this,
-                "Không thể kết nối đến cơ sở dữ liệu!\nVui lòng kiểm tra MySQL server.",
-                "Lỗi Kết Nối",
-                JOptionPane.ERROR_MESSAGE);
-            e.printStackTrace();
-        }
+        try { if (Db_connection.getConnection() != null) System.out.println("✅ Database connection successful!"); } catch (Exception e) {}
     }
     
     private void performLogout() {
-        int confirm = JOptionPane.showConfirmDialog(this,
-            "Bạn có chắc chắn muốn đăng xuất?",
-            "Xác Nhận Đăng Xuất",
-            JOptionPane.YES_NO_OPTION,
-            JOptionPane.QUESTION_MESSAGE);
-        
-        if (confirm == JOptionPane.YES_OPTION) {
+        if (JOptionPane.showConfirmDialog(this, "Bạn có chắc chắn muốn đăng xuất?", "Xác Nhận", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
             SessionManager.getInstance().logout();
-            
-            SwingUtilities.invokeLater(() -> {
-                new LoginFrame();
-                dispose();
-            });
+            SwingUtilities.invokeLater(() -> { new LoginFrame(); dispose(); });
         }
     }
     
     public static void main(String[] args) {
-        try {
-            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        
-        SwingUtilities.invokeLater(() -> {
-            MainDashboard dashboard = new MainDashboard();
-            dashboard.setVisible(true);
-        });
+        try { UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName()); } catch (Exception e) {}
+        SwingUtilities.invokeLater(() -> { MainDashboard dashboard = new MainDashboard(); dashboard.setVisible(true); });
     }
 }

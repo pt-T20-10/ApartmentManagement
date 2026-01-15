@@ -10,20 +10,24 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Arc2D;
-import java.awt.geom.Path2D; // Import quan trọng để vẽ Icon đẹp
+import java.awt.geom.Path2D;
 
 public class BuildingCard extends JPanel {
 
     private Building building;
     private BuildingStats stats;
+    // Thêm hành động khi chọn (click) vào Card
+    private java.util.function.Consumer<Building> onSelect; 
     private java.util.function.Consumer<Building> onEdit;
     private java.util.function.Consumer<Building> onDelete;
 
     public BuildingCard(Building building, BuildingStats stats,
+                        java.util.function.Consumer<Building> onSelect, // THÊM MỚI
                         java.util.function.Consumer<Building> onEdit,
                         java.util.function.Consumer<Building> onDelete) {
         this.building = building;
         this.stats = stats;
+        this.onSelect = onSelect;
         this.onEdit = onEdit;
         this.onDelete = onDelete;
         setOpaque(false);
@@ -34,6 +38,30 @@ public class BuildingCard extends JPanel {
         setPreferredSize(new Dimension(500, 240)); 
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(15, 20, 15, 20));
+        
+        // --- THIẾT LẬP SỰ KIỆN CLICK CHO TOÀN BỘ CARD ---
+        this.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        this.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (onSelect != null) {
+                    onSelect.accept(building); // Chuyển sang quản lý tầng
+                }
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                // Hiệu ứng đổi màu nền nhẹ khi di chuột vào card
+                setBackground(new Color(252, 252, 252));
+                repaint();
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                setBackground(null);
+                repaint();
+            }
+        });
 
         // === 1. TOP PANEL ===
         JPanel topPanel = new JPanel(new BorderLayout(20, 0));
@@ -58,12 +86,6 @@ public class BuildingCard extends JPanel {
         JLabel lblName = new JLabel(building.getName());
         lblName.setFont(new Font("Segoe UI", Font.BOLD, 19));
         lblName.setForeground(new Color(33, 33, 33));
-        lblName.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        lblName.addMouseListener(new MouseAdapter() {
-            public void mouseClicked(MouseEvent e) { if (onEdit != null) onEdit.accept(building); }
-            public void mouseEntered(MouseEvent e) { lblName.setForeground(UIConstants.PRIMARY_COLOR); }
-            public void mouseExited(MouseEvent e) { lblName.setForeground(new Color(33, 33, 33)); }
-        });
 
         JLabel lblAddress = new JLabel(building.getAddress());
         lblAddress.setFont(new Font("Segoe UI", Font.PLAIN, 13));
@@ -88,7 +110,7 @@ public class BuildingCard extends JPanel {
         
         topPanel.add(infoPanel, BorderLayout.CENTER);
 
-        // Status Badge (Chip Style)
+        // Status Badge
         StatusBadge statusBadge = new StatusBadge(building.getStatus());
         JPanel statusWrapper = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         statusWrapper.setOpaque(false);
@@ -102,12 +124,16 @@ public class BuildingCard extends JPanel {
 
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0)); bottomPanel.setOpaque(false); bottomPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
         
-        // --- CẬP NHẬT ICON SỬA/XÓA MỚI ---
+        // --- NÚT SỬA/XÓA ---
         JButton btnEdit = createIconButton("EDIT", new Color(117, 117, 117)); 
         btnEdit.addActionListener(e -> { if(onEdit != null) onEdit.accept(building); });
+        // Chặn sự kiện lan truyền lên Card khi nhấn nút
+        btnEdit.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
         
         JButton btnDelete = createIconButton("DELETE", new Color(239, 83, 80)); 
         btnDelete.addActionListener(e -> { if(onDelete != null) onDelete.accept(building); });
+        // Chặn sự kiện lan truyền lên Card khi nhấn nút
+        btnDelete.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
         
         bottomPanel.add(btnEdit); bottomPanel.add(btnDelete);
 
@@ -119,11 +145,12 @@ public class BuildingCard extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setColor(Color.WHITE); g2.fillRoundRect(0, 0, getWidth()-1, getHeight()-1, 20, 20);
-        g2.setColor(new Color(220, 220, 220)); g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 20, 20); g2.dispose(); super.paintComponent(g);
+        g2.setColor(getBackground() != null ? getBackground() : Color.WHITE); // Đổi màu nền khi hover
+        g2.fillRoundRect(0, 0, getWidth()-1, getHeight()-1, 20, 20);
+        g2.setColor(new Color(220, 220, 220)); g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 20, 20); g2.dispose();
     }
 
-    // --- Inner Classes ---
+    // --- Inner Classes giữ nguyên như cũ ---
     private static class StatusBadge extends JLabel {
         private Color bgColor, textColor;
         public StatusBadge(String status) {
@@ -144,7 +171,6 @@ public class BuildingCard extends JPanel {
     
     private class OccupancyBar extends JPanel { int percent, rented, total; public OccupancyBar(int percent, int rented, int total) { this.percent = percent; this.rented = rented; this.total = total; setPreferredSize(new Dimension(100, 45)); setOpaque(false); } @Override protected void paintComponent(Graphics g) { super.paintComponent(g); Graphics2D g2 = (Graphics2D) g; g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); int w = getWidth(), h = getHeight(), arc = 12; g2.setColor(new Color(230, 230, 230)); g2.fillRoundRect(0, 0, w, h, arc, arc); int blueW = (int)(w * (percent / 100.0)); if (blueW > 0) { g2.setColor(new Color(25, 118, 210)); if (percent == 100) g2.fillRoundRect(0, 0, w, h, arc, arc); else { g2.fillRoundRect(0, 0, blueW, h, arc, arc); g2.fillRect(blueW - arc, 0, arc, h); } } g2.setFont(new Font("Segoe UI", Font.BOLD, 14)); FontMetrics fm = g2.getFontMetrics(); if (percent > 0) { String txt = percent + "% Đang thuê (" + rented + " căn)"; if (blueW > fm.stringWidth(txt) + 30) { g2.setColor(Color.WHITE); g2.drawString(txt, 20, (h + fm.getAscent()) / 2 - 2); } } String rightTxt = (100 - percent) + "% Trống"; g2.setColor(new Color(66, 66, 66)); if (w - blueW > fm.stringWidth(rightTxt) + 30) g2.drawString(rightTxt, w - fm.stringWidth(rightTxt) - 20, (h + fm.getAscent()) / 2 - 2); } }
     
-    // --- ICON CẬP NHẬT (Dùng Path2D cho Edit/Delete) ---
     private static class SimpleIcon implements Icon { private String type; private int size; private Color color; public SimpleIcon(String type, int size, Color color) { this.type = type; this.size = size; this.color = color; } @Override public void paintIcon(Component c, Graphics g, int x, int y) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(color); g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); g2.translate(x, y); 
         if ("EDIT".equals(type)) { 
             g2.rotate(Math.toRadians(45), size/2.0, size/2.0); g2.drawRoundRect(size/2-2, 0, 4, size-4, 1, 1); g2.drawLine(size/2-2, 3, size/2+2, 3); 
@@ -152,5 +178,4 @@ public class BuildingCard extends JPanel {
         } else if ("DELETE".equals(type)) { 
             int w = size-6; int h = size-4; int mx = 3; int my = 4; g2.drawRoundRect(mx, my, w, h, 3, 3); g2.drawLine(1, my, size-1, my); g2.drawArc(size/2-2, 0, 4, 4, 0, 180); g2.drawLine(size/2-2, my+3, size/2-2, my+h-3); g2.drawLine(size/2+2, my+3, size/2+2, my+h-3); 
         } else if ("BUILDING_COMPLEX".equals(type)) { g2.setStroke(new BasicStroke(1.5f)); int baseY = size - 4; int midW = size * 36 / 100; int midH = size * 80 / 100; int midX = (size - midW) / 2; g2.fillRect(midX, baseY - midH, midW, midH); int leftW = size * 15 / 100; int leftH = size * 40 / 100; int leftX = midX - leftW - 2; g2.drawRect(leftX, baseY - leftH, leftW, leftH); g2.fillRect(leftX + leftW, baseY - leftH + 5, 2, leftH - 5); int rightW = size * 18 / 100; int rightH = size * 60 / 100; int rightX = midX + midW + 2; g2.drawRect(rightX, baseY - rightH, rightW, rightH); g2.setColor(Color.WHITE); int winSize = 4; int gap = 3; int startWX = midX + (midW - (3*winSize + 2*gap))/2; int startWY = baseY - midH + 8; for(int r=0; r<4; r++) for(int c1=0; c1<3; c1++) g2.fillRect(startWX + c1*(winSize+gap), startWY + r*(winSize+gap), winSize, winSize); g2.fillRect(midX + midW/2 - 4, baseY - 10, 8, 10); g2.setColor(color); for(int i=0; i<3; i++) g2.fillRect(rightX + rightW/2 - 2, baseY - rightH + 8 + (i*8), 4, 4); g2.drawLine(leftX - 2, baseY, rightX + rightW + 2, baseY); } else if ("USER".equals(type)) { g2.fillOval(size/2 - 2, 0, 4, 4); g2.setStroke(new BasicStroke(2f)); g2.draw(new Arc2D.Double(size/2.0 - 5, 5, 10, 10, 0, 180, Arc2D.OPEN)); } else if ("FLOOR".equals(type)) { int w=size-2; int h=3; g2.fillRect(1,2,w,h); g2.fillRect(1,6,w,h); g2.fillRect(1,10,w,h); } else if ("DOOR".equals(type)) { g2.drawRect(3,1,8,12); g2.fillOval(9,7,2,2); } } @Override public int getIconWidth() { return size; } @Override public int getIconHeight() { return size; } }
-    private static class RoundedButton extends JButton { private int arc; public RoundedButton(String text, int arc) { super(text); this.arc = arc; setContentAreaFilled(false); setFocusPainted(false); setBorderPainted(false); setCursor(new Cursor(Cursor.HAND_CURSOR)); } @Override protected void paintComponent(Graphics g) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(getBackground()); g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc); super.paintComponent(g); g2.dispose(); } }
 }

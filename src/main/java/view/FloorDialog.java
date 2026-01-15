@@ -55,7 +55,7 @@ public class FloorDialog extends JDialog { // Tên class phải là FloorDialog
         txtFloorNumber = createRoundedField();
         txtName = createRoundedField();
         
-        cbbStatus = new JComboBox<>(new String[]{"Đang hoạt động", "Đang bảo trì", "Đóng cửa"});
+        cbbStatus = new JComboBox<>(new String[]{"Đang hoạt động", "Đang bảo trì"});
         cbbStatus.setFont(UIConstants.FONT_REGULAR);
         cbbStatus.setBackground(Color.WHITE);
         cbbStatus.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -119,28 +119,45 @@ public class FloorDialog extends JDialog { // Tên class phải là FloorDialog
     }
 
     private void onSave() {
-        String numStr = txtFloorNumber.getText().trim();
-        String name = txtName.getText().trim();
+    String numStr = txtFloorNumber.getText().trim();
+    String name = txtName.getText().trim();
 
-        if (numStr.isEmpty() || name.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập Số tầng và Tên tầng!", "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        
-        try {
-            int num = Integer.parseInt(numStr);
-            floor.setFloorNumber(num);
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Số tầng phải là số nguyên!", "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        floor.setName(name);
-        floor.setStatus((String) cbbStatus.getSelectedItem());
-        
-        confirmed = true;
-        dispose();
+    // 1. Kiểm tra rỗng
+    if (numStr.isEmpty() || name.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Vui lòng nhập Số tầng và Tên tầng!", "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
+        return;
     }
+    
+    int num;
+    try {
+        num = Integer.parseInt(numStr);
+    } catch (NumberFormatException e) {
+        JOptionPane.showMessageDialog(this, "Số tầng phải là số nguyên!", "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
+        return;
+    }
+
+    // 2. KIỂM TRA TRÙNG LẶP (Đây là phần bạn đang thiếu)
+    dao.FloorDAO dao = new dao.FloorDAO();
+    
+    // Nếu là thêm mới (floor.getId() == null) 
+    // hoặc là sửa nhưng thay đổi số tầng/tên tầng so với ban đầu
+    if (floor.getId() == null) {
+        // Kiểm tra xem tòa nhà này đã có tầng số 'num' hoặc tên 'name' chưa
+        if (dao.isFloorNameExists(floor.getBuildingId(), name)) {
+            JOptionPane.showMessageDialog(this, "Tên tầng '" + name + "' đã tồn tại trong tòa nhà này!", "Trùng dữ liệu", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        // Bạn có thể thêm hàm kiểm tra trùng số tầng tương tự nếu cần
+    }
+
+    // 3. Gán dữ liệu nếu mọi thứ đều ổn
+    floor.setFloorNumber(num);
+    floor.setName(name);
+    floor.setStatus((String) cbbStatus.getSelectedItem());
+    
+    confirmed = true;
+    dispose();
+}
 
     public boolean isConfirmed() { return confirmed; }
     public Floor getFloor() { return floor; }
