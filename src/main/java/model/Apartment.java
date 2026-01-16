@@ -1,5 +1,7 @@
 package model;
+
 import java.math.BigDecimal;
+
 /**
  * Apartment Entity
  * Represents an apartment/unit in a floor
@@ -13,19 +15,27 @@ public class Apartment {
     private BigDecimal basePrice;
     private String description;
     private boolean isDeleted;
-    private Integer bedrooms; // Added for compatibility
-    
+
+    // --- 3 THUỘC TÍNH MỚI (Đã cập nhật) ---
+    private String apartmentType;   // Loại căn hộ (Studio, Standard...)
+    private Integer bedroomCount;   // Số phòng ngủ
+    private Integer bathroomCount;  // Số phòng tắm
+
     // For display purposes
     private String floorName;
     private String buildingName;
-    
-    // Constructors
+
+    // --- Constructors ---
     public Apartment() {
-        this.bedrooms = 1; // Default value
+        // Giá trị mặc định
+        this.apartmentType = "Standard";
+        this.bedroomCount = 1;
+        this.bathroomCount = 1;
     }
-    
+
     public Apartment(Long id, Long floorId, String roomNumber, Double area, String status, 
-                     BigDecimal basePrice, String description, boolean isDeleted) {
+                     BigDecimal basePrice, String description, boolean isDeleted,
+                     String apartmentType, Integer bedroomCount, Integer bathroomCount) {
         this.id = id;
         this.floorId = floorId;
         this.roomNumber = roomNumber;
@@ -34,9 +44,12 @@ public class Apartment {
         this.basePrice = basePrice;
         this.description = description;
         this.isDeleted = isDeleted;
-        this.bedrooms = 1; // Default value
+        this.apartmentType = apartmentType;
+        this.bedroomCount = bedroomCount;
+        this.bathroomCount = bathroomCount;
     }
-    
+
+    // Constructor rút gọn
     public Apartment(Long floorId, String roomNumber, Double area, String status, BigDecimal basePrice) {
         this.floorId = floorId;
         this.roomNumber = roomNumber;
@@ -44,128 +57,71 @@ public class Apartment {
         this.status = status;
         this.basePrice = basePrice;
         this.isDeleted = false;
-        this.bedrooms = 1; // Default value
+        // Mặc định
+        this.apartmentType = "Standard";
+        this.bedroomCount = 1;
+        this.bathroomCount = 1;
     }
+
+    // --- Getters and Setters ---
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+    public Long getFloorId() { return floorId; }
+    public void setFloorId(Long floorId) { this.floorId = floorId; }
+
+    public String getRoomNumber() { return roomNumber; }
+    public void setRoomNumber(String roomNumber) { this.roomNumber = roomNumber; }
+
+    public Double getArea() { return area; }
+    public void setArea(Double area) { this.area = area; }
+    public void setArea(BigDecimal area) { this.area = area != null ? area.doubleValue() : null; }
+
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+
+    public BigDecimal getBasePrice() { return basePrice; }
+    public void setBasePrice(BigDecimal basePrice) { this.basePrice = basePrice; }
+
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+
+    public boolean isDeleted() { return isDeleted; }
+    public void setDeleted(boolean deleted) { isDeleted = deleted; }
+
+    // --- Getters & Setters cho 3 thuộc tính mới ---
+    public String getApartmentType() { return apartmentType; }
+    public void setApartmentType(String apartmentType) { this.apartmentType = apartmentType; }
+
+    public Integer getBedroomCount() { return bedroomCount; }
+    public void setBedroomCount(Integer bedroomCount) { this.bedroomCount = bedroomCount; }
+
+    public Integer getBathroomCount() { return bathroomCount; }
+    public void setBathroomCount(Integer bathroomCount) { this.bathroomCount = bathroomCount; }
+
+    // --- Display Helpers ---
+    public String getFloorName() { return floorName; }
+    public void setFloorName(String floorName) { this.floorName = floorName; }
+
+    public String getBuildingName() { return buildingName; }
+    public void setBuildingName(String buildingName) { this.buildingName = buildingName; }
+
+    // Alias methods (Giữ lại để tương thích code cũ nếu cần)
+    public String getApartmentNumber() { return this.roomNumber; }
+    public void setApartmentNumber(String apartmentNumber) { this.roomNumber = apartmentNumber; }
     
-    // Getters and Setters
-    public Long getId() {
-        return id;
-    }
-    
-    public void setId(Long id) {
-        this.id = id;
-    }
-    
-    public Long getFloorId() {
-        return floorId;
-    }
-    
-    public void setFloorId(Long floorId) {
-        this.floorId = floorId;
-    }
-    
-    public String getRoomNumber() {
-        return roomNumber;
-    }
-    
-    public void setRoomNumber(String roomNumber) {
-        this.roomNumber = roomNumber;
-    }
-    
-    public Double getArea() {
-        return area;
-    }
-    
-    public void setArea(Double area) {
-        this.area = area;
-    }
-    
-    // Overload for BigDecimal compatibility
-    public void setArea(BigDecimal area) {
-        this.area = area != null ? area.doubleValue() : null;
-    }
-    
-    public String getStatus() {
-        return status;
-    }
-    
-    public void setStatus(String status) {
-        this.status = status;
-    }
-    
-    public BigDecimal getBasePrice() {
-        return basePrice;
-    }
-    
-    public void setBasePrice(BigDecimal basePrice) {
-        this.basePrice = basePrice;
-    }
-    
-    public String getDescription() {
-        return description;
-    }
-    
-    public void setDescription(String description) {
-        this.description = description;
-    }
-    
-    public boolean isDeleted() {
-        return isDeleted;
-    }
-    
-    public void setDeleted(boolean deleted) {
-        isDeleted = deleted;
-    }
-    
-    public String getFloorName() {
-        return floorName;
-    }
-    
-    public void setBuildingName(String buildingName) {
-        this.buildingName = buildingName;
-    }
-    
-    public String getBuildingName() {
-        return buildingName;
-    }
-    
-    public void setFloorName(String floorName) {
-        this.floorName = floorName;
-    }
-    
-    public Integer getBedrooms() {
-        return bedrooms;
-    }
-    
-    public void setBedrooms(Integer bedrooms) {
-        this.bedrooms = bedrooms;
-    }
-    
-    // ===== ALIAS METHODS FOR PANEL COMPATIBILITY =====
-    
-    /**
-     * Alias for getRoomNumber() - for panel compatibility
-     */
-    public String getApartmentNumber() {
-        return this.roomNumber;
-    }
-    
-    /**
-     * Alias for setRoomNumber() - for panel compatibility
-     */
-    public void setApartmentNumber(String apartmentNumber) {
-        this.roomNumber = apartmentNumber;
-    }
-    
+    // Alias cho bedrooms cũ (trỏ về bedroomCount mới)
+    public Integer getBedrooms() { return bedroomCount; }
+    public void setBedrooms(Integer bedrooms) { this.bedroomCount = bedrooms; }
+
     @Override
     public String toString() {
         return "Apartment{" +
                 "id=" + id +
-                ", roomNumber='" + roomNumber + '\'' +
-                ", area=" + area +
-                ", status='" + status + '\'' +
-                ", basePrice=" + basePrice +
-                ", bedrooms=" + bedrooms +
+                ", room='" + roomNumber + '\'' +
+                ", type='" + apartmentType + '\'' +
+                ", bed=" + bedroomCount +
+                ", bath=" + bathroomCount +
                 '}';
     }
 }

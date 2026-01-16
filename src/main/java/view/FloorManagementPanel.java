@@ -1,335 +1,522 @@
 package view;
 
-import dao.FloorDAO;
 import dao.BuildingDAO;
-import model.Floor;
+import dao.FloorDAO;
 import model.Building;
+import model.Floor;
 import util.UIConstants;
-import util.ModernButton;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.table.DefaultTableModel;
-import javax.swing.table.JTableHeader;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.geom.RoundRectangle2D;
 import java.util.List;
+import java.util.function.Consumer;
 
-/**
- * Floor Management Panel
- * Full CRUD operations with popup dialog
- */
 public class FloorManagementPanel extends JPanel {
-    
+
     private FloorDAO floorDAO;
     private BuildingDAO buildingDAO;
-    private JTable floorTable;
-    private DefaultTableModel tableModel;
-    private JTextField searchField;
+    private JPanel cardsContainer;
+    private Building currentBuilding; 
     
+    private JComboBox<Building> cbbBuilding;
+    private JPanel overlayPanel; 
+    private JButton btnBatchAdd;
+    private JButton btnAdd;
+    private Consumer<Floor> onFloorSelect;
+    
+    // *** THÊM DÒNG NÀY - QUAN TRỌNG ***
+    private SwingWorker<?, ?> currentWorker = null;
+
     public FloorManagementPanel() {
+        this(null, null);
+    }
+
+    public FloorManagementPanel(Consumer<Floor> onFloorSelect) {
+        this(null, onFloorSelect);
+    }
+
+    public FloorManagementPanel(Building building, Consumer<Floor> onFloorSelect) {
         this.floorDAO = new FloorDAO();
         this.buildingDAO = new BuildingDAO();
-        
-        setLayout(new BorderLayout(20, 20));
-        setBackground(UIConstants.BACKGROUND_COLOR);
-        setBorder(new EmptyBorder(30, 30, 30, 30));
-        
-        createHeader();
-        createTablePanel();
-        createActionPanel();
-        
+        this.currentBuilding = building;
+        this.onFloorSelect = onFloorSelect;
+
+        initUI();
+        loadBuildingData(); 
+    }
+    
+    public void setBuilding(Building building) {
+        this.currentBuilding = building;
+        if (building != null) {
+            for (int i = 0; i < cbbBuilding.getItemCount(); i++) {
+                Building b = cbbBuilding.getItemAt(i);
+                if (b.getId() != null && b.getId().equals(building.getId())) {
+                    cbbBuilding.setSelectedIndex(i);
+                    break;
+                }
+            }
+        }
         loadFloors();
     }
-    
-    private void createHeader() {
+
+    private void initUI() {
+        setLayout(new BorderLayout(20, 20));
+        setBackground(UIConstants.BACKGROUND_COLOR);
+        setBorder(new EmptyBorder(20, 30, 20, 30));
+
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        headerPanel.setBorder(new EmptyBorder(0, 0, 20, 0));
-        
-        // Title
-        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        titlePanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        
-        JLabel iconLabel = new JLabel("🏢");
-        iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 32));
-        
-        JLabel titleLabel = new JLabel("Quản Lý Tầng");
-        titleLabel.setFont(UIConstants.FONT_TITLE);
-        titleLabel.setForeground(UIConstants.TEXT_PRIMARY);
-        
-        titlePanel.add(iconLabel);
-        titlePanel.add(Box.createHorizontalStrut(10));
-        titlePanel.add(titleLabel);
-        
-        // Search panel
-        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        searchPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        
-        searchField = new JTextField(20);
-        searchField.setFont(UIConstants.FONT_REGULAR);
-        searchField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(8, 12, 8, 12)
-        ));
-        searchField.addActionListener(e -> searchFloors());
-        
-        ModernButton searchButton = new ModernButton("🔍 Tìm Kiếm", UIConstants.INFO_COLOR);
-        searchButton.addActionListener(e -> searchFloors());
-        
-        ModernButton refreshButton = new ModernButton("🔄 Làm Mới", UIConstants.SUCCESS_COLOR);
-        refreshButton.addActionListener(e -> {
-            searchField.setText("");
-            loadFloors();
+
+        JPanel leftHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
+        leftHeader.setBackground(UIConstants.BACKGROUND_COLOR);
+
+        JButton btnBack = createBackArrowButton();
+        btnBack.addActionListener(e -> {
+            MainDashboard main = (MainDashboard) SwingUtilities.getWindowAncestor(this);
+            if (main != null) {
+                main.showBuildingsPanel(); 
+            }
         });
+        leftHeader.add(btnBack);
+
+        JLabel lblFilter = new JLabel("Quản Lý Tầng:");
+        lblFilter.setFont(UIConstants.FONT_TITLE);
+        lblFilter.setForeground(UIConstants.TEXT_PRIMARY);
         
-        searchPanel.add(searchField);
-        searchPanel.add(searchButton);
-        searchPanel.add(refreshButton);
-        
-        headerPanel.add(titlePanel, BorderLayout.WEST);
-        headerPanel.add(searchPanel, BorderLayout.EAST);
-        
+        cbbBuilding = new JComboBox<>();
+        cbbBuilding.setPreferredSize(new Dimension(280, 35));
+        cbbBuilding.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        cbbBuilding.setBackground(Color.WHITE);
+        cbbBuilding.setRenderer(new DefaultListCellRenderer() {
+            @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof Building) setText(((Building) value).getName());
+                return this;
+            }
+        });
+        cbbBuilding.addActionListener(e -> {
+            Building selected = (Building) cbbBuilding.getSelectedItem();
+            if (selected != null && selected.getId() != null) { 
+                this.currentBuilding = selected; loadFloors();
+            } else {
+                this.currentBuilding = null; cardsContainer.removeAll(); cardsContainer.repaint();
+            }
+        });
+        leftHeader.add(lblFilter); leftHeader.add(cbbBuilding);
+
+        JPanel rightHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        rightHeader.setBackground(UIConstants.BACKGROUND_COLOR);
+
+        btnBatchAdd = new RoundedButton(" Thêm Hàng Loạt", 15);
+        btnBatchAdd.setIcon(new HeaderIcon("LAYER_PLUS", 14, Color.WHITE));
+        btnBatchAdd.setPreferredSize(new Dimension(160, 40));
+        btnBatchAdd.setBackground(new Color(0, 150, 136));
+        btnBatchAdd.setForeground(Color.WHITE);
+        btnBatchAdd.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btnBatchAdd.addActionListener(e -> showBatchAddDialog());
+
+        btnAdd = new RoundedButton(" Thêm Tầng Mới", 15);
+        btnAdd.setIcon(new HeaderIcon("PLUS", 14, Color.WHITE));
+        btnAdd.setPreferredSize(new Dimension(160, 40));
+        btnAdd.setBackground(UIConstants.PRIMARY_COLOR);
+        btnAdd.setForeground(Color.WHITE);
+        btnAdd.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        btnAdd.addActionListener(e -> showAddDialog());
+
+        rightHeader.add(btnBatchAdd);
+        rightHeader.add(btnAdd);
+
+        headerPanel.add(leftHeader, BorderLayout.WEST);
+        headerPanel.add(rightHeader, BorderLayout.EAST);
         add(headerPanel, BorderLayout.NORTH);
+
+        JPanel stackPanel = new JPanel();
+        stackPanel.setLayout(new OverlayLayout(stackPanel));
+        stackPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+
+        overlayPanel = createMaintenanceOverlay();
+        overlayPanel.setVisible(false); 
+        overlayPanel.setAlignmentX(0.5f);
+        overlayPanel.setAlignmentY(0.5f);
+        stackPanel.add(overlayPanel);
+
+        JPanel wrapperPanel = new JPanel(new BorderLayout());
+        wrapperPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        cardsContainer = new JPanel(new GridLayout(0, 3, 20, 20));
+        cardsContainer.setBackground(UIConstants.BACKGROUND_COLOR);
+        cardsContainer.setBorder(new EmptyBorder(10, 0, 10, 0));
+        wrapperPanel.add(cardsContainer, BorderLayout.NORTH);
+
+        JScrollPane scrollPane = new JScrollPane(wrapperPanel);
+        scrollPane.setBorder(null);
+        scrollPane.setBackground(UIConstants.BACKGROUND_COLOR);
+        scrollPane.getViewport().setBackground(UIConstants.BACKGROUND_COLOR);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        
+        scrollPane.setAlignmentX(0.5f);
+        scrollPane.setAlignmentY(0.5f);
+        
+        stackPanel.add(scrollPane);
+        add(stackPanel, BorderLayout.CENTER);
     }
     
-    private void createTablePanel() {
-        JPanel tablePanel = new JPanel(new BorderLayout());
-        tablePanel.setBackground(Color.WHITE);
-        tablePanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
-        
-        // Table model
-        String[] columns = {"ID", "Tòa Nhà", "Số Tầng", "Mô Tả"};
-        tableModel = new DefaultTableModel(columns, 0) {
+    private JButton createBackArrowButton() {
+        JButton btn = new JButton(" \u2190 Quay lại"); 
+        btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        btn.setForeground(UIConstants.PRIMARY_COLOR);
+        btn.setContentAreaFilled(false);
+        btn.setBorderPainted(false);
+        btn.setFocusPainted(false);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return btn;
+    }
+    
+    private JPanel createMaintenanceOverlay() {
+        JPanel overlay = new JPanel(new GridBagLayout()) {
             @Override
-            public boolean isCellEditable(int row, int column) {
-                return false;
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setColor(new Color(0, 0, 0, 120)); 
+                g2.fillRect(0, 0, getWidth(), getHeight());
+                super.paintComponent(g);
+            }
+        };
+        overlay.setOpaque(false);
+        overlay.addMouseListener(new MouseAdapter() {}); 
+
+        JPanel cardPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(new Color(0, 0, 0, 50));
+                g2.fillRoundRect(5, 5, getWidth()-10, getHeight()-10, 25, 25);
+                g2.setColor(Color.WHITE);
+                g2.fillRoundRect(0, 0, getWidth()-10, getHeight()-10, 25, 25);
+                g2.setColor(new Color(255, 112, 67)); 
+                RoundRectangle2D topRect = new RoundRectangle2D.Float(0, 0, getWidth()-10, 10, 25, 25);
+                g2.setClip(topRect);
+                g2.fillRect(0, 0, getWidth()-10, 10);
+                g2.setClip(null);
+                g2.dispose();
+            }
+        };
+        cardPanel.setOpaque(false);
+        cardPanel.setLayout(new BoxLayout(cardPanel, BoxLayout.Y_AXIS));
+        cardPanel.setBorder(new EmptyBorder(30, 40, 30, 40));
+
+        JLabel lblIcon = new JLabel(new HeaderIcon("MAINTENANCE_ART", 64, new Color(255, 112, 67)));
+        lblIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel lblTitle = new JLabel("HỆ THỐNG BẢO TRÌ");
+        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        lblTitle.setForeground(new Color(66, 66, 66));
+        lblTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel lblDesc1 = new JLabel("Tòa nhà hiện đang trong trạng thái bảo trì.");
+        lblDesc1.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        lblDesc1.setForeground(new Color(100, 100, 100));
+        lblDesc1.setAlignmentX(Component.CENTER_ALIGNMENT);
+        JLabel lblDesc2 = new JLabel("Chức năng chỉnh sửa tạm thời bị khóa.");
+        lblDesc2.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        lblDesc2.setForeground(new Color(100, 100, 100));
+        lblDesc2.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        cardPanel.add(lblIcon);
+        cardPanel.add(Box.createVerticalStrut(20));
+        cardPanel.add(lblTitle);
+        cardPanel.add(Box.createVerticalStrut(10));
+        cardPanel.add(lblDesc1);
+        cardPanel.add(lblDesc2);
+        overlay.add(cardPanel);
+        return overlay;
+    }
+
+    private void loadBuildingData() {
+        List<Building> buildings = buildingDAO.getAllBuildings();
+        cbbBuilding.removeAllItems();
+        if (buildings.isEmpty()) {
+            cbbBuilding.addItem(new Building(null, "Chưa có tòa nhà nào", "", "", "", "Đang hoạt động", false));
+        } else {
+            for (Building b : buildings) cbbBuilding.addItem(b);
+            if (currentBuilding != null) {
+                for(int i=0; i<cbbBuilding.getItemCount(); i++) {
+                    Building b = cbbBuilding.getItemAt(i);
+                    if(b.getId() != null && b.getId().equals(currentBuilding.getId())) { 
+                        cbbBuilding.setSelectedIndex(i); 
+                        break; 
+                    }
+                }
+            } else cbbBuilding.setSelectedIndex(0);
+        }
+    }
+
+    // *** METHOD loadFloors() ĐÃ ĐƯỢC SỬA TRIỆT ĐỂ ***
+    public void loadFloors() {
+        // Hủy worker cũ nếu đang chạy
+        if (currentWorker != null && !currentWorker.isDone()) {
+            System.out.println("⚠️ [FLOOR] Cancelling previous worker...");
+            currentWorker.cancel(true);
+        }
+        
+        cardsContainer.removeAll();
+        
+        if (currentBuilding == null || currentBuilding.getId() == null) {
+            showEmptyMessage("Vui lòng chọn một tòa nhà.");
+            cardsContainer.revalidate(); 
+            cardsContainer.repaint();
+            return;
+        }
+
+        System.out.println("🔄 [FLOOR] Loading floors for building: " + currentBuilding.getName() + " (ID: " + currentBuilding.getId() + ")");
+
+        SwingWorker<List<dao.FloorDAO.FloorWithStats>, Void> worker = new SwingWorker<>() {
+            @Override
+            protected List<dao.FloorDAO.FloorWithStats> doInBackground() {
+                if (isCancelled()) return null;
+                System.out.println("📊 [FLOOR] Fetching data from database...");
+                return floorDAO.getFloorsWithStatsByBuildingId(currentBuilding.getId());
+            }
+
+            @Override
+            protected void done() {
+                // *** KIỂM TRA STALE WORKER TRƯỚC KHI XỬ LÝ ***
+                if (this != FloorManagementPanel.this.currentWorker) {
+                    System.out.println("⚠️ [FLOOR] Ignored stale worker result");
+                    return;
+                }
+
+                if (isCancelled()) {
+                    System.out.println("❌ [FLOOR] Worker was cancelled");
+                    return;
+                }
+                
+                try {
+                    List<dao.FloorDAO.FloorWithStats> data = get();
+                    System.out.println("✅ [FLOOR] Received " + data.size() + " floors from database");
+                    
+                    cardsContainer.removeAll();
+                    
+                    boolean isMaintenance = "Đang bảo trì".equals(currentBuilding.getStatus());
+                    updateMaintenanceUI(isMaintenance);
+
+                    if (data.isEmpty()) {
+                        showEmptyMessage("Tòa nhà này chưa có tầng nào.");
+                    } else {
+                        for (dao.FloorDAO.FloorWithStats item : data) {
+                            System.out.println("  📍 [FLOOR] Floor " + item.floor.getFloorNumber() + 
+                                             " - " + item.floor.getName() + 
+                                             ": " + item.stats.rentedApartments + "/" + 
+                                             item.stats.totalApartments);
+                            
+                            FloorCard card = new FloorCard(
+                                item.floor, 
+                                item.stats, 
+                                isMaintenance, 
+                                onFloorSelect, 
+                                FloorManagementPanel.this::editFloor, 
+                                FloorManagementPanel.this::deleteFloor
+                            );
+                            cardsContainer.add(card);
+                        }
+                    }
+                    
+                    cardsContainer.revalidate();
+                    cardsContainer.repaint();
+                    System.out.println("✅ [FLOOR] UI updated with " + cardsContainer.getComponentCount() + " components");
+                    
+                } catch (Exception e) {
+                    // *** KIỂM TRA STALE WORKER TRONG CATCH ***
+                    if (this != FloorManagementPanel.this.currentWorker) {
+                        System.out.println("⚠️ [FLOOR] Ignored stale worker exception");
+                        return;
+                    }
+                    
+                    System.err.println("❌ [FLOOR] Error loading floors:");
+                    e.printStackTrace();
+                    cardsContainer.removeAll();
+                    showEmptyMessage("Lỗi khi tải dữ liệu tầng.");
+                    cardsContainer.revalidate();
+                    cardsContainer.repaint();
+                }
             }
         };
         
-        floorTable = new JTable(tableModel);
-        floorTable.setFont(UIConstants.FONT_REGULAR);
-        floorTable.setRowHeight(45);
-        floorTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        floorTable.setShowGrid(true);
-        floorTable.setGridColor(UIConstants.BORDER_COLOR);
-        
-        // Double-click to edit
-        floorTable.addMouseListener(new java.awt.event.MouseAdapter() {
-            public void mouseClicked(java.awt.event.MouseEvent evt) {
-                if (evt.getClickCount() == 2) {
-                    editFloor();
-                }
-            }
-        });
-        
-        // Table header
-        JTableHeader header = floorTable.getTableHeader();
-        header.setFont(UIConstants.FONT_HEADING);
-        header.setBackground(UIConstants.BACKGROUND_COLOR);
-        header.setForeground(UIConstants.TEXT_PRIMARY);
-        header.setBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, UIConstants.BORDER_COLOR));
-        
-        // Column widths
-        floorTable.getColumnModel().getColumn(0).setPreferredWidth(50);
-        floorTable.getColumnModel().getColumn(1).setPreferredWidth(250);
-        floorTable.getColumnModel().getColumn(2).setPreferredWidth(100);
-        floorTable.getColumnModel().getColumn(3).setPreferredWidth(400);
-        
-        JScrollPane scrollPane = new JScrollPane(floorTable);
-        scrollPane.setBorder(null);
-        
-        tablePanel.add(scrollPane, BorderLayout.CENTER);
-        
-        add(tablePanel, BorderLayout.CENTER);
+        currentWorker = worker;
+        worker.execute();
     }
     
-    private void createActionPanel() {
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
-        actionPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        actionPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
-        
-        ModernButton addButton = new ModernButton("➕ Thêm Tầng", UIConstants.SUCCESS_COLOR);
-        addButton.setPreferredSize(new Dimension(150, 45));
-        addButton.addActionListener(e -> addFloor());
-        
-        ModernButton editButton = new ModernButton("✏️ Sửa", UIConstants.WARNING_COLOR);
-        editButton.setPreferredSize(new Dimension(120, 45));
-        editButton.addActionListener(e -> editFloor());
-        
-        ModernButton deleteButton = new ModernButton("🗑️ Xóa", UIConstants.DANGER_COLOR);
-        deleteButton.setPreferredSize(new Dimension(120, 45));
-        deleteButton.addActionListener(e -> deleteFloor());
-        
-        actionPanel.add(addButton);
-        actionPanel.add(editButton);
-        actionPanel.add(deleteButton);
-        
-        add(actionPanel, BorderLayout.SOUTH);
-    }
-    
-    private void loadFloors() {
-        tableModel.setRowCount(0);
-        List<Floor> floors = floorDAO.getAllFloors();
-        
-        for (Floor floor : floors) {
-            Building building = buildingDAO.getBuildingById(floor.getBuildingId());
-            String buildingName = (building != null) ? building.getName() : "N/A";
-            
-            Object[] row = {
-                floor.getId(),
-                buildingName,
-                floor.getFloorNumber(),
-                floor.getDescription() != null ? floor.getDescription() : ""
-            };
-            tableModel.addRow(row);
+    private void updateMaintenanceUI(boolean isMaintenance) {
+        overlayPanel.setVisible(isMaintenance);
+        btnBatchAdd.setEnabled(!isMaintenance);
+        btnAdd.setEnabled(!isMaintenance);
+        if(isMaintenance) {
+            btnBatchAdd.setBackground(Color.GRAY);
+            btnAdd.setBackground(Color.GRAY);
+        } else {
+            btnBatchAdd.setBackground(new Color(0, 150, 136));
+            btnAdd.setBackground(UIConstants.PRIMARY_COLOR);
         }
     }
     
-    private void addFloor() {
-        // Get parent frame
-        JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        
-        // Show dialog
-        FloorDialog dialog = new FloorDialog(parentFrame);
+    private void showEmptyMessage(String msg) {
+        JLabel guideLabel = new JLabel(msg); 
+        guideLabel.setHorizontalAlignment(SwingConstants.CENTER); 
+        guideLabel.setFont(new Font("Segoe UI", Font.ITALIC, 16)); 
+        guideLabel.setForeground(Color.GRAY);
+        JPanel msgPanel = new JPanel(new BorderLayout()); 
+        msgPanel.setBackground(UIConstants.BACKGROUND_COLOR); 
+        msgPanel.add(guideLabel, BorderLayout.CENTER);
+        cardsContainer.add(msgPanel);
+    }
+    
+    private boolean checkMaintenance() {
+        if (currentBuilding != null && "Đang bảo trì".equals(currentBuilding.getStatus())) {
+            JOptionPane.showMessageDialog(this, "Tòa nhà đang bảo trì. Không thể thao tác!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+            return true;
+        }
+        return false;
+    }
+
+    private void showBatchAddDialog() {
+        if (checkMaintenance()) return;
+        if (currentBuilding == null || currentBuilding.getId() == null) { 
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn Tòa nhà trước!"); 
+            return; 
+        }
+        JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+        BatchAddFloorDialog dialog = new BatchAddFloorDialog(parent, currentBuilding.getId());
         dialog.setVisible(true);
-        
-        // Check if confirmed
-        if (dialog.isConfirmed()) {
-            Floor floor = dialog.getFloor();
-            
-            if (floorDAO.insertFloor(floor)) {
-                JOptionPane.showMessageDialog(this, 
-                    "Thêm tầng thành công!", 
-                    "Thành Công", 
-                    JOptionPane.INFORMATION_MESSAGE);
-                loadFloors();
-            } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Thêm tầng thất bại!", 
-                    "Lỗi", 
-                    JOptionPane.ERROR_MESSAGE);
-            }
-        }
+        if (dialog.isSuccess()) loadFloors();
     }
-    
-    private void editFloor() {
-        int selectedRow = floorTable.getSelectedRow();
-        
-        if (selectedRow < 0) {
-            JOptionPane.showMessageDialog(this, 
-                "Vui lòng chọn tầng cần sửa!", 
-                "Cảnh Báo", 
-                JOptionPane.WARNING_MESSAGE);
-            return;
+
+    private void showAddDialog() {
+        if (checkMaintenance()) return;
+        if (currentBuilding == null || currentBuilding.getId() == null) { 
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn Tòa nhà trước!"); 
+            return; 
         }
-        
-        Long id = (Long) tableModel.getValueAt(selectedRow, 0);
-        Floor floor = floorDAO.getFloorById(id);
-        
-        if (floor == null) {
-            JOptionPane.showMessageDialog(this, 
-                "Không tìm thấy tầng!", 
-                "Lỗi", 
-                JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-        
-        // Get parent frame
-        JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        
-        // Show dialog with existing floor
-        FloorDialog dialog = new FloorDialog(parentFrame, floor);
+        JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+        Floor newFloor = new Floor(); 
+        newFloor.setBuildingId(currentBuilding.getId());
+        FloorDialog dialog = new FloorDialog(parent, newFloor); 
         dialog.setVisible(true);
-        
-        // Check if confirmed
         if (dialog.isConfirmed()) {
-            Floor updatedFloor = dialog.getFloor();
-            
-            if (floorDAO.updateFloor(updatedFloor)) {
-                JOptionPane.showMessageDialog(this, 
-                    "Cập nhật tầng thành công!", 
-                    "Thành Công", 
-                    JOptionPane.INFORMATION_MESSAGE);
-                loadFloors();
+            if (floorDAO.insertFloor(dialog.getFloor())) { 
+                JOptionPane.showMessageDialog(this, "Thêm tầng thành công!"); 
+                loadFloors(); 
             } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Cập nhật tầng thất bại!", 
-                    "Lỗi", 
-                    JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Thêm thất bại!");
             }
         }
     }
-    
-    private void deleteFloor() {
-        int selectedRow = floorTable.getSelectedRow();
-        
-        if (selectedRow < 0) {
-            JOptionPane.showMessageDialog(this, 
-                "Vui lòng chọn tầng cần xóa!", 
-                "Cảnh Báo", 
-                JOptionPane.WARNING_MESSAGE);
-            return;
+
+    private void editFloor(Floor floor) {
+        if (checkMaintenance()) return;
+        JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+        FloorDialog dialog = new FloorDialog(parent, floor); 
+        dialog.setVisible(true);
+        if (dialog.isConfirmed()) {
+            if (floorDAO.updateFloor(dialog.getFloor())) { 
+                JOptionPane.showMessageDialog(this, "Cập nhật thành công!"); 
+                loadFloors(); 
+            } else {
+                JOptionPane.showMessageDialog(this, "Cập nhật thất bại!");
+            }
         }
-        
-        Long id = (Long) tableModel.getValueAt(selectedRow, 0);
-        String buildingName = (String) tableModel.getValueAt(selectedRow, 1);
-        int floorNumber = (Integer) tableModel.getValueAt(selectedRow, 2);
-        
-        int confirm = JOptionPane.showConfirmDialog(this,
-            "Bạn có chắc chắn muốn xóa tầng " + floorNumber + " của " + buildingName + "?",
-            "Xác Nhận Xóa",
-            JOptionPane.YES_NO_OPTION,
-            JOptionPane.WARNING_MESSAGE);
-        
+    }
+
+    private void deleteFloor(Floor floor) {
+        if (checkMaintenance()) return;
+        int confirm = JOptionPane.showConfirmDialog(this, 
+            "Bạn có chắc muốn xóa " + floor.getName() + "?", 
+            "Xác nhận xóa", 
+            JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
-            if (floorDAO.deleteFloor(id)) {
-                JOptionPane.showMessageDialog(this, 
-                    "Xóa tầng thành công!", 
-                    "Thành Công", 
-                    JOptionPane.INFORMATION_MESSAGE);
+            if (floorDAO.deleteFloor(floor.getId())) {
                 loadFloors();
             } else {
-                JOptionPane.showMessageDialog(this, 
-                    "Xóa tầng thất bại!", 
-                    "Lỗi", 
-                    JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this, "Xóa thất bại!");
             }
         }
     }
+
+    private static class RoundedButton extends JButton { 
+        private int arc; 
+        public RoundedButton(String text, int arc) { 
+            super(text); 
+            this.arc = arc; 
+            setContentAreaFilled(false); 
+            setFocusPainted(false); 
+            setBorderPainted(false); 
+            setCursor(new Cursor(Cursor.HAND_CURSOR)); 
+        } 
+        @Override 
+        protected void paintComponent(Graphics g) { 
+            Graphics2D g2 = (Graphics2D) g.create(); 
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); 
+            g2.setColor(getBackground()); 
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc); 
+            super.paintComponent(g); 
+            g2.dispose(); 
+        } 
+    }
     
-    private void searchFloors() {
-        String keyword = searchField.getText().trim();
+    private static class HeaderIcon implements Icon {
+        private String type; 
+        private int size; 
+        private Color color; 
         
-        if (keyword.isEmpty()) {
-            loadFloors();
-            return;
+        public HeaderIcon(String type, int size, Color color) { 
+            this.type = type; 
+            this.size = size; 
+            this.color = color; 
         }
         
-        tableModel.setRowCount(0);
-        List<Floor> floors = floorDAO.getAllFloors();
-        
-        for (Floor floor : floors) {
-            Building building = buildingDAO.getBuildingById(floor.getBuildingId());
-            String buildingName = (building != null) ? building.getName() : "";
+        @Override 
+        public void paintIcon(Component c, Graphics g, int x, int y) { 
+            Graphics2D g2 = (Graphics2D) g.create(); 
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); 
+            g2.setColor(color); 
+            g2.setStroke(new BasicStroke(2.0f)); 
+            g2.translate(x, y);
             
-            if (buildingName.toLowerCase().contains(keyword.toLowerCase()) ||
-                String.valueOf(floor.getFloorNumber()).contains(keyword)) {
-                
-                Object[] row = {
-                    floor.getId(),
-                    buildingName,
-                    floor.getFloorNumber(),
-                    floor.getDescription() != null ? floor.getDescription() : ""
-                };
-                tableModel.addRow(row);
+            if ("PLUS".equals(type)) { 
+                g2.drawLine(0, size/2, size, size/2); 
+                g2.drawLine(size/2, 0, size/2, size); 
             }
-        }
+            else if ("LAYER_PLUS".equals(type)) { 
+                int w=size-8; int h=size/4; 
+                g2.drawRoundRect(4, size/2-4, w, h, 3,3); 
+                g2.drawRoundRect(4, size/2+4, w, h, 3,3); 
+                g2.drawLine(size/2, 2, size/2, 10); 
+                g2.drawLine(size/2-4, 6, size/2+4, 6); 
+            }
+            else if ("MAINTENANCE_ART".equals(type)) { 
+                int cx = size/2; int cy = size/2; int r = size/3;
+                g2.setStroke(new BasicStroke(3.0f));
+                g2.drawOval(cx-r, cy-r, r*2, r*2);
+                g2.setStroke(new BasicStroke(4.0f));
+                for(int i=0; i<8; i++) {
+                    double angle = Math.toRadians(i * 45);
+                    int x1 = cx + (int)(Math.cos(angle) * (r-2));
+                    int y1 = cy + (int)(Math.sin(angle) * (r-2));
+                    int x2 = cx + (int)(Math.cos(angle) * (r+6));
+                    int y2 = cy + (int)(Math.sin(angle) * (r+6));
+                    g2.drawLine(x1, y1, x2, y2);
+                }
+                g2.setColor(new Color(90, 90, 90));
+                g2.setStroke(new BasicStroke(3.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawLine(size/4, size-size/4, size-size/4, size/4);
+            }
+            g2.dispose(); 
+        } 
         
-        if (tableModel.getRowCount() == 0) {
-            JOptionPane.showMessageDialog(this, 
-                "Không tìm thấy tầng nào!", 
-                "Thông Báo", 
-                JOptionPane.INFORMATION_MESSAGE);
-        }
+        @Override 
+        public int getIconWidth() { return size; } 
+        
+        @Override 
+        public int getIconHeight() { return size; }
     }
 }

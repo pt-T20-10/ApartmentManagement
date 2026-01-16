@@ -11,6 +11,26 @@ import java.util.List;
  */
 public class ApartmentDAO {
     
+    // --- HELPER: Map ResultSet to Object (Tránh lặp code) ---
+    private Apartment mapResultSetToApartment(ResultSet rs) throws SQLException {
+        Apartment apartment = new Apartment();
+        apartment.setId(rs.getLong("id"));
+        apartment.setFloorId(rs.getLong("floor_id"));
+        apartment.setRoomNumber(rs.getString("room_number"));
+        apartment.setArea(rs.getDouble("area"));
+        apartment.setStatus(rs.getString("status"));
+        apartment.setBasePrice(rs.getBigDecimal("base_price"));
+        apartment.setDescription(rs.getString("description"));
+        apartment.setDeleted(rs.getBoolean("is_deleted"));
+        
+        // --- 3 THUỘC TÍNH MỚI ---
+        apartment.setApartmentType(rs.getString("apartment_type"));
+        apartment.setBedroomCount(rs.getInt("bedroom_count"));
+        apartment.setBathroomCount(rs.getInt("bathroom_count"));
+        
+        return apartment;
+    }
+
     // Get all apartments
     public List<Apartment> getAllApartments() {
         List<Apartment> apartments = new ArrayList<>();
@@ -21,16 +41,7 @@ public class ApartmentDAO {
              ResultSet rs = stmt.executeQuery(sql)) {
             
             while (rs.next()) {
-                Apartment apartment = new Apartment();
-                apartment.setId(rs.getLong("id"));
-                apartment.setFloorId(rs.getLong("floor_id"));
-                apartment.setRoomNumber(rs.getString("room_number"));
-                apartment.setArea(rs.getDouble("area"));
-                apartment.setStatus(rs.getString("status"));
-                apartment.setBasePrice(rs.getBigDecimal("base_price"));
-                apartment.setDescription(rs.getString("description"));
-                apartment.setDeleted(rs.getBoolean("is_deleted"));
-                apartments.add(apartment);
+                apartments.add(mapResultSetToApartment(rs));
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -50,16 +61,7 @@ public class ApartmentDAO {
             ResultSet rs = pstmt.executeQuery();
             
             while (rs.next()) {
-                Apartment apartment = new Apartment();
-                apartment.setId(rs.getLong("id"));
-                apartment.setFloorId(rs.getLong("floor_id"));
-                apartment.setRoomNumber(rs.getString("room_number"));
-                apartment.setArea(rs.getDouble("area"));
-                apartment.setStatus(rs.getString("status"));
-                apartment.setBasePrice(rs.getBigDecimal("base_price"));
-                apartment.setDescription(rs.getString("description"));
-                apartment.setDeleted(rs.getBoolean("is_deleted"));
-                apartments.add(apartment);
+                apartments.add(mapResultSetToApartment(rs));
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -67,17 +69,13 @@ public class ApartmentDAO {
         return apartments;
     }
     
-    // ===== ADDED FOR PANEL COMPATIBILITY =====
-    
-    /**
-     * Get apartments by building ID (through floor relationship)
-     */
+    // Get apartments by building ID (through floor relationship)
     public List<Apartment> getApartmentsByBuildingId(Long buildingId) {
         List<Apartment> apartments = new ArrayList<>();
         String sql = "SELECT a.* FROM apartments a " +
                      "JOIN floors f ON a.floor_id = f.id " +
                      "WHERE f.building_id = ? AND a.is_deleted = 0 " +
-                     "ORDER BY a.room_number";
+                     "ORDER BY f.floor_number, a.room_number";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -86,42 +84,12 @@ public class ApartmentDAO {
             ResultSet rs = pstmt.executeQuery();
             
             while (rs.next()) {
-                Apartment apartment = new Apartment();
-                apartment.setId(rs.getLong("id"));
-                apartment.setFloorId(rs.getLong("floor_id"));
-                apartment.setRoomNumber(rs.getString("room_number"));
-                apartment.setArea(rs.getDouble("area"));
-                apartment.setStatus(rs.getString("status"));
-                apartment.setBasePrice(rs.getBigDecimal("base_price"));
-                apartment.setDescription(rs.getString("description"));
-                apartment.setDeleted(rs.getBoolean("is_deleted"));
-                apartments.add(apartment);
+                apartments.add(mapResultSetToApartment(rs));
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return apartments;
-    }
-    
-    /**
-     * Count apartments by status
-     */
-    public int countApartmentsByStatus(String status) {
-        String sql = "SELECT COUNT(*) FROM apartments WHERE status = ? AND is_deleted = 0";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
-            pstmt.setString(1, status);
-            ResultSet rs = pstmt.executeQuery();
-            
-            if (rs.next()) {
-                return rs.getInt(1);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return 0;
     }
     
     // Get apartment by ID
@@ -135,16 +103,7 @@ public class ApartmentDAO {
             ResultSet rs = pstmt.executeQuery();
             
             if (rs.next()) {
-                Apartment apartment = new Apartment();
-                apartment.setId(rs.getLong("id"));
-                apartment.setFloorId(rs.getLong("floor_id"));
-                apartment.setRoomNumber(rs.getString("room_number"));
-                apartment.setArea(rs.getDouble("area"));
-                apartment.setStatus(rs.getString("status"));
-                apartment.setBasePrice(rs.getBigDecimal("base_price"));
-                apartment.setDescription(rs.getString("description"));
-                apartment.setDeleted(rs.getBoolean("is_deleted"));
-                return apartment;
+                return mapResultSetToApartment(rs);
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -152,10 +111,11 @@ public class ApartmentDAO {
         return null;
     }
     
-    // Insert new apartment
+    // Insert new apartment (CẬP NHẬT THÊM 3 TRƯỜNG MỚI)
     public boolean insertApartment(Apartment apartment) {
-        String sql = "INSERT INTO apartments (floor_id, room_number, area, status, base_price, description, is_deleted) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, 0)";
+        String sql = "INSERT INTO apartments (floor_id, room_number, area, status, base_price, description, " +
+                     "apartment_type, bedroom_count, bathroom_count, is_deleted) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -166,6 +126,11 @@ public class ApartmentDAO {
             pstmt.setString(4, apartment.getStatus());
             pstmt.setBigDecimal(5, apartment.getBasePrice());
             pstmt.setString(6, apartment.getDescription());
+            
+            // --- Set 3 tham số mới ---
+            pstmt.setString(7, apartment.getApartmentType());
+            pstmt.setInt(8, apartment.getBedroomCount());
+            pstmt.setInt(9, apartment.getBathroomCount());
             
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -174,10 +139,11 @@ public class ApartmentDAO {
         return false;
     }
     
-    // Update apartment
+    // Update apartment (CẬP NHẬT THÊM 3 TRƯỜNG MỚI)
     public boolean updateApartment(Apartment apartment) {
         String sql = "UPDATE apartments SET floor_id = ?, room_number = ?, area = ?, status = ?, " +
-                     "base_price = ?, description = ? WHERE id = ?";
+                     "base_price = ?, description = ?, apartment_type = ?, bedroom_count = ?, bathroom_count = ? " +
+                     "WHERE id = ?";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -188,7 +154,13 @@ public class ApartmentDAO {
             pstmt.setString(4, apartment.getStatus());
             pstmt.setBigDecimal(5, apartment.getBasePrice());
             pstmt.setString(6, apartment.getDescription());
-            pstmt.setLong(7, apartment.getId());
+            
+            // --- Set 3 tham số mới ---
+            pstmt.setString(7, apartment.getApartmentType());
+            pstmt.setInt(8, apartment.getBedroomCount());
+            pstmt.setInt(9, apartment.getBathroomCount());
+            
+            pstmt.setLong(10, apartment.getId()); // ID là tham số cuối cùng
             
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -212,54 +184,28 @@ public class ApartmentDAO {
         return false;
     }
     
-    // Count total apartments
+    // Count functions...
     public int countApartments() {
         String sql = "SELECT COUNT(*) FROM apartments WHERE is_deleted = 0";
-        
         try (Connection conn = Db_connection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-            
-            if (rs.next()) {
-                return rs.getInt(1);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+            if (rs.next()) return rs.getInt(1);
+        } catch (SQLException e) { e.printStackTrace(); }
         return 0;
     }
     
-    // Count available apartments
-    public int countAvailableApartments() {
-        String sql = "SELECT COUNT(*) FROM apartments WHERE status = 'AVAILABLE' AND is_deleted = 0";
-        
+    public int countApartmentsByStatus(String status) {
+        String sql = "SELECT COUNT(*) FROM apartments WHERE status = ? AND is_deleted = 0";
         try (Connection conn = Db_connection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
-            if (rs.next()) {
-                return rs.getInt(1);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, status);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) return rs.getInt(1);
+        } catch (SQLException e) { e.printStackTrace(); }
         return 0;
     }
-    
-    // Count rented apartments
-    public int countRentedApartments() {
-        String sql = "SELECT COUNT(*) FROM apartments WHERE status = 'RENTED' AND is_deleted = 0";
-        
-        try (Connection conn = Db_connection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
-            if (rs.next()) {
-                return rs.getInt(1);
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return 0;
-    }
+
+    public int countAvailableApartments() { return countApartmentsByStatus("AVAILABLE"); }
+    public int countRentedApartments() { return countApartmentsByStatus("RENTED"); }
 }
