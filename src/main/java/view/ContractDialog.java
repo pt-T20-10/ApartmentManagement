@@ -217,28 +217,46 @@ public class ContractDialog extends JDialog {
     }
     
     private JPanel createButtonPanel() {
-        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        buttonPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        
-        ModernButton cancelButton = new ModernButton("Hủy", UIConstants.TEXT_SECONDARY);
-        cancelButton.setPreferredSize(new Dimension(100, 40));
-        cancelButton.addActionListener(e -> {
-            confirmed = false;
-            dispose();
-        });
-        
-        ModernButton saveButton = new ModernButton(
-            contract == null ? "Thêm" : "Lưu", 
-            UIConstants.SUCCESS_COLOR
-        );
-        saveButton.setPreferredSize(new Dimension(100, 40));
-        saveButton.addActionListener(e -> saveContract());
-        
-        buttonPanel.add(cancelButton);
-        buttonPanel.add(saveButton);
-        
-        return buttonPanel;
+    JPanel buttonPanel = new JPanel(new BorderLayout());
+    buttonPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+    
+    // Left: Manage Members button (only in Edit mode)
+    JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+    leftPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+    
+    if (contract != null && contract.getId() != null) {
+        ModernButton manageMembersButton = new ModernButton("👥 Quản lý Thành viên", new Color(103, 58, 183));
+        manageMembersButton.setPreferredSize(new Dimension(200, 40));
+        manageMembersButton.addActionListener(e -> manageHouseholdMembers());
+        leftPanel.add(manageMembersButton);
     }
+    
+    // Right: Save/Cancel buttons
+    JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+    rightPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+    
+    ModernButton cancelButton = new ModernButton("Hủy", UIConstants.TEXT_SECONDARY);
+    cancelButton.setPreferredSize(new Dimension(100, 40));
+    cancelButton.addActionListener(e -> {
+        confirmed = false;
+        dispose();
+    });
+    
+    ModernButton saveButton = new ModernButton(
+        contract == null ? "Thêm" : "Lưu", 
+        UIConstants.SUCCESS_COLOR
+    );
+    saveButton.setPreferredSize(new Dimension(100, 40));
+    saveButton.addActionListener(e -> saveContract());
+    
+    rightPanel.add(cancelButton);
+    rightPanel.add(saveButton);
+    
+    buttonPanel.add(leftPanel, BorderLayout.WEST);
+    buttonPanel.add(rightPanel, BorderLayout.EAST);
+    
+    return buttonPanel;
+}
     
     private JLabel createFieldLabel(String text) {
         JLabel label = new JLabel(text);
@@ -492,4 +510,17 @@ public class ContractDialog extends JDialog {
     public Contract getContract() {
         return contract;
     }
+    
+    private void manageHouseholdMembers() {
+    if (contract == null || contract.getId() == null) {
+        JOptionPane.showMessageDialog(this,
+            "Vui lòng lưu hợp đồng trước khi quản lý thành viên!",
+            "Thông Báo",
+            JOptionPane.INFORMATION_MESSAGE);
+        return;
+    }
+    
+    HouseholdMemberManagementDialog dialog = new HouseholdMemberManagementDialog(this, contract.getId());
+    dialog.setVisible(true);
+}
 }
