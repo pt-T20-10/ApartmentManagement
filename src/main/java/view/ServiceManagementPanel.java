@@ -7,14 +7,16 @@ import util.ModernButton;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import java.awt.*;
+import java.text.DecimalFormat;
 import java.util.List;
 
 /**
- * Service Management Panel
- * Full CRUD operations with popup dialog
+ * Service Management Panel - REDESIGNED
+ * Modern, clean interface without Description column
  */
 public class ServiceManagementPanel extends JPanel {
     
@@ -22,6 +24,7 @@ public class ServiceManagementPanel extends JPanel {
     private JTable serviceTable;
     private DefaultTableModel tableModel;
     private JTextField searchField;
+    private DecimalFormat currencyFormat = new DecimalFormat("#,###");
     
     public ServiceManagementPanel() {
         this.serviceDAO = new ServiceDAO();
@@ -42,12 +45,13 @@ public class ServiceManagementPanel extends JPanel {
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         headerPanel.setBorder(new EmptyBorder(0, 0, 20, 0));
         
-        // Title
+        // Title with icon
         JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         titlePanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
-        JLabel iconLabel = new JLabel("⚡");
-        iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 32));
+        JLabel iconLabel = new JLabel("\u26A1"); // ⚡
+        iconLabel.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 32));
+        iconLabel.setForeground(UIConstants.WARNING_COLOR);
         
         JLabel titleLabel = new JLabel("Quản Lý Dịch Vụ");
         titleLabel.setFont(UIConstants.FONT_TITLE);
@@ -58,7 +62,7 @@ public class ServiceManagementPanel extends JPanel {
         titlePanel.add(titleLabel);
         
         // Search panel
-        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         searchPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
         searchField = new JTextField(20);
@@ -69,10 +73,10 @@ public class ServiceManagementPanel extends JPanel {
         ));
         searchField.addActionListener(e -> searchServices());
         
-        ModernButton searchButton = new ModernButton("🔍 Tìm Kiếm", UIConstants.INFO_COLOR);
+        ModernButton searchButton = new ModernButton("\uD83D\uDD0D Tìm Kiếm", UIConstants.INFO_COLOR);
         searchButton.addActionListener(e -> searchServices());
         
-        ModernButton refreshButton = new ModernButton("🔄 Làm Mới", UIConstants.SUCCESS_COLOR);
+        ModernButton refreshButton = new ModernButton("\uD83D\uDD04 Làm Mới", UIConstants.SUCCESS_COLOR);
         refreshButton.addActionListener(e -> {
             searchField.setText("");
             loadServices();
@@ -93,21 +97,30 @@ public class ServiceManagementPanel extends JPanel {
         tablePanel.setBackground(Color.WHITE);
         tablePanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
         
-        // Table model
-        String[] columns = {"ID", "Tên Dịch Vụ", "Đơn Vị", "Đơn Giá", "Bắt Buộc", "Mô Tả"};
+        // Table model - REMOVED Description column
+        String[] columns = {"ID", "Tên Dịch Vụ", "Đơn Vị", "Đơn Giá", "Bắt Buộc"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
             }
+            
+            @Override
+            public Class<?> getColumnClass(int column) {
+                if (column == 0) return Long.class;
+                if (column == 3) return String.class; // Formatted currency
+                return String.class;
+            }
         };
         
         serviceTable = new JTable(tableModel);
         serviceTable.setFont(UIConstants.FONT_REGULAR);
-        serviceTable.setRowHeight(45);
+        serviceTable.setRowHeight(50);
         serviceTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         serviceTable.setShowGrid(true);
-        serviceTable.setGridColor(UIConstants.BORDER_COLOR);
+        serviceTable.setGridColor(new Color(240, 240, 240));
+        serviceTable.setSelectionBackground(new Color(232, 240, 254));
+        serviceTable.setSelectionForeground(UIConstants.TEXT_PRIMARY);
         
         // Double-click to edit
         serviceTable.addMouseListener(new java.awt.event.MouseAdapter() {
@@ -118,23 +131,58 @@ public class ServiceManagementPanel extends JPanel {
             }
         });
         
-        // Table header
+        // Table header styling
         JTableHeader header = serviceTable.getTableHeader();
         header.setFont(UIConstants.FONT_HEADING);
-        header.setBackground(UIConstants.BACKGROUND_COLOR);
+        header.setBackground(new Color(249, 250, 251));
         header.setForeground(UIConstants.TEXT_PRIMARY);
+        header.setPreferredSize(new Dimension(header.getPreferredSize().width, 45));
         header.setBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, UIConstants.BORDER_COLOR));
         
         // Column widths
-        serviceTable.getColumnModel().getColumn(0).setPreferredWidth(50);
-        serviceTable.getColumnModel().getColumn(1).setPreferredWidth(200);
-        serviceTable.getColumnModel().getColumn(2).setPreferredWidth(100);
-        serviceTable.getColumnModel().getColumn(3).setPreferredWidth(120);
-        serviceTable.getColumnModel().getColumn(4).setPreferredWidth(100);
-        serviceTable.getColumnModel().getColumn(5).setPreferredWidth(250);
+        serviceTable.getColumnModel().getColumn(0).setPreferredWidth(60);
+        serviceTable.getColumnModel().getColumn(0).setMaxWidth(80);
+        serviceTable.getColumnModel().getColumn(1).setPreferredWidth(250);
+        serviceTable.getColumnModel().getColumn(2).setPreferredWidth(120);
+        serviceTable.getColumnModel().getColumn(3).setPreferredWidth(150);
+        serviceTable.getColumnModel().getColumn(4).setPreferredWidth(120);
+        
+        // Center align ID column
+        DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
+        centerRenderer.setHorizontalAlignment(JLabel.CENTER);
+        serviceTable.getColumnModel().getColumn(0).setCellRenderer(centerRenderer);
+        
+        // Right align price column
+        DefaultTableCellRenderer rightRenderer = new DefaultTableCellRenderer();
+        rightRenderer.setHorizontalAlignment(JLabel.RIGHT);
+        serviceTable.getColumnModel().getColumn(3).setCellRenderer(rightRenderer);
+        
+        // Custom renderer for "Bắt Buộc" column with colored badges
+        serviceTable.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable table, Object value,
+                    boolean isSelected, boolean hasFocus, int row, int column) {
+                JLabel label = (JLabel) super.getTableCellRendererComponent(
+                    table, value, isSelected, hasFocus, row, column);
+                
+                label.setHorizontalAlignment(JLabel.CENTER);
+                label.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                
+                if ("Có".equals(value)) {
+                    label.setText("✓ Có");
+                    label.setForeground(new Color(22, 163, 74)); // Green
+                } else {
+                    label.setText("○ Không");
+                    label.setForeground(new Color(156, 163, 175)); // Gray
+                }
+                
+                return label;
+            }
+        });
         
         JScrollPane scrollPane = new JScrollPane(serviceTable);
         scrollPane.setBorder(null);
+        scrollPane.getViewport().setBackground(Color.WHITE);
         
         tablePanel.add(scrollPane, BorderLayout.CENTER);
         
@@ -146,15 +194,15 @@ public class ServiceManagementPanel extends JPanel {
         actionPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         actionPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
         
-        ModernButton addButton = new ModernButton("➕ Thêm Dịch Vụ", UIConstants.SUCCESS_COLOR);
-        addButton.setPreferredSize(new Dimension(150, 45));
+        ModernButton addButton = new ModernButton("\u2795 Thêm Dịch Vụ", UIConstants.SUCCESS_COLOR);
+        addButton.setPreferredSize(new Dimension(160, 45));
         addButton.addActionListener(e -> addService());
         
-        ModernButton editButton = new ModernButton("✏️ Sửa", UIConstants.WARNING_COLOR);
+        ModernButton editButton = new ModernButton("\u270F Sửa", UIConstants.WARNING_COLOR);
         editButton.setPreferredSize(new Dimension(120, 45));
         editButton.addActionListener(e -> editService());
         
-        ModernButton deleteButton = new ModernButton("🗑️ Xóa", UIConstants.DANGER_COLOR);
+        ModernButton deleteButton = new ModernButton("\uD83D\uDDD1 Xóa", UIConstants.DANGER_COLOR);
         deleteButton.setPreferredSize(new Dimension(120, 45));
         deleteButton.addActionListener(e -> deleteService());
         
@@ -174,23 +222,23 @@ public class ServiceManagementPanel extends JPanel {
                 service.getId(),
                 service.getName(),
                 service.getUnit(),
-                service.getUnitPrice(),
-                service.isMandatory() ? "Có" : "Không",
-                service.getDescription() != null ? service.getDescription() : ""
+                formatCurrency(service.getUnitPrice()) + " đ",
+                service.isMandatory() ? "Có" : "Không"
             };
             tableModel.addRow(row);
         }
     }
     
+    private String formatCurrency(java.math.BigDecimal amount) {
+        if (amount == null) return "0";
+        return currencyFormat.format(amount);
+    }
+    
     private void addService() {
-        // Get parent frame
         JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        
-        // Show dialog
         ServiceDialog dialog = new ServiceDialog(parentFrame);
         dialog.setVisible(true);
         
-        // Check if confirmed
         if (dialog.isConfirmed()) {
             Service service = dialog.getService();
             
@@ -231,14 +279,10 @@ public class ServiceManagementPanel extends JPanel {
             return;
         }
         
-        // Get parent frame
         JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        
-        // Show dialog with existing service
         ServiceDialog dialog = new ServiceDialog(parentFrame, service);
         dialog.setVisible(true);
         
-        // Check if confirmed
         if (dialog.isConfirmed()) {
             Service updatedService = dialog.getService();
             
@@ -312,9 +356,8 @@ public class ServiceManagementPanel extends JPanel {
                     service.getId(),
                     service.getName(),
                     service.getUnit(),
-                    service.getUnitPrice(),
-                    service.isMandatory() ? "Có" : "Không",
-                    service.getDescription() != null ? service.getDescription() : ""
+                    formatCurrency(service.getUnitPrice()) + " đ",
+                    service.isMandatory() ? "Có" : "Không"
                 };
                 tableModel.addRow(row);
             }

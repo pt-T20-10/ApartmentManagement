@@ -7,38 +7,78 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * DAO class for Contract operations with automatic Apartment status update
+ * DAO class for Contract operations
+ * UPDATED: Support for new database fields
  */
 public class ContractDAO {
 
-    // --- HELPER: Mapping dữ liệu từ ResultSet sang Model ---
+    // --- HELPER: Mapping ResultSet to Contract (UPDATED) ---
     private Contract mapResultSetToContract(ResultSet rs) throws SQLException {
         Contract contract = new Contract();
         contract.setId(rs.getLong("id"));
+        
+        // NEW FIELD
+        contract.setContractNumber(rs.getString("contract_number"));
+        
         contract.setApartmentId(rs.getLong("apartment_id"));
         contract.setResidentId(rs.getLong("resident_id"));
+        
+        // NEW FIELD
+        contract.setContractType(rs.getString("contract_type"));
+        
+        // NEW FIELD
+        java.sql.Date signedDate = rs.getDate("signed_date");
+        if (signedDate != null) {
+            contract.setSignedDate(new java.util.Date(signedDate.getTime()));
+        }
         
         java.sql.Date startDate = rs.getDate("start_date");
         if (startDate != null) {
             contract.setStartDate(new java.util.Date(startDate.getTime()));
         }
+        
         java.sql.Date endDate = rs.getDate("end_date");
         if (endDate != null) {
             contract.setEndDate(new java.util.Date(endDate.getTime()));
         }
         
+        // NEW FIELD
+        java.sql.Date terminatedDate = rs.getDate("terminated_date");
+        if (terminatedDate != null) {
+            contract.setTerminatedDate(new java.util.Date(terminatedDate.getTime()));
+        }
+        
         contract.setDepositAmount(rs.getBigDecimal("deposit_amount"));
         contract.setStatus(rs.getString("status"));
+        
+        // NEW FIELD
+        contract.setNotes(rs.getString("notes"));
+        
         contract.setDeleted(rs.getBoolean("is_deleted"));
+        
+        // NEW FIELDS - Audit
+        Timestamp createdAt = rs.getTimestamp("created_at");
+        if (createdAt != null) {
+            contract.setCreatedAt(new java.util.Date(createdAt.getTime()));
+        }
+        
+        Timestamp updatedAt = rs.getTimestamp("updated_at");
+        if (updatedAt != null) {
+            contract.setUpdatedAt(new java.util.Date(updatedAt.getTime()));
+        }
+        
         return contract;
     }
 
+    // --- GET ALL CONTRACTS ---
     public List<Contract> getAllContracts() {
         List<Contract> contracts = new ArrayList<>();
-        String sql = "SELECT * FROM contracts WHERE is_deleted = 0 ORDER BY start_date DESC";
+        String sql = "SELECT * FROM contracts WHERE is_deleted = 0 ORDER BY created_at DESC";
+        
         try (Connection conn = Db_connection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
+            
             while (rs.next()) {
                 contracts.add(mapResultSetToContract(rs));
             }
@@ -48,76 +88,273 @@ public class ContractDAO {
         return contracts;
     }
 
+    // --- GET CONTRACT BY ID ---
     public Contract getContractById(Long id) {
         String sql = "SELECT * FROM contracts WHERE id = ? AND is_deleted = 0";
+        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
             pstmt.setLong(1, id);
             try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) return mapResultSetToContract(rs);
+                if (rs.next()) {
+                    return mapResultSetToContract(rs);
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return null;
     }
+    
+    // --- NEW: GET CONTRACT BY CONTRACT NUMBER ---
+    public Contract getContractByNumber(String contractNumber) {
+        String sql = "SELECT * FROM contracts WHERE contract_number = ? AND is_deleted = 0";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, contractNumber);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return mapResultSetToContract(rs);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    
+    // --- NEW: GET CONTRACTS BY BUILDING ---
+    public List<Contract> getContractsByBuilding(Long buildingId) {
+        List<Contract> contracts = new ArrayList<>();
+        String sql = "SELECT c.* FROM contracts c " +
+                     "INNER JOIN apartments a ON c.apartment_id = a.id " +
+                     "INNER JOIN floors f ON a.floor_id = f.id " +
+                     "WHERE f.building_id = ? AND c.is_deleted = 0 " +
+                     "ORDER BY c.created_at DESC";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setLong(1, buildingId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    contracts.add(mapResultSetToContract(rs));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return contracts;
+    }
+    
+    // --- NEW: GET ACTIVE CONTRACTS BY APARTMENT ---
+    public List<Contract> getActiveContractsByApartment(Long apartmentId) {
+        List<Contract> contracts = new ArrayList<>();
+        String sql = "SELECT * FROM contracts " +
+                     "WHERE apartment_id = ? " +
+                     "AND status IN ('ACTIVE', 'EXPIRING_SOON') " +
+                     "AND is_deleted = 0";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setLong(1, apartmentId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    contracts.add(mapResultSetToContract(rs));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return contracts;
+    }
+    
+    // --- NEW: CHECK IF APARTMENT HAS ACTIVE CONTRACT ---
+    public boolean hasActiveContract(Long apartmentId) {
+        List<Contract> activeContracts = getActiveContractsByApartment(apartmentId);
+        return !activeContracts.isEmpty();
+    }
 
-    // --- INSERT CONTRACT + AUTO UPDATE APARTMENT (TRANSACTION) ---
+    // --- INSERT CONTRACT (UPDATED WITH NEW FIELDS + TRANSACTION) ---
     public boolean insertContract(Contract contract) {
-        String sqlContract = "INSERT INTO contracts (apartment_id, resident_id, start_date, end_date, deposit_amount, status, is_deleted) VALUES (?, ?, ?, ?, ?, ?, 0)";
+        String sqlContract = "INSERT INTO contracts " +
+                           "(contract_number, apartment_id, resident_id, contract_type, " +
+                           "signed_date, start_date, end_date, deposit_amount, status, notes, is_deleted) " +
+                           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
         String sqlApartment = "UPDATE apartments SET status = 'RENTED' WHERE id = ?";
 
         Connection conn = null;
         try {
             conn = Db_connection.getConnection();
-            conn.setAutoCommit(false); // Bắt đầu Transaction
+            conn.setAutoCommit(false);
 
-            // 1. Thêm hợp đồng
-            try (PreparedStatement pstC = conn.prepareStatement(sqlContract)) {
-                pstC.setLong(1, contract.getApartmentId());
-                pstC.setLong(2, contract.getResidentId());
-                pstC.setDate(3, new java.sql.Date(contract.getStartDate().getTime()));
-                if (contract.getEndDate() != null) {
-                    pstC.setDate(4, new java.sql.Date(contract.getEndDate().getTime()));
+            // 1. Insert contract
+            try (PreparedStatement pstC = conn.prepareStatement(sqlContract, Statement.RETURN_GENERATED_KEYS)) {
+                pstC.setString(1, contract.getContractNumber());
+                pstC.setLong(2, contract.getApartmentId());
+                pstC.setLong(3, contract.getResidentId());
+                pstC.setString(4, contract.getContractType());
+                
+                if (contract.getSignedDate() != null) {
+                    pstC.setDate(5, new java.sql.Date(contract.getSignedDate().getTime()));
                 } else {
-                    pstC.setNull(4, Types.DATE);
+                    pstC.setNull(5, Types.DATE);
                 }
-                pstC.setBigDecimal(5, contract.getDepositAmount());
-                pstC.setString(6, contract.getStatus());
-                pstC.executeUpdate();
+                
+                pstC.setDate(6, new java.sql.Date(contract.getStartDate().getTime()));
+                
+                if (contract.getEndDate() != null) {
+                    pstC.setDate(7, new java.sql.Date(contract.getEndDate().getTime()));
+                } else {
+                    pstC.setNull(7, Types.DATE);
+                }
+                
+                pstC.setBigDecimal(8, contract.getDepositAmount());
+                pstC.setString(9, contract.getStatus());
+                pstC.setString(10, contract.getNotes());
+                
+                int affected = pstC.executeUpdate();
+                
+                if (affected > 0) {
+                    // Get generated ID
+                    try (ResultSet generatedKeys = pstC.getGeneratedKeys()) {
+                        if (generatedKeys.next()) {
+                            contract.setId(generatedKeys.getLong(1));
+                        }
+                    }
+                }
             }
 
-            // 2. Cập nhật trạng thái căn hộ sang RENTED
+            // 2. Update apartment status to RENTED
             try (PreparedStatement pstA = conn.prepareStatement(sqlApartment)) {
                 pstA.setLong(1, contract.getApartmentId());
                 pstA.executeUpdate();
             }
 
-            conn.commit(); // Xác nhận lưu mọi thay đổi
+            conn.commit();
             return true;
+            
         } catch (SQLException e) {
             if (conn != null) {
-                try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
+                try { 
+                    conn.rollback(); 
+                } catch (SQLException ex) { 
+                    ex.printStackTrace(); 
+                }
             }
             e.printStackTrace();
         }
         return false;
     }
 
+    // --- UPDATE CONTRACT (UPDATED WITH NEW FIELDS) ---
     public boolean updateContract(Contract contract) {
-        String sql = "UPDATE contracts SET apartment_id = ?, resident_id = ?, start_date = ?, end_date = ?, deposit_amount = ?, status = ? WHERE id = ?";
+        String sql = "UPDATE contracts SET " +
+                     "contract_number = ?, apartment_id = ?, resident_id = ?, contract_type = ?, " +
+                     "signed_date = ?, start_date = ?, end_date = ?, terminated_date = ?, " +
+                     "deposit_amount = ?, status = ?, notes = ? " +
+                     "WHERE id = ?";
+        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setLong(1, contract.getApartmentId());
-            pstmt.setLong(2, contract.getResidentId());
-            pstmt.setDate(3, new java.sql.Date(contract.getStartDate().getTime()));
-            if (contract.getEndDate() != null) pstmt.setDate(4, new java.sql.Date(contract.getEndDate().getTime()));
-            else pstmt.setNull(4, Types.DATE);
-            pstmt.setBigDecimal(5, contract.getDepositAmount());
-            pstmt.setString(6, contract.getStatus());
-            pstmt.setLong(7, contract.getId());
+            
+            pstmt.setString(1, contract.getContractNumber());
+            pstmt.setLong(2, contract.getApartmentId());
+            pstmt.setLong(3, contract.getResidentId());
+            pstmt.setString(4, contract.getContractType());
+            
+            if (contract.getSignedDate() != null) {
+                pstmt.setDate(5, new java.sql.Date(contract.getSignedDate().getTime()));
+            } else {
+                pstmt.setNull(5, Types.DATE);
+            }
+            
+            pstmt.setDate(6, new java.sql.Date(contract.getStartDate().getTime()));
+            
+            if (contract.getEndDate() != null) {
+                pstmt.setDate(7, new java.sql.Date(contract.getEndDate().getTime()));
+            } else {
+                pstmt.setNull(7, Types.DATE);
+            }
+            
+            if (contract.getTerminatedDate() != null) {
+                pstmt.setDate(8, new java.sql.Date(contract.getTerminatedDate().getTime()));
+            } else {
+                pstmt.setNull(8, Types.DATE);
+            }
+            
+            pstmt.setBigDecimal(9, contract.getDepositAmount());
+            pstmt.setString(10, contract.getStatus());
+            pstmt.setString(11, contract.getNotes());
+            pstmt.setLong(12, contract.getId());
+            
             return pstmt.executeUpdate() > 0;
+            
         } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+    
+    // --- NEW: RENEW CONTRACT (GIA HẠN) ---
+    public boolean renewContract(Long contractId, java.util.Date newEndDate) {
+        String sql = "UPDATE contracts SET end_date = ? WHERE id = ?";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setDate(1, new java.sql.Date(newEndDate.getTime()));
+            pstmt.setLong(2, contractId);
+            
+            return pstmt.executeUpdate() > 0;
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+    
+    // --- NEW: TERMINATE CONTRACT (KẾT THÚC) ---
+    public boolean terminateContract(Long contractId, String reason) {
+        String sqlUpdate = "UPDATE contracts SET " +
+                          "status = 'TERMINATED', " +
+                          "terminated_date = CURDATE(), " +
+                          "notes = CONCAT(IFNULL(notes, ''), '\n[Kết thúc] ', ?) " +
+                          "WHERE id = ?";
+        String sqlResetApartment = "UPDATE apartments a " +
+                                  "INNER JOIN contracts c ON a.id = c.apartment_id " +
+                                  "SET a.status = 'AVAILABLE' " +
+                                  "WHERE c.id = ?";
+        
+        Connection conn = null;
+        try {
+            conn = Db_connection.getConnection();
+            conn.setAutoCommit(false);
+            
+            // 1. Update contract
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdate)) {
+                pstmt.setString(1, reason);
+                pstmt.setLong(2, contractId);
+                pstmt.executeUpdate();
+            }
+            
+            // 2. Reset apartment status
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlResetApartment)) {
+                pstmt.setLong(1, contractId);
+                pstmt.executeUpdate();
+            }
+            
+            conn.commit();
+            return true;
+            
+        } catch (SQLException e) {
+            if (conn != null) {
+                try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
+            }
             e.printStackTrace();
         }
         return false;
@@ -134,7 +371,7 @@ public class ContractDAO {
             conn = Db_connection.getConnection();
             conn.setAutoCommit(false);
 
-            // 1. Lấy ID căn hộ trước khi xóa hợp đồng
+            // 1. Get apartment ID
             Long apartmentId = null;
             try (PreparedStatement pstG = conn.prepareStatement(sqlGetAptId)) {
                 pstG.setLong(1, contractId);
@@ -143,13 +380,13 @@ public class ContractDAO {
                 }
             }
 
-            // 2. Xóa mềm hợp đồng
+            // 2. Soft delete contract
             try (PreparedStatement pstD = conn.prepareStatement(sqlDeleteContract)) {
                 pstD.setLong(1, contractId);
                 pstD.executeUpdate();
             }
 
-            // 3. Đưa căn hộ về trạng thái Trống (AVAILABLE)
+            // 3. Reset apartment status
             if (apartmentId != null) {
                 try (PreparedStatement pstR = conn.prepareStatement(sqlResetApartment)) {
                     pstR.setLong(1, apartmentId);
@@ -159,6 +396,7 @@ public class ContractDAO {
 
             conn.commit();
             return true;
+            
         } catch (SQLException e) {
             if (conn != null) {
                 try { conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); }
@@ -167,13 +405,93 @@ public class ContractDAO {
         }
         return false;
     }
-
-    public int countActiveContracts() {
-        String sql = "SELECT COUNT(*) FROM contracts WHERE status = 'ACTIVE' AND is_deleted = 0";
+    
+    // --- NEW: GENERATE CONTRACT NUMBER ---
+    public String generateContractNumber() {
+        String sql = "SELECT IFNULL(MAX(CAST(SUBSTRING(contract_number, 12, 3) AS UNSIGNED)), 0) + 1 AS next_seq " +
+                     "FROM contracts " +
+                     "WHERE contract_number LIKE CONCAT('HD', DATE_FORMAT(CURDATE(), '%Y%m%d'), '%')";
+        
         try (Connection conn = Db_connection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-            if (rs.next()) return rs.getInt(1);
+            
+            if (rs.next()) {
+                int nextSeq = rs.getInt("next_seq");
+                String dateStr = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
+                return String.format("HD%s%03d", dateStr, nextSeq);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        // Fallback
+        String dateStr = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
+        return String.format("HD%s001", dateStr);
+    }
+    
+    // --- NEW: COUNT CONTRACTS BY STATUS ---
+    public int countContractsByStatus(String status) {
+        String sql = "SELECT COUNT(*) FROM contracts WHERE status = ? AND is_deleted = 0";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, status);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    // --- COUNT ACTIVE CONTRACTS ---
+    public int countActiveContracts() {
+        return countContractsByStatus("ACTIVE");
+    }
+    
+    // --- NEW: GET EXPIRING CONTRACTS (WITHIN N DAYS) ---
+    public List<Contract> getExpiringContracts(int daysThreshold) {
+        List<Contract> contracts = new ArrayList<>();
+        String sql = "SELECT * FROM contracts " +
+                     "WHERE end_date IS NOT NULL " +
+                     "AND DATEDIFF(end_date, CURDATE()) BETWEEN 0 AND ? " +
+                     "AND status != 'TERMINATED' " +
+                     "AND is_deleted = 0 " +
+                     "ORDER BY end_date ASC";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setInt(1, daysThreshold);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    contracts.add(mapResultSetToContract(rs));
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return contracts;
+    }
+    
+    // --- NEW: COUNT INVOICES BY CONTRACT (FOR VALIDATION) ---
+    public int countInvoicesByContract(Long contractId) {
+        String sql = "SELECT COUNT(*) FROM invoices WHERE contract_id = ? AND is_deleted = 0";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setLong(1, contractId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1);
+                }
+            }
         } catch (SQLException e) {
             e.printStackTrace();
         }

@@ -4,6 +4,7 @@ import dao.BuildingDAO;
 import model.Building;
 import util.UIConstants;
 import dao.BuildingDAO.BuildingStats; // [QUAN TRỌNG] Import class này
+import util.BuildingContext;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -21,12 +22,22 @@ public class BuildingManagementPanel extends JPanel {
     private Consumer<Building> onBuildingSelect; 
 
     public BuildingManagementPanel(Consumer<Building> onBuildingSelect) {
-        this.onBuildingSelect = onBuildingSelect;
-        this.buildingDAO = new BuildingDAO();
+    // Wrap callback để set context trước
+    this.onBuildingSelect = building -> {
+        // 1. Set building context (QUAN TRỌNG!)
+        BuildingContext.getInstance().setCurrentBuilding(building);
         
-        initUI();
-        loadBuildings();
-    }
+        // 2. Gọi callback gốc (navigate to floors)
+        if (onBuildingSelect != null) {
+            onBuildingSelect.accept(building);
+        }
+    };
+    
+    this.buildingDAO = new BuildingDAO();
+    
+    initUI();
+    loadBuildings();
+}
 
     private void initUI() {
     setLayout(new BorderLayout(20, 20));
