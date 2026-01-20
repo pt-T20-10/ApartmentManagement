@@ -3,6 +3,7 @@ package view;
 import model.Service;
 import util.UIConstants;
 import util.ModernButton;
+import util.MoneyFormatter;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -11,7 +12,8 @@ import java.math.BigDecimal;
 
 /**
  * Service Dialog - Popup for Add/Edit Service
- * Features: Name, Unit, Price, Mandatory checkbox, Description
+ * Fields: Name, Unit, Price (with VND formatting), Mandatory checkbox
+ * NO Description field
  */
 public class ServiceDialog extends JDialog {
     
@@ -19,7 +21,6 @@ public class ServiceDialog extends JDialog {
     private JTextField unitField;
     private JTextField unitPriceField;
     private JCheckBox isMandatoryCheckbox;
-    private JTextArea descriptionArea;
     
     private Service service;
     private boolean confirmed = false;
@@ -50,7 +51,7 @@ public class ServiceDialog extends JDialog {
     }
     
     private void initializeDialog() {
-        setSize(500, 600);
+        setSize(550, 450); // Shorter without description
         setResizable(false);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         getContentPane().setBackground(UIConstants.BACKGROUND_COLOR);
@@ -78,7 +79,7 @@ public class ServiceDialog extends JDialog {
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
         JLabel iconLabel = new JLabel(service == null ? "➕" : "✏️");
-        iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 36));
+        iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 36));
         
         JLabel titleLabel = new JLabel(service == null ? "Thêm Dịch Vụ Mới" : "Sửa Thông Tin Dịch Vụ");
         titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
@@ -114,10 +115,14 @@ public class ServiceDialog extends JDialog {
         formPanel.add(unitHint);
         formPanel.add(Box.createVerticalStrut(15));
         
-        // Unit price
+        // Unit price with VND formatting
         formPanel.add(createFieldLabel("Đơn Giá (VNĐ) *"));
-        unitPriceField = createTextField();
+        unitPriceField = MoneyFormatter.createMoneyField(42);
+        unitPriceField.setAlignmentX(Component.LEFT_ALIGNMENT);
+        unitPriceField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
         formPanel.add(unitPriceField);
+        JLabel priceHint = createHintLabel("Nhập số tiền, tự động format: 50.000");
+        formPanel.add(priceHint);
         formPanel.add(Box.createVerticalStrut(15));
         
         // Mandatory checkbox
@@ -126,24 +131,8 @@ public class ServiceDialog extends JDialog {
         isMandatoryCheckbox.setBackground(Color.WHITE);
         isMandatoryCheckbox.setAlignmentX(Component.LEFT_ALIGNMENT);
         formPanel.add(isMandatoryCheckbox);
-        formPanel.add(Box.createVerticalStrut(15));
         
-        // Description
-        formPanel.add(createFieldLabel("Mô Tả"));
-        descriptionArea = new JTextArea(4, 20);
-        descriptionArea.setFont(UIConstants.FONT_REGULAR);
-        descriptionArea.setLineWrap(true);
-        descriptionArea.setWrapStyleWord(true);
-        descriptionArea.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(10, 12, 10, 12)
-        ));
-        
-        JScrollPane scrollPane = new JScrollPane(descriptionArea);
-        scrollPane.setAlignmentX(Component.LEFT_ALIGNMENT);
-        scrollPane.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
-        scrollPane.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
-        formPanel.add(scrollPane);
+        // NO DESCRIPTION FIELD - REMOVED!
         
         return formPanel;
     }
@@ -221,9 +210,13 @@ public class ServiceDialog extends JDialog {
         if (service != null) {
             nameField.setText(service.getName());
             unitField.setText(service.getUnit());
-            unitPriceField.setText(service.getUnitPrice().toString());
+            
+            // Load price with MoneyFormatter
+            MoneyFormatter.setValue(unitPriceField, service.getUnitPrice().longValue());
+            
             isMandatoryCheckbox.setSelected(service.isMandatory());
-            descriptionArea.setText(service.getDescription());
+            
+            // NO description field
         }
     }
     
@@ -234,9 +227,12 @@ public class ServiceDialog extends JDialog {
         
         String name = nameField.getText().trim();
         String unit = unitField.getText().trim();
-        BigDecimal unitPrice = new BigDecimal(unitPriceField.getText().trim());
+        
+        // Get price from MoneyFormatter
+        Long priceValue = MoneyFormatter.getValue(unitPriceField);
+        BigDecimal unitPrice = BigDecimal.valueOf(priceValue != null ? priceValue : 0);
+        
         boolean isMandatory = isMandatoryCheckbox.isSelected();
-        String description = descriptionArea.getText().trim();
         
         if (service == null) {
             // Create new service
@@ -245,14 +241,14 @@ public class ServiceDialog extends JDialog {
             service.setUnit(unit);
             service.setUnitPrice(unitPrice);
             service.setMandatory(isMandatory);
-            service.setDescription(description);
+            // NO description
         } else {
             // Update existing service
             service.setName(name);
             service.setUnit(unit);
             service.setUnitPrice(unitPrice);
             service.setMandatory(isMandatory);
-            service.setDescription(description);
+            // NO description
         }
         
         confirmed = true;
@@ -281,21 +277,15 @@ public class ServiceDialog extends JDialog {
         }
         
         // Unit price
-        if (unitPriceField.getText().trim().isEmpty()) {
+        Long priceValue = MoneyFormatter.getValue(unitPriceField);
+        if (priceValue == null || priceValue == 0) {
             showError("Vui lòng nhập đơn giá!");
             unitPriceField.requestFocus();
             return false;
         }
         
-        try {
-            BigDecimal price = new BigDecimal(unitPriceField.getText().trim());
-            if (price.compareTo(BigDecimal.ZERO) <= 0) {
-                showError("Đơn giá phải lớn hơn 0!");
-                unitPriceField.requestFocus();
-                return false;
-            }
-        } catch (NumberFormatException e) {
-            showError("Đơn giá không hợp lệ!");
+        if (priceValue < 0) {
+            showError("Đơn giá phải lớn hơn 0!");
             unitPriceField.requestFocus();
             return false;
         }

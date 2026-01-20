@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * DAO class for Resident operations
+ * DAO class for Resident operations - UPDATED WITH ID FIX
  */
 public class ResidentDAO {
     
@@ -76,11 +76,7 @@ public class ResidentDAO {
         return null;
     }
     
-    // ===== ADDED FOR PANEL COMPATIBILITY =====
-    
-    /**
-     * Search residents by name (LIKE query)
-     */
+    // Search residents by name (LIKE query)
     public List<Resident> searchResidentsByName(String keyword) {
         List<Resident> residents = new ArrayList<>();
         String sql = "SELECT * FROM residents WHERE full_name LIKE ? AND is_deleted = 0 ORDER BY full_name";
@@ -114,13 +110,13 @@ public class ResidentDAO {
         return residents;
     }
     
-    // Insert new resident
+    // Insert new resident - FIXED TO SET ID AFTER INSERT
     public boolean insertResident(Resident resident) {
         String sql = "INSERT INTO residents (full_name, phone, email, identity_card, gender, dob, hometown, is_deleted) " +
                      "VALUES (?, ?, ?, ?, ?, ?, ?, 0)";
         
         try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+             PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             
             pstmt.setString(1, resident.getFullName());
             pstmt.setString(2, resident.getPhone());
@@ -134,7 +130,19 @@ public class ResidentDAO {
             }
             pstmt.setString(7, resident.getHometown());
             
-            return pstmt.executeUpdate() > 0;
+            int affectedRows = pstmt.executeUpdate();
+            
+            if (affectedRows > 0) {
+                // CRITICAL FIX: Get generated ID and set it to the resident object
+                try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
+                    if (generatedKeys.next()) {
+                        resident.setId(generatedKeys.getLong(1));
+                    }
+                }
+                return true;
+            }
+            
+            return false;
         } catch (SQLException e) {
             e.printStackTrace();
         }
@@ -199,5 +207,172 @@ public class ResidentDAO {
             e.printStackTrace();
         }
         return 0;
+    }
+    
+    // ===== NEW METHODS FOR CONTRACT FORM VALIDATION =====
+    
+    /**
+     * Check if identity card exists (for validation)
+     */
+    public boolean isIdentityCardExists(String identityCard) {
+        String sql = "SELECT COUNT(*) FROM residents WHERE identity_card = ? AND is_deleted = 0";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, identityCard);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Check if phone exists (for validation)
+     */
+    public boolean isPhoneExists(String phone) {
+        String sql = "SELECT COUNT(*) FROM residents WHERE phone = ? AND is_deleted = 0";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, phone);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Get resident by identity card
+     */
+    public Resident getResidentByIdentityCard(String identityCard) {
+        String sql = "SELECT * FROM residents WHERE identity_card = ? AND is_deleted = 0";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, identityCard);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    Resident resident = new Resident();
+                    resident.setId(rs.getLong("id"));
+                    resident.setFullName(rs.getString("full_name"));
+                    resident.setPhone(rs.getString("phone"));
+                    resident.setEmail(rs.getString("email"));
+                    resident.setIdentityCard(rs.getString("identity_card"));
+                    resident.setGender(rs.getString("gender"));
+                    java.sql.Date sqlDate = rs.getDate("dob");
+                    if (sqlDate != null) {
+                        resident.setDob(new java.util.Date(sqlDate.getTime()));
+                    }
+                    resident.setHometown(rs.getString("hometown"));
+                    resident.setDeleted(rs.getBoolean("is_deleted"));
+                    return resident;
+                }
+            }
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Get resident by phone
+     */
+    public Resident getResidentByPhone(String phone) {
+        String sql = "SELECT * FROM residents WHERE phone = ? AND is_deleted = 0";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setString(1, phone);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    Resident resident = new Resident();
+                    resident.setId(rs.getLong("id"));
+                    resident.setFullName(rs.getString("full_name"));
+                    resident.setPhone(rs.getString("phone"));
+                    resident.setEmail(rs.getString("email"));
+                    resident.setIdentityCard(rs.getString("identity_card"));
+                    resident.setGender(rs.getString("gender"));
+                    java.sql.Date sqlDate = rs.getDate("dob");
+                    if (sqlDate != null) {
+                        resident.setDob(new java.util.Date(sqlDate.getTime()));
+                    }
+                    resident.setHometown(rs.getString("hometown"));
+                    resident.setDeleted(rs.getBoolean("is_deleted"));
+                    return resident;
+                }
+            }
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Search residents by keyword (name, phone, identity card)
+     */
+    public List<Resident> searchResidents(String keyword) {
+        List<Resident> residents = new ArrayList<>();
+        String sql = "SELECT * FROM residents WHERE " +
+                     "(full_name LIKE ? OR phone LIKE ? OR identity_card LIKE ?) " +
+                     "AND is_deleted = 0 ORDER BY full_name";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            String searchPattern = "%" + keyword + "%";
+            pstmt.setString(1, searchPattern);
+            pstmt.setString(2, searchPattern);
+            pstmt.setString(3, searchPattern);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                while (rs.next()) {
+                    Resident resident = new Resident();
+                    resident.setId(rs.getLong("id"));
+                    resident.setFullName(rs.getString("full_name"));
+                    resident.setPhone(rs.getString("phone"));
+                    resident.setEmail(rs.getString("email"));
+                    resident.setIdentityCard(rs.getString("identity_card"));
+                    resident.setGender(rs.getString("gender"));
+                    java.sql.Date sqlDate = rs.getDate("dob");
+                    if (sqlDate != null) {
+                        resident.setDob(new java.util.Date(sqlDate.getTime()));
+                    }
+                    resident.setHometown(rs.getString("hometown"));
+                    resident.setDeleted(rs.getBoolean("is_deleted"));
+                    residents.add(resident);
+                }
+            }
+            
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        
+        return residents;
     }
 }
