@@ -9,8 +9,6 @@ import util.UIConstants;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.geom.RoundRectangle2D;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -22,12 +20,11 @@ public class FloorManagementPanel extends JPanel {
     private Building currentBuilding; 
     
     private JComboBox<Building> cbbBuilding;
-    private JPanel overlayPanel; 
+    // Đã xóa overlayPanel
     private JButton btnBatchAdd;
     private JButton btnAdd;
     private Consumer<Floor> onFloorSelect;
     
-    // *** THÊM DÒNG NÀY - QUAN TRỌNG ***
     private SwingWorker<?, ?> currentWorker = null;
 
     public FloorManagementPanel() {
@@ -67,6 +64,7 @@ public class FloorManagementPanel extends JPanel {
         setBackground(UIConstants.BACKGROUND_COLOR);
         setBorder(new EmptyBorder(20, 30, 20, 30));
 
+        // === HEADER ===
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
 
@@ -133,16 +131,7 @@ public class FloorManagementPanel extends JPanel {
         headerPanel.add(rightHeader, BorderLayout.EAST);
         add(headerPanel, BorderLayout.NORTH);
 
-        JPanel stackPanel = new JPanel();
-        stackPanel.setLayout(new OverlayLayout(stackPanel));
-        stackPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-
-        overlayPanel = createMaintenanceOverlay();
-        overlayPanel.setVisible(false); 
-        overlayPanel.setAlignmentX(0.5f);
-        overlayPanel.setAlignmentY(0.5f);
-        stackPanel.add(overlayPanel);
-
+        // === CONTENT (Đã bỏ OverlayLayout phức tạp) ===
         JPanel wrapperPanel = new JPanel(new BorderLayout());
         wrapperPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         cardsContainer = new JPanel(new GridLayout(0, 3, 20, 20));
@@ -156,11 +145,7 @@ public class FloorManagementPanel extends JPanel {
         scrollPane.getViewport().setBackground(UIConstants.BACKGROUND_COLOR);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         
-        scrollPane.setAlignmentX(0.5f);
-        scrollPane.setAlignmentY(0.5f);
-        
-        stackPanel.add(scrollPane);
-        add(stackPanel, BorderLayout.CENTER);
+        add(scrollPane, BorderLayout.CENTER);
     }
     
     private JButton createBackArrowButton() {
@@ -174,64 +159,7 @@ public class FloorManagementPanel extends JPanel {
         return btn;
     }
     
-    private JPanel createMaintenanceOverlay() {
-        JPanel overlay = new JPanel(new GridBagLayout()) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g;
-                g2.setColor(new Color(0, 0, 0, 120)); 
-                g2.fillRect(0, 0, getWidth(), getHeight());
-                super.paintComponent(g);
-            }
-        };
-        overlay.setOpaque(false);
-        overlay.addMouseListener(new MouseAdapter() {}); 
-
-        JPanel cardPanel = new JPanel() {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(new Color(0, 0, 0, 50));
-                g2.fillRoundRect(5, 5, getWidth()-10, getHeight()-10, 25, 25);
-                g2.setColor(Color.WHITE);
-                g2.fillRoundRect(0, 0, getWidth()-10, getHeight()-10, 25, 25);
-                g2.setColor(new Color(255, 112, 67)); 
-                RoundRectangle2D topRect = new RoundRectangle2D.Float(0, 0, getWidth()-10, 10, 25, 25);
-                g2.setClip(topRect);
-                g2.fillRect(0, 0, getWidth()-10, 10);
-                g2.setClip(null);
-                g2.dispose();
-            }
-        };
-        cardPanel.setOpaque(false);
-        cardPanel.setLayout(new BoxLayout(cardPanel, BoxLayout.Y_AXIS));
-        cardPanel.setBorder(new EmptyBorder(30, 40, 30, 40));
-
-        JLabel lblIcon = new JLabel(new HeaderIcon("MAINTENANCE_ART", 64, new Color(255, 112, 67)));
-        lblIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
-        JLabel lblTitle = new JLabel("HỆ THỐNG BẢO TRÌ");
-        lblTitle.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        lblTitle.setForeground(new Color(66, 66, 66));
-        lblTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
-        JLabel lblDesc1 = new JLabel("Tòa nhà hiện đang trong trạng thái bảo trì.");
-        lblDesc1.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        lblDesc1.setForeground(new Color(100, 100, 100));
-        lblDesc1.setAlignmentX(Component.CENTER_ALIGNMENT);
-        JLabel lblDesc2 = new JLabel("Chức năng chỉnh sửa tạm thời bị khóa.");
-        lblDesc2.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        lblDesc2.setForeground(new Color(100, 100, 100));
-        lblDesc2.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        cardPanel.add(lblIcon);
-        cardPanel.add(Box.createVerticalStrut(20));
-        cardPanel.add(lblTitle);
-        cardPanel.add(Box.createVerticalStrut(10));
-        cardPanel.add(lblDesc1);
-        cardPanel.add(lblDesc2);
-        overlay.add(cardPanel);
-        return overlay;
-    }
+    // Đã xóa createMaintenanceOverlay()
 
     private void loadBuildingData() {
         List<Building> buildings = buildingDAO.getAllBuildings();
@@ -252,11 +180,8 @@ public class FloorManagementPanel extends JPanel {
         }
     }
 
-    // *** METHOD loadFloors() ĐÃ ĐƯỢC SỬA TRIỆT ĐỂ ***
     public void loadFloors() {
-        // Hủy worker cũ nếu đang chạy
         if (currentWorker != null && !currentWorker.isDone()) {
-            System.out.println("⚠️ [FLOOR] Cancelling previous worker...");
             currentWorker.cancel(true);
         }
         
@@ -269,51 +194,32 @@ public class FloorManagementPanel extends JPanel {
             return;
         }
 
-        System.out.println("🔄 [FLOOR] Loading floors for building: " + currentBuilding.getName() + " (ID: " + currentBuilding.getId() + ")");
-
         SwingWorker<List<dao.FloorDAO.FloorWithStats>, Void> worker = new SwingWorker<>() {
             @Override
             protected List<dao.FloorDAO.FloorWithStats> doInBackground() {
                 if (isCancelled()) return null;
-                System.out.println("📊 [FLOOR] Fetching data from database...");
                 return floorDAO.getFloorsWithStatsByBuildingId(currentBuilding.getId());
             }
 
             @Override
             protected void done() {
-                // *** KIỂM TRA STALE WORKER TRƯỚC KHI XỬ LÝ ***
-                if (this != FloorManagementPanel.this.currentWorker) {
-                    System.out.println("⚠️ [FLOOR] Ignored stale worker result");
-                    return;
-                }
-
-                if (isCancelled()) {
-                    System.out.println("❌ [FLOOR] Worker was cancelled");
-                    return;
-                }
+                if (this != FloorManagementPanel.this.currentWorker) return;
+                if (isCancelled()) return;
                 
                 try {
                     List<dao.FloorDAO.FloorWithStats> data = get();
-                    System.out.println("✅ [FLOOR] Received " + data.size() + " floors from database");
-                    
                     cardsContainer.removeAll();
                     
-                    boolean isMaintenance = "Đang bảo trì".equals(currentBuilding.getStatus());
-                    updateMaintenanceUI(isMaintenance);
+                    // Không cần kiểm tra Maintenance nữa
 
                     if (data.isEmpty()) {
                         showEmptyMessage("Tòa nhà này chưa có tầng nào.");
                     } else {
                         for (dao.FloorDAO.FloorWithStats item : data) {
-                            System.out.println("  📍 [FLOOR] Floor " + item.floor.getFloorNumber() + 
-                                             " - " + item.floor.getName() + 
-                                             ": " + item.stats.rentedApartments + "/" + 
-                                             item.stats.totalApartments);
-                            
                             FloorCard card = new FloorCard(
                                 item.floor, 
                                 item.stats, 
-                                isMaintenance, 
+                                false, // Luôn truyền false (Không bảo trì)
                                 onFloorSelect, 
                                 FloorManagementPanel.this::editFloor, 
                                 FloorManagementPanel.this::deleteFloor
@@ -324,16 +230,9 @@ public class FloorManagementPanel extends JPanel {
                     
                     cardsContainer.revalidate();
                     cardsContainer.repaint();
-                    System.out.println("✅ [FLOOR] UI updated with " + cardsContainer.getComponentCount() + " components");
                     
                 } catch (Exception e) {
-                    // *** KIỂM TRA STALE WORKER TRONG CATCH ***
-                    if (this != FloorManagementPanel.this.currentWorker) {
-                        System.out.println("⚠️ [FLOOR] Ignored stale worker exception");
-                        return;
-                    }
-                    
-                    System.err.println("❌ [FLOOR] Error loading floors:");
+                    if (this != FloorManagementPanel.this.currentWorker) return;
                     e.printStackTrace();
                     cardsContainer.removeAll();
                     showEmptyMessage("Lỗi khi tải dữ liệu tầng.");
@@ -347,18 +246,7 @@ public class FloorManagementPanel extends JPanel {
         worker.execute();
     }
     
-    private void updateMaintenanceUI(boolean isMaintenance) {
-        overlayPanel.setVisible(isMaintenance);
-        btnBatchAdd.setEnabled(!isMaintenance);
-        btnAdd.setEnabled(!isMaintenance);
-        if(isMaintenance) {
-            btnBatchAdd.setBackground(Color.GRAY);
-            btnAdd.setBackground(Color.GRAY);
-        } else {
-            btnBatchAdd.setBackground(new Color(0, 150, 136));
-            btnAdd.setBackground(UIConstants.PRIMARY_COLOR);
-        }
-    }
+    // Đã xóa updateMaintenanceUI()
     
     private void showEmptyMessage(String msg) {
         JLabel guideLabel = new JLabel(msg); 
@@ -371,16 +259,9 @@ public class FloorManagementPanel extends JPanel {
         cardsContainer.add(msgPanel);
     }
     
-    private boolean checkMaintenance() {
-        if (currentBuilding != null && "Đang bảo trì".equals(currentBuilding.getStatus())) {
-            JOptionPane.showMessageDialog(this, "Tòa nhà đang bảo trì. Không thể thao tác!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
-            return true;
-        }
-        return false;
-    }
+    // Đã xóa checkMaintenance()
 
     private void showBatchAddDialog() {
-        if (checkMaintenance()) return;
         if (currentBuilding == null || currentBuilding.getId() == null) { 
             JOptionPane.showMessageDialog(this, "Vui lòng chọn Tòa nhà trước!"); 
             return; 
@@ -392,7 +273,6 @@ public class FloorManagementPanel extends JPanel {
     }
 
     private void showAddDialog() {
-        if (checkMaintenance()) return;
         if (currentBuilding == null || currentBuilding.getId() == null) { 
             JOptionPane.showMessageDialog(this, "Vui lòng chọn Tòa nhà trước!"); 
             return; 
@@ -413,7 +293,6 @@ public class FloorManagementPanel extends JPanel {
     }
 
     private void editFloor(Floor floor) {
-        if (checkMaintenance()) return;
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
         FloorDialog dialog = new FloorDialog(parent, floor); 
         dialog.setVisible(true);
@@ -428,7 +307,6 @@ public class FloorManagementPanel extends JPanel {
     }
 
     private void deleteFloor(Floor floor) {
-        if (checkMaintenance()) return;
         int confirm = JOptionPane.showConfirmDialog(this, 
             "Bạn có chắc muốn xóa " + floor.getName() + "?", 
             "Xác nhận xóa", 
@@ -492,23 +370,6 @@ public class FloorManagementPanel extends JPanel {
                 g2.drawRoundRect(4, size/2+4, w, h, 3,3); 
                 g2.drawLine(size/2, 2, size/2, 10); 
                 g2.drawLine(size/2-4, 6, size/2+4, 6); 
-            }
-            else if ("MAINTENANCE_ART".equals(type)) { 
-                int cx = size/2; int cy = size/2; int r = size/3;
-                g2.setStroke(new BasicStroke(3.0f));
-                g2.drawOval(cx-r, cy-r, r*2, r*2);
-                g2.setStroke(new BasicStroke(4.0f));
-                for(int i=0; i<8; i++) {
-                    double angle = Math.toRadians(i * 45);
-                    int x1 = cx + (int)(Math.cos(angle) * (r-2));
-                    int y1 = cy + (int)(Math.sin(angle) * (r-2));
-                    int x2 = cx + (int)(Math.cos(angle) * (r+6));
-                    int y2 = cy + (int)(Math.sin(angle) * (r+6));
-                    g2.drawLine(x1, y1, x2, y2);
-                }
-                g2.setColor(new Color(90, 90, 90));
-                g2.setStroke(new BasicStroke(3.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g2.drawLine(size/4, size-size/4, size-size/4, size/4);
             }
             g2.dispose(); 
         } 

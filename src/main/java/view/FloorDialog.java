@@ -5,17 +5,22 @@ import util.UIConstants;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 
-public class FloorDialog extends JDialog { // Tên class phải là FloorDialog
+public class FloorDialog extends JDialog {
 
     private JTextField txtFloorNumber; 
     private JTextField txtName;        
     private JComboBox<String> cbbStatus; 
-    private JTextArea txtDesc;         
+    private JTextArea txtDesc;          
     
     private boolean confirmed = false;
     private Floor floor;
+    private boolean dataChanged = false; // Biến cờ theo dõi thay đổi
 
     public FloorDialog(Frame owner, Floor floor) {
         super(owner, floor.getId() == null ? "Thêm Tầng Mới" : "Cập Nhật Tầng", true);
@@ -23,6 +28,9 @@ public class FloorDialog extends JDialog { // Tên class phải là FloorDialog
         
         initUI();
         fillData();
+        
+        // Reset cờ sau khi nạp dữ liệu xong
+        dataChanged = false;
         
         setSize(450, 580); 
         setLocationRelativeTo(owner);
@@ -70,6 +78,13 @@ public class FloorDialog extends JDialog { // Tên class phải là FloorDialog
         JScrollPane scrollDesc = new JScrollPane(txtDesc);
         scrollDesc.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+        // --- LẮNG NGHE THAY ĐỔI DỮ LIỆU ---
+        SimpleDocumentListener docListener = new SimpleDocumentListener(() -> dataChanged = true);
+        txtFloorNumber.getDocument().addDocumentListener(docListener);
+        txtName.getDocument().addDocumentListener(docListener);
+        txtDesc.getDocument().addDocumentListener(docListener);
+        cbbStatus.addActionListener(e -> dataChanged = true);
+
         formPanel.add(createLabel("Số Tầng (VD: 1, 2...) (*)"));
         formPanel.add(txtFloorNumber);
         formPanel.add(Box.createVerticalStrut(15));
@@ -95,17 +110,43 @@ public class FloorDialog extends JDialog { // Tên class phải là FloorDialog
         btnCancel.setBackground(new Color(225, 225, 225));
         btnCancel.setForeground(Color.BLACK);
         btnCancel.setPreferredSize(new Dimension(100, 38));
-        btnCancel.addActionListener(e -> dispose());
+        btnCancel.addActionListener(e -> handleCancel()); // Gọi hàm xử lý đóng
 
         JButton btnSave = new RoundedButton("Lưu Lại", 10);
         btnSave.setBackground(UIConstants.PRIMARY_COLOR);
         btnSave.setForeground(Color.WHITE);
         btnSave.setPreferredSize(new Dimension(120, 38));
-        btnSave.addActionListener(e -> onSave());
+        btnSave.addActionListener(e -> onSave()); // Gọi hàm xử lý lưu
 
         buttonPanel.add(btnCancel);
         buttonPanel.add(btnSave);
         add(buttonPanel, BorderLayout.SOUTH);
+
+        // Xử lý nút X trên cửa sổ
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+        addWindowListener(new WindowAdapter() {
+            @Override
+            public void windowClosing(WindowEvent e) {
+                handleCancel();
+            }
+        });
+    }
+
+    // --- XỬ LÝ ĐÓNG FORM (Có hỏi xác nhận) ---
+    private void handleCancel() {
+        if (dataChanged) {
+            int choice = JOptionPane.showConfirmDialog(this, 
+                "Dữ liệu chưa được lưu. Bạn có chắc muốn đóng?", 
+                "Cảnh báo", 
+                JOptionPane.YES_NO_OPTION, 
+                JOptionPane.WARNING_MESSAGE);
+            
+            if (choice == JOptionPane.YES_OPTION) {
+                dispose();
+            }
+        } else {
+            dispose();
+        }
     }
 
     private void fillData() {
@@ -118,46 +159,53 @@ public class FloorDialog extends JDialog { // Tên class phải là FloorDialog
         }
     }
 
+    // --- XỬ LÝ LƯU (Có hỏi xác nhận) ---
     private void onSave() {
-    String numStr = txtFloorNumber.getText().trim();
-    String name = txtName.getText().trim();
+        String numStr = txtFloorNumber.getText().trim();
+        String name = txtName.getText().trim();
 
-    // 1. Kiểm tra rỗng
-    if (numStr.isEmpty() || name.isEmpty()) {
-        JOptionPane.showMessageDialog(this, "Vui lòng nhập Số tầng và Tên tầng!", "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
-        return;
-    }
-    
-    int num;
-    try {
-        num = Integer.parseInt(numStr);
-    } catch (NumberFormatException e) {
-        JOptionPane.showMessageDialog(this, "Số tầng phải là số nguyên!", "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
-        return;
-    }
-
-    // 2. KIỂM TRA TRÙNG LẶP (Đây là phần bạn đang thiếu)
-    dao.FloorDAO dao = new dao.FloorDAO();
-    
-    // Nếu là thêm mới (floor.getId() == null) 
-    // hoặc là sửa nhưng thay đổi số tầng/tên tầng so với ban đầu
-    if (floor.getId() == null) {
-        // Kiểm tra xem tòa nhà này đã có tầng số 'num' hoặc tên 'name' chưa
-        if (dao.isFloorNameExists(floor.getBuildingId(), name)) {
-            JOptionPane.showMessageDialog(this, "Tên tầng '" + name + "' đã tồn tại trong tòa nhà này!", "Trùng dữ liệu", JOptionPane.ERROR_MESSAGE);
+        if (numStr.isEmpty() || name.isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập Số tầng và Tên tầng!", "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        // Bạn có thể thêm hàm kiểm tra trùng số tầng tương tự nếu cần
-    }
+        
+        int num;
+        try {
+            num = Integer.parseInt(numStr);
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Số tầng phải là số nguyên!", "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
 
-    // 3. Gán dữ liệu nếu mọi thứ đều ổn
-    floor.setFloorNumber(num);
-    floor.setName(name);
-    floor.setStatus((String) cbbStatus.getSelectedItem());
-    
-    confirmed = true;
-    dispose();
-}
+        // KIỂM TRA TRÙNG LẶP
+        dao.FloorDAO dao = new dao.FloorDAO();
+        if (floor.getId() == null) {
+            if (dao.isFloorNameExists(floor.getBuildingId(), name)) {
+                JOptionPane.showMessageDialog(this, "Tên tầng '" + name + "' đã tồn tại trong tòa nhà này!", "Trùng dữ liệu", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+        }
+
+        // HỎI XÁC NHẬN TRƯỚC KHI LƯU
+        int choice = JOptionPane.showConfirmDialog(this, 
+            "Bạn có chắc chắn muốn lưu thông tin tầng này?", 
+            "Xác nhận lưu", 
+            JOptionPane.YES_NO_OPTION, 
+            JOptionPane.QUESTION_MESSAGE);
+
+        if (choice != JOptionPane.YES_OPTION) {
+            return; // Hủy lưu
+        }
+
+        // Thực hiện lưu
+        floor.setFloorNumber(num);
+        floor.setName(name);
+        floor.setStatus((String) cbbStatus.getSelectedItem());
+        
+        confirmed = true;
+        dataChanged = false;
+        dispose();
+    }
 
     public boolean isConfirmed() { return confirmed; }
     public Floor getFloor() { return floor; }
@@ -179,6 +227,15 @@ public class FloorDialog extends JDialog { // Tên class phải là FloorDialog
         f.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
         f.setAlignmentX(Component.LEFT_ALIGNMENT);
         return f;
+    }
+
+    // Class lắng nghe thay đổi
+    private static class SimpleDocumentListener implements DocumentListener {
+        private Runnable onChange;
+        public SimpleDocumentListener(Runnable onChange) { this.onChange = onChange; }
+        @Override public void insertUpdate(DocumentEvent e) { onChange.run(); }
+        @Override public void removeUpdate(DocumentEvent e) { onChange.run(); }
+        @Override public void changedUpdate(DocumentEvent e) { onChange.run(); }
     }
 
     // Styles
