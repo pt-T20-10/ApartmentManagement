@@ -11,6 +11,8 @@ import javax.swing.border.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.math.BigDecimal;
@@ -55,11 +57,9 @@ public class ApartmentDialog extends JDialog {
         if (apartment.getId() == null) {
             if (preSelectedFloorId != null) {
                 autoSelectFloorAndGenerateRoom();
-                // [QUAN TRỌNG] Khóa ô chọn tầng
                 cbbFloor.setEnabled(false);
             }
         } else {
-            // Nếu là Edit -> Cũng khóa luôn tầng và mã phòng (không cho chuyển tầng)
             cbbFloor.setEnabled(false);
             txtRoomNumber.setEditable(false);
             txtRoomNumber.setBackground(new Color(240, 240, 240));
@@ -106,7 +106,6 @@ public class ApartmentDialog extends JDialog {
             }
         });
         
-        // Sự kiện: Khi tầng thay đổi (trường hợp chưa bị khóa) -> Sinh mã phòng
         cbbFloor.addActionListener(e -> {
             if (cbbFloor.isEnabled() && apartment.getId() == null) {
                 generateRoomNumber();
@@ -114,7 +113,6 @@ public class ApartmentDialog extends JDialog {
         });
 
         txtRoomNumber = createRoundedField();
-        // [QUAN TRỌNG] Khóa ô mã phòng, set màu xám để báo hiệu Read-Only
         txtRoomNumber.setEditable(false);
         txtRoomNumber.setBackground(new Color(240, 240, 240));
         txtRoomNumber.setToolTipText("Mã phòng được sinh tự động theo Tầng");
@@ -164,7 +162,6 @@ public class ApartmentDialog extends JDialog {
         scrollDesc.setBorder(new LineBorder(new Color(200, 200, 200), 1));
         pnlDesc.add(createFieldGroup("Mô Tả Tiện Ích & Ghi Chú", scrollDesc));
 
-        // Listeners changes
         SimpleDocumentListener docListener = new SimpleDocumentListener(() -> dataChanged = true);
         txtArea.getDocument().addDocumentListener(docListener);
         txtPrice.getDocument().addDocumentListener(docListener);
@@ -196,10 +193,51 @@ public class ApartmentDialog extends JDialog {
         buttonPanel.add(btnCancel); buttonPanel.add(btnSave);
         add(buttonPanel, BorderLayout.SOUTH);
 
+        // [QUAN TRỌNG] Cấu hình phím tắt Enter/Esc
+        configureShortcuts(btnSave);
+
+        // Chặn sự kiện đóng cửa sổ mặc định để hiển thị dialog xác nhận
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
-            @Override public void windowClosing(WindowEvent e) { handleCancel(); }
+            @Override
+            public void windowClosing(WindowEvent e) {
+                handleCancel();
+            }
         });
+    }
+
+    // --- CẤU HÌNH PHÍM TẮT ---
+    private void configureShortcuts(JButton defaultButton) {
+        // 1. Enter để Lưu
+        getRootPane().setDefaultButton(defaultButton);
+
+        // 2. Esc để Thoát (gọi handleCancel)
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+            .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
+            
+        getRootPane().getActionMap().put("cancel", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleCancel();
+            }
+        });
+    }
+
+    // --- XỬ LÝ THOÁT VỚI XÁC NHẬN ---
+    private void handleCancel() {
+        // Luôn hiển thị xác nhận, kể cả khi chưa sửa gì (theo yêu cầu an toàn cao)
+        // Hoặc bạn có thể thêm điều kiện: if (dataChanged) { ... }
+        int choice = JOptionPane.showConfirmDialog(
+            this, 
+            "Bạn có chắc muốn thoát? Dữ liệu chưa lưu sẽ bị mất.", 
+            "Xác nhận thoát", 
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE
+        );
+
+        if (choice == JOptionPane.YES_OPTION) {
+            dispose();
+        }
     }
 
     private void autoSelectFloorAndGenerateRoom() {
@@ -212,7 +250,7 @@ public class ApartmentDialog extends JDialog {
                 }
             }
         }
-        generateRoomNumber(); // Gọi hàm sinh mã ngay sau khi chọn tầng
+        generateRoomNumber(); 
     }
 
     private void generateRoomNumber() {
@@ -227,10 +265,6 @@ public class ApartmentDialog extends JDialog {
             try {
                 String roomNum = a.getRoomNumber(); 
                 if (roomNum.length() >= 2) {
-                    // Lấy phần đuôi (ví dụ 101 -> 01, 205 -> 05)
-                    // Giả sử format là [Tầng][2 số thứ tự]
-                    // Nếu tầng 1 chữ số (1-9) -> cắt lấy 2 số cuối
-                    // Nếu tầng 2 chữ số (10-99) -> cắt lấy 2 số cuối
                     String suffixStr = roomNum.substring(roomNum.length() - 2);
                     int suffix = Integer.parseInt(suffixStr);
                     if (suffix > maxSuffix) maxSuffix = suffix;
@@ -239,24 +273,13 @@ public class ApartmentDialog extends JDialog {
         }
         
         int nextSuffix = maxSuffix + 1;
-        // Format: Tầng + 01, 02... (VD: 101, 201, 1201)
         String newRoomNumber = floorNum + String.format("%02d", nextSuffix); 
         
         txtRoomNumber.setText(newRoomNumber);
     }
 
-    private void handleCancel() {
-        if (dataChanged) {
-            int choice = JOptionPane.showConfirmDialog(this, "Dữ liệu chưa lưu. Đóng?", "Cảnh báo", JOptionPane.YES_NO_OPTION);
-            if (choice == JOptionPane.YES_OPTION) dispose();
-        } else {
-            dispose();
-        }
-    }
-
     private void onSave() {
         StringBuilder sb = new StringBuilder();
-        // Kiểm tra các trường KHÁC (Tầng và Mã phòng đã tự động nên chắc chắn có)
         if (txtArea.getText().trim().isEmpty()) sb.append("- Thiếu Diện tích\n");
         if (txtPrice.getText().trim().isEmpty()) sb.append("- Thiếu Giá thuê\n");
         

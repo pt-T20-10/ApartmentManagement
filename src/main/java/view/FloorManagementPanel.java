@@ -9,6 +9,9 @@ import util.UIConstants;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.Path2D;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -20,7 +23,6 @@ public class FloorManagementPanel extends JPanel {
     private Building currentBuilding; 
     
     private JComboBox<Building> cbbBuilding;
-    // Đã xóa overlayPanel
     private JButton btnBatchAdd;
     private JButton btnAdd;
     private Consumer<Floor> onFloorSelect;
@@ -68,6 +70,7 @@ public class FloorManagementPanel extends JPanel {
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
 
+        // LEFT SIDE
         JPanel leftHeader = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
         leftHeader.setBackground(UIConstants.BACKGROUND_COLOR);
 
@@ -80,31 +83,34 @@ public class FloorManagementPanel extends JPanel {
         });
         leftHeader.add(btnBack);
 
-        JLabel lblFilter = new JLabel("Quản Lý Tầng:");
-        lblFilter.setFont(UIConstants.FONT_TITLE);
-        lblFilter.setForeground(UIConstants.TEXT_PRIMARY);
+        JLabel lblFilter = new JLabel("Đang xem:");
+        lblFilter.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        lblFilter.setForeground(Color.GRAY);
         
         cbbBuilding = new JComboBox<>();
-        cbbBuilding.setPreferredSize(new Dimension(280, 35));
-        cbbBuilding.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        cbbBuilding.setPreferredSize(new Dimension(250, 40)); 
+        cbbBuilding.setFont(new Font("Segoe UI", Font.BOLD, 14));
         cbbBuilding.setBackground(Color.WHITE);
         cbbBuilding.setRenderer(new DefaultListCellRenderer() {
             @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof Building) setText(((Building) value).getName());
+                setBorder(new EmptyBorder(5, 5, 5, 5)); 
                 return this;
             }
         });
         cbbBuilding.addActionListener(e -> {
             Building selected = (Building) cbbBuilding.getSelectedItem();
             if (selected != null && selected.getId() != null) { 
-                this.currentBuilding = selected; loadFloors();
+                this.currentBuilding = selected; 
             } else {
-                this.currentBuilding = null; cardsContainer.removeAll(); cardsContainer.repaint();
+                this.currentBuilding = null;
             }
+            loadFloors(); 
         });
         leftHeader.add(lblFilter); leftHeader.add(cbbBuilding);
 
+        // RIGHT SIDE
         JPanel rightHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         rightHeader.setBackground(UIConstants.BACKGROUND_COLOR);
 
@@ -131,7 +137,7 @@ public class FloorManagementPanel extends JPanel {
         headerPanel.add(rightHeader, BorderLayout.EAST);
         add(headerPanel, BorderLayout.NORTH);
 
-        // === CONTENT (Đã bỏ OverlayLayout phức tạp) ===
+        // === CONTENT ===
         JPanel wrapperPanel = new JPanel(new BorderLayout());
         wrapperPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         cardsContainer = new JPanel(new GridLayout(0, 3, 20, 20));
@@ -149,17 +155,27 @@ public class FloorManagementPanel extends JPanel {
     }
     
     private JButton createBackArrowButton() {
-        JButton btn = new JButton(" \u2190 Quay lại"); 
+        JButton btn = new JButton("Quay lại");
+        btn.setIcon(new HeaderIcon("BACK_ARROW", 16, UIConstants.PRIMARY_COLOR));
         btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btn.setForeground(UIConstants.PRIMARY_COLOR);
+        btn.setBackground(Color.WHITE);
         btn.setContentAreaFilled(false);
-        btn.setBorderPainted(false);
+        btn.setBorder(new EmptyBorder(5, 10, 5, 15)); 
         btn.setFocusPainted(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        
+        btn.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) {
+                btn.setContentAreaFilled(true);
+                btn.setBackground(new Color(235, 245, 255)); 
+            }
+            public void mouseExited(MouseEvent e) {
+                btn.setContentAreaFilled(false);
+            }
+        });
         return btn;
     }
-    
-    // Đã xóa createMaintenanceOverlay()
 
     private void loadBuildingData() {
         List<Building> buildings = buildingDAO.getAllBuildings();
@@ -188,11 +204,22 @@ public class FloorManagementPanel extends JPanel {
         cardsContainer.removeAll();
         
         if (currentBuilding == null || currentBuilding.getId() == null) {
-            showEmptyMessage("Vui lòng chọn một tòa nhà.");
+            showEmptyMessage("Vui lòng chọn một tòa nhà.", false);
+            setButtonsEnabled(false); 
             cardsContainer.revalidate(); 
             cardsContainer.repaint();
             return;
         }
+
+        if ("Đang bảo trì".equals(currentBuilding.getStatus())) {
+            setButtonsEnabled(false);
+            showEmptyMessage("TÒA NHÀ ĐANG BẢO TRÌ\nKhông thể truy cập dữ liệu tầng.", true);
+            cardsContainer.revalidate();
+            cardsContainer.repaint();
+            return;
+        }
+
+        setButtonsEnabled(true);
 
         SwingWorker<List<dao.FloorDAO.FloorWithStats>, Void> worker = new SwingWorker<>() {
             @Override
@@ -210,16 +237,14 @@ public class FloorManagementPanel extends JPanel {
                     List<dao.FloorDAO.FloorWithStats> data = get();
                     cardsContainer.removeAll();
                     
-                    // Không cần kiểm tra Maintenance nữa
-
                     if (data.isEmpty()) {
-                        showEmptyMessage("Tòa nhà này chưa có tầng nào.");
+                        showEmptyMessage("Tòa nhà này chưa có tầng nào.", false);
                     } else {
                         for (dao.FloorDAO.FloorWithStats item : data) {
                             FloorCard card = new FloorCard(
                                 item.floor, 
                                 item.stats, 
-                                false, // Luôn truyền false (Không bảo trì)
+                                false, 
                                 onFloorSelect, 
                                 FloorManagementPanel.this::editFloor, 
                                 FloorManagementPanel.this::deleteFloor
@@ -227,7 +252,6 @@ public class FloorManagementPanel extends JPanel {
                             cardsContainer.add(card);
                         }
                     }
-                    
                     cardsContainer.revalidate();
                     cardsContainer.repaint();
                     
@@ -235,7 +259,7 @@ public class FloorManagementPanel extends JPanel {
                     if (this != FloorManagementPanel.this.currentWorker) return;
                     e.printStackTrace();
                     cardsContainer.removeAll();
-                    showEmptyMessage("Lỗi khi tải dữ liệu tầng.");
+                    showEmptyMessage("Lỗi khi tải dữ liệu tầng.", false);
                     cardsContainer.revalidate();
                     cardsContainer.repaint();
                 }
@@ -246,25 +270,55 @@ public class FloorManagementPanel extends JPanel {
         worker.execute();
     }
     
-    // Đã xóa updateMaintenanceUI()
-    
-    private void showEmptyMessage(String msg) {
-        JLabel guideLabel = new JLabel(msg); 
-        guideLabel.setHorizontalAlignment(SwingConstants.CENTER); 
-        guideLabel.setFont(new Font("Segoe UI", Font.ITALIC, 16)); 
-        guideLabel.setForeground(Color.GRAY);
-        JPanel msgPanel = new JPanel(new BorderLayout()); 
-        msgPanel.setBackground(UIConstants.BACKGROUND_COLOR); 
-        msgPanel.add(guideLabel, BorderLayout.CENTER);
-        cardsContainer.add(msgPanel);
+    private void setButtonsEnabled(boolean enabled) {
+        btnAdd.setEnabled(enabled);
+        btnBatchAdd.setEnabled(enabled);
+        if (enabled) {
+            btnAdd.setBackground(UIConstants.PRIMARY_COLOR);
+            btnBatchAdd.setBackground(new Color(0, 150, 136));
+        } else {
+            btnAdd.setBackground(Color.GRAY);
+            btnBatchAdd.setBackground(Color.GRAY);
+        }
     }
     
-    // Đã xóa checkMaintenance()
+    private void showEmptyMessage(String msg, boolean isWarning) {
+        JPanel msgPanel = new JPanel();
+        msgPanel.setLayout(new BoxLayout(msgPanel, BoxLayout.Y_AXIS));
+        msgPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        
+        if (isWarning) {
+            JLabel iconLabel = new JLabel(new HeaderIcon("MAINTENANCE_ART", 80, new Color(255, 87, 34))); 
+            iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            msgPanel.add(Box.createVerticalStrut(50));
+            msgPanel.add(iconLabel);
+            msgPanel.add(Box.createVerticalStrut(20));
+        }
+
+        JLabel guideLabel = new JLabel("<html><center>" + msg.replace("\n", "<br>") + "</center></html>"); 
+        guideLabel.setHorizontalAlignment(SwingConstants.CENTER); 
+        guideLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        
+        if (isWarning) {
+            guideLabel.setFont(new Font("Segoe UI", Font.BOLD, 18)); 
+            guideLabel.setForeground(new Color(211, 47, 47)); 
+        } else {
+            guideLabel.setFont(new Font("Segoe UI", Font.ITALIC, 16)); 
+            guideLabel.setForeground(Color.GRAY);
+        }
+        
+        msgPanel.add(guideLabel);
+        
+        JPanel centerWrapper = new JPanel(new GridBagLayout());
+        centerWrapper.setBackground(UIConstants.BACKGROUND_COLOR);
+        centerWrapper.add(msgPanel);
+        
+        cardsContainer.add(centerWrapper);
+    }
 
     private void showBatchAddDialog() {
         if (currentBuilding == null || currentBuilding.getId() == null) { 
-            JOptionPane.showMessageDialog(this, "Vui lòng chọn Tòa nhà trước!"); 
-            return; 
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn Tòa nhà trước!"); return; 
         }
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
         BatchAddFloorDialog dialog = new BatchAddFloorDialog(parent, currentBuilding.getId());
@@ -274,110 +328,101 @@ public class FloorManagementPanel extends JPanel {
 
     private void showAddDialog() {
         if (currentBuilding == null || currentBuilding.getId() == null) { 
-            JOptionPane.showMessageDialog(this, "Vui lòng chọn Tòa nhà trước!"); 
-            return; 
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn Tòa nhà trước!"); return; 
         }
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
         Floor newFloor = new Floor(); 
+        
+        // Gán Building ID vào object Floor
         newFloor.setBuildingId(currentBuilding.getId());
+        
+        // [SỬA LỖI] Chỉ truyền 2 tham số: parent và object floor
         FloorDialog dialog = new FloorDialog(parent, newFloor); 
+        
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             if (floorDAO.insertFloor(dialog.getFloor())) { 
-                JOptionPane.showMessageDialog(this, "Thêm tầng thành công!"); 
-                loadFloors(); 
-            } else {
-                JOptionPane.showMessageDialog(this, "Thêm thất bại!");
-            }
+                JOptionPane.showMessageDialog(this, "Thêm tầng thành công!"); loadFloors(); 
+            } else { JOptionPane.showMessageDialog(this, "Thêm thất bại!"); }
         }
     }
 
     private void editFloor(Floor floor) {
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+        
+        // [SỬA LỖI] Chỉ truyền 2 tham số: parent và object floor
         FloorDialog dialog = new FloorDialog(parent, floor); 
+        
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
             if (floorDAO.updateFloor(dialog.getFloor())) { 
-                JOptionPane.showMessageDialog(this, "Cập nhật thành công!"); 
-                loadFloors(); 
-            } else {
-                JOptionPane.showMessageDialog(this, "Cập nhật thất bại!");
-            }
+                JOptionPane.showMessageDialog(this, "Cập nhật thành công!"); loadFloors(); 
+            } else { JOptionPane.showMessageDialog(this, "Cập nhật thất bại!"); }
         }
     }
 
     private void deleteFloor(Floor floor) {
-        int confirm = JOptionPane.showConfirmDialog(this, 
-            "Bạn có chắc muốn xóa " + floor.getName() + "?", 
-            "Xác nhận xóa", 
-            JOptionPane.YES_NO_OPTION);
+        int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa " + floor.getName() + "?", "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
-            if (floorDAO.deleteFloor(floor.getId())) {
-                loadFloors();
-            } else {
-                JOptionPane.showMessageDialog(this, "Xóa thất bại!");
-            }
+            if (floorDAO.deleteFloor(floor.getId())) { loadFloors(); } 
+            else { JOptionPane.showMessageDialog(this, "Xóa thất bại!"); }
         }
     }
 
     private static class RoundedButton extends JButton { 
         private int arc; 
         public RoundedButton(String text, int arc) { 
-            super(text); 
-            this.arc = arc; 
-            setContentAreaFilled(false); 
-            setFocusPainted(false); 
-            setBorderPainted(false); 
-            setCursor(new Cursor(Cursor.HAND_CURSOR)); 
+            super(text); this.arc = arc; setContentAreaFilled(false); setFocusPainted(false); setBorderPainted(false); setCursor(new Cursor(Cursor.HAND_CURSOR)); 
         } 
-        @Override 
-        protected void paintComponent(Graphics g) { 
+        @Override protected void paintComponent(Graphics g) { 
             Graphics2D g2 = (Graphics2D) g.create(); 
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); 
             g2.setColor(getBackground()); 
             g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc); 
-            super.paintComponent(g); 
-            g2.dispose(); 
+            super.paintComponent(g); g2.dispose(); 
         } 
     }
     
     private static class HeaderIcon implements Icon {
-        private String type; 
-        private int size; 
-        private Color color; 
-        
-        public HeaderIcon(String type, int size, Color color) { 
-            this.type = type; 
-            this.size = size; 
-            this.color = color; 
-        }
-        
-        @Override 
-        public void paintIcon(Component c, Graphics g, int x, int y) { 
+        private String type; private int size; private Color color; 
+        public HeaderIcon(String type, int size, Color color) { this.type = type; this.size = size; this.color = color; }
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) { 
             Graphics2D g2 = (Graphics2D) g.create(); 
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); 
-            g2.setColor(color); 
-            g2.setStroke(new BasicStroke(2.0f)); 
-            g2.translate(x, y);
+            g2.setColor(color); g2.setStroke(new BasicStroke(2.0f)); g2.translate(x, y);
             
             if ("PLUS".equals(type)) { 
-                g2.drawLine(0, size/2, size, size/2); 
-                g2.drawLine(size/2, 0, size/2, size); 
+                g2.drawLine(0, size/2, size, size/2); g2.drawLine(size/2, 0, size/2, size); 
             }
             else if ("LAYER_PLUS".equals(type)) { 
                 int w=size-8; int h=size/4; 
-                g2.drawRoundRect(4, size/2-4, w, h, 3,3); 
-                g2.drawRoundRect(4, size/2+4, w, h, 3,3); 
-                g2.drawLine(size/2, 2, size/2, 10); 
-                g2.drawLine(size/2-4, 6, size/2+4, 6); 
+                g2.drawRoundRect(4, size/2-4, w, h, 3,3); g2.drawRoundRect(4, size/2+4, w, h, 3,3); 
+                g2.drawLine(size/2, 2, size/2, 10); g2.drawLine(size/2-4, 6, size/2+4, 6); 
+            }
+            else if ("BACK_ARROW".equals(type)) { 
+                g2.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                Path2D p = new Path2D.Float();
+                p.moveTo(size * 0.7, size * 0.2); 
+                p.lineTo(size * 0.3, size * 0.5); 
+                p.lineTo(size * 0.7, size * 0.8); 
+                g2.draw(p);
+            }
+            else if ("MAINTENANCE_ART".equals(type)) { 
+                int cx = size/2; int cy = size/2; int r = size/3;
+                g2.setStroke(new BasicStroke(3.0f)); g2.drawOval(cx-r, cy-r, r*2, r*2);
+                g2.setStroke(new BasicStroke(4.0f));
+                for(int i=0; i<8; i++) {
+                    double angle = Math.toRadians(i * 45);
+                    int x1 = cx + (int)(Math.cos(angle) * (r-2)); int y1 = cy + (int)(Math.sin(angle) * (r-2));
+                    int x2 = cx + (int)(Math.cos(angle) * (r+6)); int y2 = cy + (int)(Math.sin(angle) * (r+6));
+                    g2.drawLine(x1, y1, x2, y2);
+                }
+                g2.setColor(new Color(255, 87, 34)); 
+                g2.setStroke(new BasicStroke(4.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.drawLine(size/4, size-size/4, size-size/4, size/4);
             }
             g2.dispose(); 
         } 
-        
-        @Override 
-        public int getIconWidth() { return size; } 
-        
-        @Override 
-        public int getIconHeight() { return size; }
+        @Override public int getIconWidth() { return size; } @Override public int getIconHeight() { return size; }
     }
 }

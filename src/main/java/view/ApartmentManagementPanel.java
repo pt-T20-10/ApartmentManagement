@@ -11,8 +11,13 @@ import util.UIConstants;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.geom.Path2D;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 public class ApartmentManagementPanel extends JPanel {
 
@@ -64,7 +69,7 @@ public class ApartmentManagementPanel extends JPanel {
         setBackground(UIConstants.BACKGROUND_COLOR);
         setBorder(new EmptyBorder(20, 30, 20, 30));
 
-        // === HEADER PANEL - SỬA LẠI LAYOUT ===
+        // === HEADER PANEL ===
         JPanel headerPanel = new JPanel();
         headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
@@ -77,7 +82,7 @@ public class ApartmentManagementPanel extends JPanel {
         JPanel leftRow1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
         leftRow1.setBackground(UIConstants.BACKGROUND_COLOR);
 
-        JButton btnBack = createBackButton();
+        JButton btnBack = createBackArrowButton();
         btnBack.addActionListener(e -> {
             MainDashboard main = (MainDashboard) SwingUtilities.getWindowAncestor(this);
             if (currentBuilding != null && main != null) {
@@ -214,7 +219,6 @@ public class ApartmentManagementPanel extends JPanel {
             return;
         }
 
-        // Lấy danh sách apartments
         List<Apartment> list;
         Floor selectedFloor = (Floor) cbbFloor.getSelectedItem();
         if (selectedFloor != null && selectedFloor.getId() != null) {
@@ -225,13 +229,11 @@ public class ApartmentManagementPanel extends JPanel {
             currentFloor = null;
         }
 
-        // Filter theo trạng thái
         String statusFilter = (String) cbbStatusFilter.getSelectedItem();
         if (statusFilter != null && !statusFilter.equals("Tất cả trạng thái")) {
             list = filterByStatus(list, statusFilter);
         }
 
-        // Hiển thị cards
         if (list.isEmpty()) {
             JLabel emptyLabel = new JLabel("Không có căn hộ nào");
             emptyLabel.setFont(new Font("Segoe UI", Font.ITALIC, 16));
@@ -243,8 +245,42 @@ public class ApartmentManagementPanel extends JPanel {
             emptyPanel.add(emptyLabel, BorderLayout.CENTER);
             cardsContainer.add(emptyPanel);
         } else {
+            // [LOGIC MOCK DATA MỚI] 
             for (Apartment apt : list) {
-                cardsContainer.add(new ApartmentCard(apt, this::editApartment, this::deleteApartment));
+                LocalDate mockEndDate = null;
+                
+                if ("RENTED".equalsIgnoreCase(apt.getStatus()) || "Đã thuê".equalsIgnoreCase(apt.getStatus())) {
+                    try {
+                        String numStr = apt.getRoomNumber().replaceAll("\\D+","");
+                        int roomNum = numStr.isEmpty() ? 0 : Integer.parseInt(numStr);
+                        
+                        // Lấy chữ số cuối cùng của số phòng (ví dụ 101 -> 1, 205 -> 5)
+                        int lastDigit = roomNum % 10;
+
+                        // [SỬA LOGIC]: 
+                        // - Các căn có đuôi 1, 2, 3 (vd: 101, 102, 103): QUÁ HẠN (Đỏ)
+                        // - Các căn có đuôi 4, 5: SẮP HẾT HẠN (Cam)
+                        // - Còn lại: Bình thường
+                        if (lastDigit >= 1 && lastDigit <= 3) {
+                            mockEndDate = LocalDate.now().minusDays(5); // Quá hạn 5 ngày
+                        } else if (lastDigit >= 4 && lastDigit <= 5) {
+                            mockEndDate = LocalDate.now().plusDays(15); // Còn 15 ngày
+                        } else {
+                            mockEndDate = LocalDate.now().plusDays(200); // Còn lâu
+                        }
+                        
+                    } catch (Exception e) { 
+                        mockEndDate = LocalDate.now().plusDays(60); 
+                    }
+                }
+
+                cardsContainer.add(new ApartmentCard(
+                    apt, 
+                    mockEndDate,
+                    this::showQuickView,
+                    this::editApartment,
+                    this::deleteApartment
+                ));
             }
         }
 
@@ -252,73 +288,56 @@ public class ApartmentManagementPanel extends JPanel {
         cardsContainer.repaint();
     }
 
+    private void showQuickView(Apartment apt) {
+        JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
+        Floor targetFloor = currentFloor;
+        if (targetFloor == null) {
+            targetFloor = floorDAO.getFloorById(apt.getFloorId());
+        }
+        if (targetFloor == null) {
+            targetFloor = new Floor(); targetFloor.setName("Tầng ?");
+        }
+
+        ApartmentQuickViewDialog dialog = new ApartmentQuickViewDialog(
+            parent, apt, currentBuilding, targetFloor, this::editApartment
+        );
+        dialog.setVisible(true);
+    }
+
     private List<Apartment> filterByStatus(List<Apartment> apartments, String statusFilter) {
         List<Apartment> filtered = new ArrayList<>();
-
         for (Apartment apt : apartments) {
             String aptStatus = apt.getStatus();
             if (aptStatus == null) aptStatus = "AVAILABLE";
-
             boolean match = false;
             switch (statusFilter) {
-                case "Trống":
-                    match = "AVAILABLE".equalsIgnoreCase(aptStatus) ||
-                            "Trống".equalsIgnoreCase(aptStatus);
-                    break;
-                case "Đã thuê":
-                    match = "RENTED".equalsIgnoreCase(aptStatus) ||
-                            "Đã thuê".equalsIgnoreCase(aptStatus);
-                    break;
-                case "Bảo trì":
-                    match = "MAINTENANCE".equalsIgnoreCase(aptStatus) ||
-                            "Bảo trì".equalsIgnoreCase(aptStatus);
-                    break;
-                default:
-                    match = true;
+                case "Trống": match = "AVAILABLE".equalsIgnoreCase(aptStatus) || "Trống".equalsIgnoreCase(aptStatus); break;
+                case "Đã thuê": match = "RENTED".equalsIgnoreCase(aptStatus) || "Đã thuê".equalsIgnoreCase(aptStatus); break;
+                case "Bảo trì": match = "MAINTENANCE".equalsIgnoreCase(aptStatus) || "Bảo trì".equalsIgnoreCase(aptStatus); break;
+                default: match = true;
             }
-
-            if (match) {
-                filtered.add(apt);
-            }
+            if (match) filtered.add(apt);
         }
-
         return filtered;
     }
 
     private void showAddDialog() {
         if (currentBuilding == null) {
-            JOptionPane.showMessageDialog(this, 
-                "Vui lòng chọn tòa nhà trước!", 
-                "Thông báo", 
-                JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Vui lòng chọn tòa nhà trước!", "Thông báo", JOptionPane.WARNING_MESSAGE);
             return;
         }
-        
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
         Apartment newApt = new Apartment();
         if (currentFloor != null) newApt.setFloorId(currentFloor.getId());
-        
         ApartmentDialog dialog = new ApartmentDialog(parent, newApt, currentBuilding.getId());
         dialog.setVisible(true);
-        
         if (dialog.isConfirmed()) {
             Apartment apt = dialog.getApartment();
-            
-            // VALIDATION: Kiểm tra số phòng trùng
             if (isRoomNumberExists(apt.getFloorId(), apt.getRoomNumber(), null)) {
-                JOptionPane.showMessageDialog(this,
-                    "Số phòng " + apt.getRoomNumber() + " đã tồn tại trên tầng này!",
-                    "Lỗi",
-                    JOptionPane.ERROR_MESSAGE);
-                return;
+                JOptionPane.showMessageDialog(this, "Số phòng " + apt.getRoomNumber() + " đã tồn tại!", "Lỗi", JOptionPane.ERROR_MESSAGE); return;
             }
-            
-            if (apartmentDAO.insertApartment(apt)) {
-                JOptionPane.showMessageDialog(this, "Thêm căn hộ thành công!");
-                loadApartments();
-            } else {
-                JOptionPane.showMessageDialog(this, "Thêm căn hộ thất bại!");
-            }
+            if (apartmentDAO.insertApartment(apt)) { JOptionPane.showMessageDialog(this, "Thêm thành công!"); loadApartments(); } 
+            else { JOptionPane.showMessageDialog(this, "Thêm thất bại!"); }
         }
     }
 
@@ -326,96 +345,65 @@ public class ApartmentManagementPanel extends JPanel {
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
         ApartmentDialog dialog = new ApartmentDialog(parent, apt, currentBuilding.getId());
         dialog.setVisible(true);
-        
         if (dialog.isConfirmed()) {
             Apartment updated = dialog.getApartment();
-            
-            // VALIDATION: Kiểm tra số phòng trùng (trừ chính nó)
             if (isRoomNumberExists(updated.getFloorId(), updated.getRoomNumber(), apt.getId())) {
-                JOptionPane.showMessageDialog(this,
-                    "Số phòng " + updated.getRoomNumber() + " đã tồn tại trên tầng này!",
-                    "Lỗi",
-                    JOptionPane.ERROR_MESSAGE);
-                return;
+                JOptionPane.showMessageDialog(this, "Số phòng " + updated.getRoomNumber() + " đã tồn tại!", "Lỗi", JOptionPane.ERROR_MESSAGE); return;
             }
-            
-            if (apartmentDAO.updateApartment(updated)) {
-                JOptionPane.showMessageDialog(this, "Cập nhật căn hộ thành công!");
-                loadApartments();
-            } else {
-                JOptionPane.showMessageDialog(this, "Cập nhật căn hộ thất bại!");
-            }
+            if (apartmentDAO.updateApartment(updated)) { JOptionPane.showMessageDialog(this, "Cập nhật thành công!"); loadApartments(); } 
+            else { JOptionPane.showMessageDialog(this, "Cập nhật thất bại!"); }
         }
     }
 
     private void deleteApartment(Apartment apt) {
-        int confirm = JOptionPane.showConfirmDialog(this,
-                "Bạn có chắc muốn xóa căn hộ " + apt.getRoomNumber() + "?",
-                "Xác nhận xóa",
-                JOptionPane.YES_NO_OPTION);
-                
+        int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa căn hộ " + apt.getRoomNumber() + "?", "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
         if (confirm == JOptionPane.YES_OPTION) {
-            if (apartmentDAO.deleteApartment(apt.getId())) {
-                JOptionPane.showMessageDialog(this, "Xóa căn hộ thành công!");
-                loadApartments();
-            } else {
-                JOptionPane.showMessageDialog(this, "Xóa căn hộ thất bại!");
-            }
+            if (apartmentDAO.deleteApartment(apt.getId())) { JOptionPane.showMessageDialog(this, "Xóa thành công!"); loadApartments(); } 
+            else { JOptionPane.showMessageDialog(this, "Xóa thất bại!"); }
         }
     }
 
-    // VALIDATION METHOD: Kiểm tra số phòng trùng
     private boolean isRoomNumberExists(Long floorId, String roomNumber, Long excludeApartmentId) {
-        if (floorId == null || roomNumber == null || roomNumber.trim().isEmpty()) {
-            return false;
-        }
-        
+        if (floorId == null || roomNumber == null) return false;
         List<Apartment> apartments = apartmentDAO.getApartmentsByFloorId(floorId);
         for (Apartment apt : apartments) {
-            // Bỏ qua căn hộ đang edit (nếu có)
-            if (excludeApartmentId != null && apt.getId().equals(excludeApartmentId)) {
-                continue;
-            }
-            
-            if (roomNumber.trim().equalsIgnoreCase(apt.getRoomNumber().trim())) {
-                return true;
-            }
+            if (excludeApartmentId != null && apt.getId().equals(excludeApartmentId)) continue;
+            if (roomNumber.trim().equalsIgnoreCase(apt.getRoomNumber().trim())) return true;
         }
-        
         return false;
     }
 
-    private JButton createBackButton() {
-        JButton btn = new JButton(" ← Quay lại");
+    private JButton createBackArrowButton() {
+        JButton btn = new JButton("Quay lại");
+        btn.setIcon(new HeaderIcon("BACK_ARROW", 16, UIConstants.PRIMARY_COLOR));
         btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btn.setForeground(UIConstants.PRIMARY_COLOR);
+        btn.setBackground(Color.WHITE);
         btn.setContentAreaFilled(false);
-        btn.setBorderPainted(false);
+        btn.setBorder(new EmptyBorder(5, 10, 5, 15)); 
         btn.setFocusPainted(false);
         btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        btn.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) { btn.setContentAreaFilled(true); btn.setBackground(new Color(235, 245, 255)); }
+            public void mouseExited(MouseEvent e) { btn.setContentAreaFilled(false); }
+        });
         return btn;
     }
 
     private static class RoundedButton extends JButton {
-        private int arc;
-
-        public RoundedButton(String text, int arc) {
-            super(text);
-            this.arc = arc;
-            setContentAreaFilled(false);
-            setBorderPainted(false);
-            setFocusPainted(false);
-            setCursor(new Cursor(Cursor.HAND_CURSOR));
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(getBackground());
-            g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc);
-            super.paintComponent(g);
-            g2.dispose();
-        }
+        private int arc; public RoundedButton(String text, int arc) { super(text); this.arc = arc; setContentAreaFilled(false); setBorderPainted(false); setFocusPainted(false); setCursor(new Cursor(Cursor.HAND_CURSOR)); }
+        @Override protected void paintComponent(Graphics g) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(getBackground()); g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc); super.paintComponent(g); g2.dispose(); }
+    }
+    
+    private static class HeaderIcon implements Icon {
+        private String type; private int size; private Color color; public HeaderIcon(String type, int size, Color color) { this.type = type; this.size = size; this.color = color; }
+        @Override public void paintIcon(Component c, Graphics g, int x, int y) { 
+            Graphics2D g2 = (Graphics2D) g.create(); 
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); 
+            g2.setColor(color); g2.setStroke(new BasicStroke(2.0f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); g2.translate(x, y);
+            if ("BACK_ARROW".equals(type)) { Path2D p = new Path2D.Float(); p.moveTo(size * 0.7, size * 0.2); p.lineTo(size * 0.3, size * 0.5); p.lineTo(size * 0.7, size * 0.8); g2.draw(p); }
+            g2.dispose(); 
+        } 
+        @Override public int getIconWidth() { return size; } @Override public int getIconHeight() { return size; }
     }
 }

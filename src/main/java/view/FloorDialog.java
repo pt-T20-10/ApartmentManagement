@@ -1,235 +1,222 @@
 package view;
 
+import dao.FloorDAO;
 import model.Floor;
 import util.UIConstants;
 
 import javax.swing.*;
+import javax.swing.border.CompoundBorder;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.LineBorder;
+import javax.swing.border.MatteBorder;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import javax.swing.border.TitledBorder;
 
 public class FloorDialog extends JDialog {
 
-    private JTextField txtFloorNumber; 
-    private JTextField txtName;        
-    private JComboBox<String> cbbStatus; 
-    private JTextArea txtDesc;          
-    
-    private boolean confirmed = false;
+    private FloorDAO floorDAO;
     private Floor floor;
-    private boolean dataChanged = false; // Biến cờ theo dõi thay đổi
+    private boolean confirmed = false;
+    private boolean dataChanged = false;
+
+    private JTextField txtName;
+    private JTextField txtNumber; 
+    private JTextArea txtDesc;
 
     public FloorDialog(Frame owner, Floor floor) {
         super(owner, floor.getId() == null ? "Thêm Tầng Mới" : "Cập Nhật Tầng", true);
         this.floor = floor;
-        
+        this.floorDAO = new FloorDAO();
+
         initUI();
         fillData();
+
+        dataChanged = false; 
         
-        // Reset cờ sau khi nạp dữ liệu xong
-        dataChanged = false;
-        
-        setSize(450, 580); 
+        setSize(500, 450); 
         setLocationRelativeTo(owner);
         setResizable(false);
     }
 
     private void initUI() {
         setLayout(new BorderLayout());
-        getContentPane().setBackground(Color.WHITE);
+        getContentPane().setBackground(new Color(245, 245, 250));
 
         // HEADER
-        JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 15, 20));
+        JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 15));
         headerPanel.setBackground(Color.WHITE);
-        
-        JLabel iconLabel = new JLabel(new SimpleIcon("FLOOR_STACK", 45, UIConstants.PRIMARY_COLOR));
-        JLabel titleLabel = new JLabel(floor.getId() == null ? "THÊM TẦNG MỚI" : "CẬP NHẬT TẦNG");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        headerPanel.setBorder(new MatteBorder(0, 0, 1, 0, new Color(230, 230, 230)));
+        JLabel titleLabel = new JLabel(floor.getId() == null ? "THIẾT LẬP TẦNG MỚI" : "THÔNG TIN TẦNG");
+        titleLabel.setFont(UIConstants.FONT_HEADING);
         titleLabel.setForeground(UIConstants.TEXT_PRIMARY);
-        
-        headerPanel.add(iconLabel);
         headerPanel.add(titleLabel);
         add(headerPanel, BorderLayout.NORTH);
 
         // BODY
-        JPanel formPanel = new JPanel();
-        formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
-        formPanel.setBackground(Color.WHITE);
-        formPanel.setBorder(new EmptyBorder(10, 50, 20, 50));
+        JPanel bodyPanel = new JPanel();
+        bodyPanel.setLayout(new BoxLayout(bodyPanel, BoxLayout.Y_AXIS));
+        bodyPanel.setBackground(new Color(245, 245, 250));
+        bodyPanel.setBorder(new EmptyBorder(20, 30, 20, 30));
 
-        txtFloorNumber = createRoundedField();
+        JPanel pnlInfo = createSectionPanel("Thông Tin Chung");
         txtName = createRoundedField();
+        txtNumber = createRoundedField(); 
         
-        cbbStatus = new JComboBox<>(new String[]{"Đang hoạt động", "Đang bảo trì"});
-        cbbStatus.setFont(UIConstants.FONT_REGULAR);
-        cbbStatus.setBackground(Color.WHITE);
-        cbbStatus.setAlignmentX(Component.LEFT_ALIGNMENT);
-        cbbStatus.setPreferredSize(new Dimension(100, 35));
-        cbbStatus.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        ((JComponent)cbbStatus.getRenderer()).setBorder(new EmptyBorder(5,5,5,5));
+        JPanel gridPanel = new JPanel(new GridLayout(2, 1, 0, 15));
+        gridPanel.setOpaque(false);
+        gridPanel.add(createFieldGroup("Tên Tầng (VD: Tầng 1) (*)", txtName));
+        gridPanel.add(createFieldGroup("Số Thứ Tự Tầng (Số nguyên) (*)", txtNumber));
+        pnlInfo.add(gridPanel);
 
-        txtDesc = new JTextArea(5, 20);
+        JPanel pnlDesc = createSectionPanel("Mô Tả / Ghi Chú");
+        txtDesc = new JTextArea(4, 20);
         txtDesc.setFont(UIConstants.FONT_REGULAR);
         txtDesc.setLineWrap(true);
         txtDesc.setWrapStyleWord(true);
         JScrollPane scrollDesc = new JScrollPane(txtDesc);
-        scrollDesc.setAlignmentX(Component.LEFT_ALIGNMENT);
+        scrollDesc.setBorder(new LineBorder(new Color(200, 200, 200), 1));
+        pnlDesc.add(createFieldGroup("Ghi chú thêm", scrollDesc));
 
-        // --- LẮNG NGHE THAY ĐỔI DỮ LIỆU ---
         SimpleDocumentListener docListener = new SimpleDocumentListener(() -> dataChanged = true);
-        txtFloorNumber.getDocument().addDocumentListener(docListener);
         txtName.getDocument().addDocumentListener(docListener);
+        txtNumber.getDocument().addDocumentListener(docListener);
         txtDesc.getDocument().addDocumentListener(docListener);
-        cbbStatus.addActionListener(e -> dataChanged = true);
 
-        formPanel.add(createLabel("Số Tầng (VD: 1, 2...) (*)"));
-        formPanel.add(txtFloorNumber);
-        formPanel.add(Box.createVerticalStrut(15));
-        
-        formPanel.add(createLabel("Tên Hiển Thị (VD: Tầng 1) (*)"));
-        formPanel.add(txtName);
-        formPanel.add(Box.createVerticalStrut(15));
-        
-        formPanel.add(createLabel("Trạng Thái Hoạt Động"));
-        formPanel.add(cbbStatus);
-        formPanel.add(Box.createVerticalStrut(15));
-        
-        formPanel.add(createLabel("Mô Tả / Ghi Chú"));
-        formPanel.add(scrollDesc);
-        
-        add(formPanel, BorderLayout.CENTER);
+        bodyPanel.add(pnlInfo);
+        bodyPanel.add(Box.createVerticalStrut(15));
+        bodyPanel.add(pnlDesc);
+        add(bodyPanel, BorderLayout.CENTER);
 
         // FOOTER
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 15));
-        buttonPanel.setBackground(new Color(248, 248, 248));
+        buttonPanel.setBackground(Color.WHITE);
+        buttonPanel.setBorder(new MatteBorder(1, 0, 0, 0, new Color(230, 230, 230)));
 
         JButton btnCancel = new RoundedButton("Hủy Bỏ", 10);
-        btnCancel.setBackground(new Color(225, 225, 225));
-        btnCancel.setForeground(Color.BLACK);
-        btnCancel.setPreferredSize(new Dimension(100, 38));
-        btnCancel.addActionListener(e -> handleCancel()); // Gọi hàm xử lý đóng
+        btnCancel.setBackground(new Color(245, 245, 245));
+        btnCancel.addActionListener(e -> handleCancel());
 
-        JButton btnSave = new RoundedButton("Lưu Lại", 10);
+        JButton btnSave = new RoundedButton("Lưu Tầng", 10);
         btnSave.setBackground(UIConstants.PRIMARY_COLOR);
         btnSave.setForeground(Color.WHITE);
-        btnSave.setPreferredSize(new Dimension(120, 38));
-        btnSave.addActionListener(e -> onSave()); // Gọi hàm xử lý lưu
+        btnSave.addActionListener(e -> onSave());
 
         buttonPanel.add(btnCancel);
         buttonPanel.add(btnSave);
         add(buttonPanel, BorderLayout.SOUTH);
 
-        // Xử lý nút X trên cửa sổ
+        configureShortcuts(btnSave);
+
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                handleCancel();
-            }
+            @Override public void windowClosing(WindowEvent e) { handleCancel(); }
         });
     }
 
-    // --- XỬ LÝ ĐÓNG FORM (Có hỏi xác nhận) ---
+    private void configureShortcuts(JButton defaultButton) {
+        getRootPane().setDefaultButton(defaultButton);
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+            .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
+        getRootPane().getActionMap().put("cancel", new AbstractAction() {
+            @Override public void actionPerformed(ActionEvent e) { handleCancel(); }
+        });
+    }
+
     private void handleCancel() {
-        if (dataChanged) {
-            int choice = JOptionPane.showConfirmDialog(this, 
-                "Dữ liệu chưa được lưu. Bạn có chắc muốn đóng?", 
-                "Cảnh báo", 
-                JOptionPane.YES_NO_OPTION, 
-                JOptionPane.WARNING_MESSAGE);
+        int choice = JOptionPane.showConfirmDialog(
+            this,
+            "Bạn có chắc muốn thoát? Dữ liệu chưa lưu sẽ bị mất.",
+            "Xác nhận thoát",
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE
+        );
+        if (choice == JOptionPane.YES_OPTION) dispose();
+    }
+
+    private void onSave() {
+        // Validation
+        if (txtName.getText().trim().isEmpty() || txtNumber.getText().trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, "Vui lòng nhập Tên tầng và Số thứ tự!", "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
+        // [MỚI] HỎI XÁC NHẬN TRƯỚC KHI LƯU
+        int confirm = JOptionPane.showConfirmDialog(
+            this, 
+            "Bạn có chắc chắn muốn lưu thông tin tầng này không?", 
+            "Xác nhận lưu", 
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.QUESTION_MESSAGE
+        );
+
+        // Nếu người dùng chọn NO hoặc tắt dialog -> Dừng lại, không lưu
+        if (confirm != JOptionPane.YES_OPTION) {
+            return;
+        }
+
+        try {
+            int floorNum = Integer.parseInt(txtNumber.getText().trim());
             
-            if (choice == JOptionPane.YES_OPTION) {
-                dispose();
-            }
-        } else {
+            floor.setName(txtName.getText().trim());
+            floor.setFloorNumber(floorNum);
+            floor.setDescription(txtDesc.getText().trim());
+            // buildingId đã có sẵn trong object floor
+
+            confirmed = true;
             dispose();
+        } catch (NumberFormatException e) {
+            JOptionPane.showMessageDialog(this, "Số thứ tự tầng phải là số nguyên!", "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
         }
     }
 
     private void fillData() {
         if (floor.getId() != null) {
-            txtFloorNumber.setText(String.valueOf(floor.getFloorNumber()));
             txtName.setText(floor.getName());
-            if (floor.getStatus() != null) {
-                cbbStatus.setSelectedItem(floor.getStatus());
-            }
+            txtNumber.setText(String.valueOf(floor.getFloorNumber()));
+            txtDesc.setText(floor.getDescription());
+        } else {
+            txtNumber.setText(""); 
         }
-    }
-
-    // --- XỬ LÝ LƯU (Có hỏi xác nhận) ---
-    private void onSave() {
-        String numStr = txtFloorNumber.getText().trim();
-        String name = txtName.getText().trim();
-
-        if (numStr.isEmpty() || name.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập Số tầng và Tên tầng!", "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        
-        int num;
-        try {
-            num = Integer.parseInt(numStr);
-        } catch (NumberFormatException e) {
-            JOptionPane.showMessageDialog(this, "Số tầng phải là số nguyên!", "Lỗi định dạng", JOptionPane.ERROR_MESSAGE);
-            return;
-        }
-
-        // KIỂM TRA TRÙNG LẶP
-        dao.FloorDAO dao = new dao.FloorDAO();
-        if (floor.getId() == null) {
-            if (dao.isFloorNameExists(floor.getBuildingId(), name)) {
-                JOptionPane.showMessageDialog(this, "Tên tầng '" + name + "' đã tồn tại trong tòa nhà này!", "Trùng dữ liệu", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-        }
-
-        // HỎI XÁC NHẬN TRƯỚC KHI LƯU
-        int choice = JOptionPane.showConfirmDialog(this, 
-            "Bạn có chắc chắn muốn lưu thông tin tầng này?", 
-            "Xác nhận lưu", 
-            JOptionPane.YES_NO_OPTION, 
-            JOptionPane.QUESTION_MESSAGE);
-
-        if (choice != JOptionPane.YES_OPTION) {
-            return; // Hủy lưu
-        }
-
-        // Thực hiện lưu
-        floor.setFloorNumber(num);
-        floor.setName(name);
-        floor.setStatus((String) cbbStatus.getSelectedItem());
-        
-        confirmed = true;
-        dataChanged = false;
-        dispose();
     }
 
     public boolean isConfirmed() { return confirmed; }
     public Floor getFloor() { return floor; }
 
-    // Helpers UI
-    private JLabel createLabel(String text) {
-        JLabel l = new JLabel(text);
-        l.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        l.setForeground(new Color(60, 60, 60));
-        l.setAlignmentX(Component.LEFT_ALIGNMENT);
-        l.setBorder(new EmptyBorder(0, 0, 5, 0));
-        return l;
+    private JPanel createSectionPanel(String title) {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(Color.WHITE);
+        TitledBorder border = BorderFactory.createTitledBorder(new LineBorder(new Color(220, 220, 220), 1, true), title);
+        border.setTitleFont(new Font("Segoe UI", Font.BOLD, 13));
+        border.setTitleColor(UIConstants.PRIMARY_COLOR);
+        panel.setBorder(new CompoundBorder(border, new EmptyBorder(10, 15, 10, 15)));
+        return panel;
     }
-    
+
+    private JPanel createFieldGroup(String labelText, JComponent field) {
+        JPanel panel = new JPanel(new BorderLayout(0, 5));
+        panel.setOpaque(false);
+        JLabel label = new JLabel(labelText);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        label.setForeground(new Color(80, 80, 80));
+        panel.add(label, BorderLayout.NORTH);
+        panel.add(field, BorderLayout.CENTER);
+        return panel;
+    }
+
     private JTextField createRoundedField() {
-        JTextField f = new RoundedTextField(10);
-        f.setFont(UIConstants.FONT_REGULAR);
+        JTextField f = new RoundedTextField(8);
         f.setPreferredSize(new Dimension(100, 35));
-        f.setMaximumSize(new Dimension(Integer.MAX_VALUE, 35));
-        f.setAlignmentX(Component.LEFT_ALIGNMENT);
+        f.setFont(UIConstants.FONT_REGULAR);
         return f;
     }
 
-    // Class lắng nghe thay đổi
     private static class SimpleDocumentListener implements DocumentListener {
         private Runnable onChange;
         public SimpleDocumentListener(Runnable onChange) { this.onChange = onChange; }
@@ -238,42 +225,13 @@ public class FloorDialog extends JDialog {
         @Override public void changedUpdate(DocumentEvent e) { onChange.run(); }
     }
 
-    // Styles
-    private static class RoundedTextField extends JTextField {
-        private int arc;
-        public RoundedTextField(int arc) { this.arc = arc; setOpaque(false); setBorder(new EmptyBorder(5, 12, 5, 12)); }
-        @Override protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(Color.WHITE); g2.fillRoundRect(1, 1, getWidth()-2, getHeight()-2, arc, arc);
-            g2.setColor(new Color(150, 150, 150)); g2.setStroke(new BasicStroke(1.2f)); g2.drawRoundRect(1, 1, getWidth()-3, getHeight()-3, arc, arc);
-            super.paintComponent(g); g2.dispose();
-        }
+    private static class RoundedTextField extends JTextField { 
+        private int arc; public RoundedTextField(int arc) { this.arc = arc; setOpaque(false); setBorder(new EmptyBorder(5, 10, 5, 10)); } 
+        @Override protected void paintComponent(Graphics g) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(getBackground()); g2.fillRoundRect(1, 1, getWidth()-2, getHeight()-2, arc, arc); g2.setColor(new Color(180, 180, 180)); g2.drawRoundRect(1, 1, getWidth()-3, getHeight()-3, arc, arc); super.paintComponent(g); g2.dispose(); } 
     }
-    private static class RoundedButton extends JButton {
-        private int arc;
-        public RoundedButton(String text, int arc) { super(text); this.arc = arc; setContentAreaFilled(false); setFocusPainted(false); setBorderPainted(false); setCursor(new Cursor(Cursor.HAND_CURSOR)); setFont(new Font("Segoe UI", Font.BOLD, 13)); }
-        @Override protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            if (getModel().isArmed()) g2.setColor(getBackground().darker()); else g2.setColor(getBackground());
-            g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc); super.paintComponent(g); g2.dispose();
-        }
-    }
-    private static class SimpleIcon implements Icon {
-        private String type; private int size; private Color color;
-        public SimpleIcon(String type, int size, Color color) { this.type = type; this.size = size; this.color = color; }
-        @Override public void paintIcon(Component c, Graphics g, int x, int y) {
-            Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(color); g2.translate(x, y);
-            if ("FLOOR_STACK".equals(type)) {
-                int h = size/4; int w = size*2/3; int cx = (size-w)/2;
-                g2.fillRoundRect(cx, size-h, w, h, 4, 4);
-                g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 180));
-                g2.fillRoundRect(cx, size-h*2+4, w, h, 4, 4);
-                g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 100));
-                g2.fillRoundRect(cx, size-h*3+8, w, h, 4, 4);
-            }
-            g2.dispose();
-        }
-        @Override public int getIconWidth() { return size; } @Override public int getIconHeight() { return size; }
+    
+    private static class RoundedButton extends JButton { 
+        private int arc; public RoundedButton(String text, int arc) { super(text); this.arc = arc; setContentAreaFilled(false); setFocusPainted(false); setBorderPainted(false); setCursor(new Cursor(Cursor.HAND_CURSOR)); setFont(new Font("Segoe UI", Font.BOLD, 13)); } 
+        @Override protected void paintComponent(Graphics g) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(getBackground()); g2.fillRoundRect(0, 0, getWidth(), getHeight(), arc, arc); super.paintComponent(g); g2.dispose(); } 
     }
 }

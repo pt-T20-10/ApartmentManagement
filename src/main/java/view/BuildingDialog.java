@@ -8,6 +8,8 @@ import javax.swing.border.*;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.geom.Path2D;
@@ -20,7 +22,7 @@ public class BuildingDialog extends JDialog {
     
     private boolean confirmed = false;
     private Building building;
-    private boolean dataChanged = false; // Biến cờ theo dõi thay đổi
+    private boolean dataChanged = false;
 
     public BuildingDialog(Frame owner, Building building) {
         super(owner, building == null || building.getId() == null ? "Thêm Mới Tòa Nhà" : "Chi Tiết Tòa Nhà", true);
@@ -29,7 +31,6 @@ public class BuildingDialog extends JDialog {
         initUI();
         fillData();
         
-        // Reset cờ sau khi nạp dữ liệu xong
         dataChanged = false;
         
         setSize(650, 680); 
@@ -128,7 +129,10 @@ public class BuildingDialog extends JDialog {
         buttonPanel.add(btnSave);
         add(buttonPanel, BorderLayout.SOUTH);
 
-        // Xử lý khi bấm nút X trên cửa sổ
+        // Cấu hình phím tắt (Enter/Esc)
+        configureShortcuts(btnSave);
+
+        // Chặn đóng cửa sổ để hỏi xác nhận
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
             @Override
@@ -138,24 +142,34 @@ public class BuildingDialog extends JDialog {
         });
     }
 
-    // --- XỬ LÝ NÚT ĐÓNG (Dùng JOptionPane thay vì ConfirmDialog) ---
-    private void handleCancel() {
-        if (dataChanged) {
-            int choice = JOptionPane.showConfirmDialog(this, 
-                "Dữ liệu chưa được lưu. Bạn có chắc muốn đóng?", 
-                "Cảnh báo", 
-                JOptionPane.YES_NO_OPTION, 
-                JOptionPane.WARNING_MESSAGE);
+    private void configureShortcuts(JButton defaultButton) {
+        getRootPane().setDefaultButton(defaultButton);
+        getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+            .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
             
-            if (choice == JOptionPane.YES_OPTION) {
-                dispose();
+        getRootPane().getActionMap().put("cancel", new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                handleCancel();
             }
-        } else {
+        });
+    }
+
+    // --- [SỬA ĐỔI] LUÔN HỎI XÁC NHẬN KHI THOÁT ---
+    private void handleCancel() {
+        int choice = JOptionPane.showConfirmDialog(
+            this, 
+            "Bạn có chắc muốn đóng? Dữ liệu chưa lưu sẽ bị mất.", 
+            "Xác nhận đóng", 
+            JOptionPane.YES_NO_OPTION, 
+            JOptionPane.WARNING_MESSAGE
+        );
+
+        if (choice == JOptionPane.YES_OPTION) {
             dispose();
         }
     }
 
-    // --- XỬ LÝ NÚT LƯU (Dùng JOptionPane thay vì ConfirmDialog) ---
     private void onSave() {
         String name = txtName.getText().trim();
         String addr = txtAddress.getText().trim();
@@ -165,7 +179,7 @@ public class BuildingDialog extends JDialog {
             return;
         }
 
-        // Hiện thông báo xác nhận bằng JOptionPane chuẩn
+        // Hỏi xác nhận trước khi lưu
         String itemName = building.getId() == null ? "tòa nhà mới" : "thay đổi thông tin";
         int choice = JOptionPane.showConfirmDialog(this, 
             "Bạn có chắc chắn muốn lưu " + itemName + " này không?", 
@@ -174,10 +188,9 @@ public class BuildingDialog extends JDialog {
             JOptionPane.QUESTION_MESSAGE);
 
         if (choice != JOptionPane.YES_OPTION) {
-            return; // Người dùng chọn No hoặc đóng dialog -> Không lưu
+            return;
         }
 
-        // Thực hiện lưu
         building.setName(name);
         building.setAddress(addr);
         building.setManagerName(txtManager.getText().trim());
@@ -203,9 +216,6 @@ public class BuildingDialog extends JDialog {
         }
     }
 
-    // --- Helper Classes ---
-    
-    // Class lắng nghe thay đổi text
     private static class SimpleDocumentListener implements DocumentListener {
         private Runnable onChange;
         public SimpleDocumentListener(Runnable onChange) { this.onChange = onChange; }
