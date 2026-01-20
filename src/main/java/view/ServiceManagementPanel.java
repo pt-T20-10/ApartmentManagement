@@ -4,6 +4,7 @@ import dao.ServiceDAO;
 import model.Service;
 import util.UIConstants;
 import util.ModernButton;
+import util.MoneyFormatter;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -11,12 +12,11 @@ import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import java.awt.*;
-import java.text.DecimalFormat;
 import java.util.List;
 
 /**
  * Service Management Panel - REDESIGNED
- * Modern, clean interface without Description column
+ * Modern interface with VND formatting, placeholder search
  */
 public class ServiceManagementPanel extends JPanel {
     
@@ -24,7 +24,6 @@ public class ServiceManagementPanel extends JPanel {
     private JTable serviceTable;
     private DefaultTableModel tableModel;
     private JTextField searchField;
-    private DecimalFormat currencyFormat = new DecimalFormat("#,###");
     
     public ServiceManagementPanel() {
         this.serviceDAO = new ServiceDAO();
@@ -49,9 +48,9 @@ public class ServiceManagementPanel extends JPanel {
         JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         titlePanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
-        JLabel iconLabel = new JLabel("\u26A1"); // ⚡
-        iconLabel.setFont(new Font("Segoe UI Symbol", Font.PLAIN, 32));
-        iconLabel.setForeground(UIConstants.WARNING_COLOR);
+        JLabel iconLabel = new JLabel("⚡");
+        iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 32));
+        iconLabel.setForeground(new Color(255, 193, 7));
         
         JLabel titleLabel = new JLabel("Quản Lý Dịch Vụ");
         titleLabel.setFont(UIConstants.FONT_TITLE);
@@ -61,7 +60,7 @@ public class ServiceManagementPanel extends JPanel {
         titlePanel.add(Box.createHorizontalStrut(10));
         titlePanel.add(titleLabel);
         
-        // Search panel
+        // Search panel with placeholder
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         searchPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
@@ -71,14 +70,38 @@ public class ServiceManagementPanel extends JPanel {
             BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
             new EmptyBorder(8, 12, 8, 12)
         ));
+        
+        // Placeholder
+        final String PLACEHOLDER = "Tìm theo tên dịch vụ...";
+        final Color PLACEHOLDER_COLOR = new Color(158, 158, 158);
+        final Color TEXT_COLOR = new Color(33, 33, 33);
+        
+        searchField.setText(PLACEHOLDER);
+        searchField.setForeground(PLACEHOLDER_COLOR);
+        searchField.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent evt) {
+                if (searchField.getText().equals(PLACEHOLDER)) {
+                    searchField.setText("");
+                    searchField.setForeground(TEXT_COLOR);
+                }
+            }
+            public void focusLost(java.awt.event.FocusEvent evt) {
+                if (searchField.getText().isEmpty()) {
+                    searchField.setText(PLACEHOLDER);
+                    searchField.setForeground(PLACEHOLDER_COLOR);
+                }
+            }
+        });
+        
         searchField.addActionListener(e -> searchServices());
         
-        ModernButton searchButton = new ModernButton("\uD83D\uDD0D Tìm Kiếm", UIConstants.INFO_COLOR);
+        ModernButton searchButton = new ModernButton("🔍 Tìm Kiếm", UIConstants.INFO_COLOR);
         searchButton.addActionListener(e -> searchServices());
         
-        ModernButton refreshButton = new ModernButton("\uD83D\uDD04 Làm Mới", UIConstants.SUCCESS_COLOR);
+        ModernButton refreshButton = new ModernButton("🔄 Làm Mới", UIConstants.SUCCESS_COLOR);
         refreshButton.addActionListener(e -> {
-            searchField.setText("");
+            searchField.setText(PLACEHOLDER);
+            searchField.setForeground(PLACEHOLDER_COLOR);
             loadServices();
         });
         
@@ -97,19 +120,12 @@ public class ServiceManagementPanel extends JPanel {
         tablePanel.setBackground(Color.WHITE);
         tablePanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
         
-        // Table model - REMOVED Description column
+        // Table columns - NO Description
         String[] columns = {"ID", "Tên Dịch Vụ", "Đơn Vị", "Đơn Giá", "Bắt Buộc"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
-            }
-            
-            @Override
-            public Class<?> getColumnClass(int column) {
-                if (column == 0) return Long.class;
-                if (column == 3) return String.class; // Formatted currency
-                return String.class;
             }
         };
         
@@ -139,6 +155,9 @@ public class ServiceManagementPanel extends JPanel {
         header.setPreferredSize(new Dimension(header.getPreferredSize().width, 45));
         header.setBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, UIConstants.BORDER_COLOR));
         
+        // Center align header
+        ((DefaultTableCellRenderer) header.getDefaultRenderer()).setHorizontalAlignment(SwingConstants.CENTER);
+        
         // Column widths
         serviceTable.getColumnModel().getColumn(0).setPreferredWidth(60);
         serviceTable.getColumnModel().getColumn(0).setMaxWidth(80);
@@ -147,17 +166,15 @@ public class ServiceManagementPanel extends JPanel {
         serviceTable.getColumnModel().getColumn(3).setPreferredWidth(150);
         serviceTable.getColumnModel().getColumn(4).setPreferredWidth(120);
         
-        // Center align ID column
+        // Center align ALL columns
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
-        centerRenderer.setHorizontalAlignment(JLabel.CENTER);
-        serviceTable.getColumnModel().getColumn(0).setCellRenderer(centerRenderer);
+        centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
         
-        // Right align price column
-        DefaultTableCellRenderer rightRenderer = new DefaultTableCellRenderer();
-        rightRenderer.setHorizontalAlignment(JLabel.RIGHT);
-        serviceTable.getColumnModel().getColumn(3).setCellRenderer(rightRenderer);
+        for (int i = 0; i < serviceTable.getColumnCount(); i++) {
+            serviceTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
+        }
         
-        // Custom renderer for "Bắt Buộc" column with colored badges
+        // Override with special renderer for "Bắt Buộc" column (keep center alignment)
         serviceTable.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,
@@ -165,7 +182,7 @@ public class ServiceManagementPanel extends JPanel {
                 JLabel label = (JLabel) super.getTableCellRendererComponent(
                     table, value, isSelected, hasFocus, row, column);
                 
-                label.setHorizontalAlignment(JLabel.CENTER);
+                label.setHorizontalAlignment(SwingConstants.CENTER); // CENTER!
                 label.setFont(new Font("Segoe UI", Font.BOLD, 12));
                 
                 if ("Có".equals(value)) {
@@ -194,15 +211,15 @@ public class ServiceManagementPanel extends JPanel {
         actionPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         actionPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
         
-        ModernButton addButton = new ModernButton("\u2795 Thêm Dịch Vụ", UIConstants.SUCCESS_COLOR);
+        ModernButton addButton = new ModernButton("➕ Thêm Dịch Vụ", UIConstants.SUCCESS_COLOR);
         addButton.setPreferredSize(new Dimension(160, 45));
         addButton.addActionListener(e -> addService());
         
-        ModernButton editButton = new ModernButton("\u270F Sửa", UIConstants.WARNING_COLOR);
+        ModernButton editButton = new ModernButton("✏ Sửa", UIConstants.WARNING_COLOR);
         editButton.setPreferredSize(new Dimension(120, 45));
         editButton.addActionListener(e -> editService());
         
-        ModernButton deleteButton = new ModernButton("\uD83D\uDDD1 Xóa", UIConstants.DANGER_COLOR);
+        ModernButton deleteButton = new ModernButton("🗑 Xóa", UIConstants.DANGER_COLOR);
         deleteButton.setPreferredSize(new Dimension(120, 45));
         deleteButton.addActionListener(e -> deleteService());
         
@@ -222,16 +239,11 @@ public class ServiceManagementPanel extends JPanel {
                 service.getId(),
                 service.getName(),
                 service.getUnit(),
-                formatCurrency(service.getUnitPrice()) + " đ",
+                MoneyFormatter.formatMoney(service.getUnitPrice()) + " đ", // VND formatting
                 service.isMandatory() ? "Có" : "Không"
             };
             tableModel.addRow(row);
         }
-    }
-    
-    private String formatCurrency(java.math.BigDecimal amount) {
-        if (amount == null) return "0";
-        return currencyFormat.format(amount);
     }
     
     private void addService() {
@@ -340,7 +352,8 @@ public class ServiceManagementPanel extends JPanel {
     private void searchServices() {
         String keyword = searchField.getText().trim().toLowerCase();
         
-        if (keyword.isEmpty()) {
+        // Ignore placeholder
+        if (keyword.isEmpty() || keyword.equals("tìm theo tên dịch vụ...")) {
             loadServices();
             return;
         }
@@ -356,7 +369,7 @@ public class ServiceManagementPanel extends JPanel {
                     service.getId(),
                     service.getName(),
                     service.getUnit(),
-                    formatCurrency(service.getUnitPrice()) + " đ",
+                    MoneyFormatter.formatMoney(service.getUnitPrice()) + " đ",
                     service.isMandatory() ? "Có" : "Không"
                 };
                 tableModel.addRow(row);

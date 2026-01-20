@@ -4,7 +4,7 @@ import dao.ContractHouseholdViewDAO;
 import dao.FloorDAO;
 import dao.ApartmentDAO;
 import dao.BuildingDAO;
-import dao.ResidentDAO;
+
 import model.ContractHouseholdViewModel;
 import model.Building;
 import model.Floor;
@@ -39,7 +39,7 @@ public class ResidentManagementPanel extends JPanel
     private FloorDAO floorDAO;
     private ApartmentDAO apartmentDAO;
     private BuildingDAO buildingDAO;
-    private ResidentDAO residentDAO; // NEW for add resident
+   
     
     private BuildingContext buildingContext;
     
@@ -73,7 +73,7 @@ public class ResidentManagementPanel extends JPanel
         this.floorDAO = new FloorDAO();
         this.apartmentDAO = new ApartmentDAO();
         this.buildingDAO = new BuildingDAO();
-        this.residentDAO = new ResidentDAO(); // NEW
+        
         this.buildingContext = BuildingContext.getInstance();
         
         setLayout(new BorderLayout());
@@ -202,135 +202,132 @@ public class ResidentManagementPanel extends JPanel
     }
     
     private JPanel createModernHeader() {
-        JPanel headerPanel = new JPanel();
-        headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
-        headerPanel.setBackground(Color.WHITE);
-        headerPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1, true),
-            new EmptyBorder(25, 30, 25, 30)
-        ));
-        
-        // ROW 1
-        JPanel row1 = new JPanel(new BorderLayout(20, 0));
-        row1.setBackground(Color.WHITE);
-        
-        JPanel leftPanel = new JPanel();
-        leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
-        leftPanel.setBackground(Color.WHITE);
-        
-        JPanel titleRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
-        titleRow.setBackground(Color.WHITE);
-        
-        JLabel iconLabel = new JLabel("👥");
-        iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 36));
-        
-        JLabel titleLabel = new JLabel("Quản Lý Cư Dân");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 26));
-        titleLabel.setForeground(new Color(33, 33, 33));
-        
-        titleRow.add(iconLabel);
-        titleRow.add(titleLabel);
-        
-        // Context label aligned to left with proper padding
-        JPanel contextRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
-        contextRow.setBackground(Color.WHITE);
-        
-        contextLabel = new JLabel();
-        contextLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        contextLabel.setForeground(new Color(117, 117, 117));
-        
-        contextRow.add(contextLabel);
-        
-        leftPanel.add(titleRow);
-        leftPanel.add(Box.createVerticalStrut(8));
-        leftPanel.add(contextRow);
-        
-        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        searchPanel.setBackground(Color.WHITE);
-        
-        searchField = new JTextField(22);
-        searchField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        searchField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(224, 224, 224), 1, true),
-            new EmptyBorder(10, 15, 10, 15)
-        ));
-        
-        // Add placeholder - use final reference
-        final String PLACEHOLDER = "Tìm theo tên, SĐT, căn hộ...";
-        final Color PLACEHOLDER_COLOR = new Color(158, 158, 158);
-        final Color TEXT_COLOR = new Color(33, 33, 33);
-        
-        searchField.setText(PLACEHOLDER);
-        searchField.setForeground(PLACEHOLDER_COLOR);
-        searchField.addFocusListener(new java.awt.event.FocusAdapter() {
-            public void focusGained(java.awt.event.FocusEvent evt) {
-                if (searchField.getText().equals(PLACEHOLDER)) {
-                    searchField.setText("");
-                    searchField.setForeground(TEXT_COLOR);
-                }
+    JPanel headerPanel = new JPanel();
+    headerPanel.setLayout(new BoxLayout(headerPanel, BoxLayout.Y_AXIS));
+    headerPanel.setBackground(Color.WHITE);
+    headerPanel.setBorder(BorderFactory.createCompoundBorder(
+        BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1, true),
+        new EmptyBorder(25, 30, 25, 30)
+    ));
+    
+    // ROW 1
+    JPanel row1 = new JPanel(new BorderLayout(20, 0));
+    row1.setBackground(Color.WHITE);
+    
+    JPanel leftPanel = new JPanel();
+    leftPanel.setLayout(new BoxLayout(leftPanel, BoxLayout.Y_AXIS));
+    leftPanel.setBackground(Color.WHITE);
+    
+    JPanel titleRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
+    titleRow.setBackground(Color.WHITE);
+    
+    JLabel iconLabel = new JLabel("👥");
+    iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 36));
+    
+    JLabel titleLabel = new JLabel("Quản Lý Cư Dân");
+    titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 26));
+    titleLabel.setForeground(new Color(33, 33, 33));
+    
+    titleRow.add(iconLabel);
+    titleRow.add(titleLabel);
+    
+    // Context label
+    JPanel contextRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+    contextRow.setBackground(Color.WHITE);
+    
+    contextLabel = new JLabel();
+    contextLabel.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+    contextLabel.setForeground(new Color(117, 117, 117));
+    
+    contextRow.add(contextLabel);
+    
+    leftPanel.add(titleRow);
+    leftPanel.add(Box.createVerticalStrut(8));
+    leftPanel.add(contextRow);
+    
+    JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+    searchPanel.setBackground(Color.WHITE);
+    
+    searchField = new JTextField(22);
+    searchField.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+    searchField.setBorder(BorderFactory.createCompoundBorder(
+        BorderFactory.createLineBorder(new Color(224, 224, 224), 1, true),
+        new EmptyBorder(10, 15, 10, 15)
+    ));
+    
+    // Placeholder
+    final String PLACEHOLDER = "Tìm theo tên, SĐT, căn hộ...";
+    final Color PLACEHOLDER_COLOR = new Color(158, 158, 158);
+    final Color TEXT_COLOR = new Color(33, 33, 33);
+    
+    searchField.setText(PLACEHOLDER);
+    searchField.setForeground(PLACEHOLDER_COLOR);
+    searchField.addFocusListener(new java.awt.event.FocusAdapter() {
+        public void focusGained(java.awt.event.FocusEvent evt) {
+            if (searchField.getText().equals(PLACEHOLDER)) {
+                searchField.setText("");
+                searchField.setForeground(TEXT_COLOR);
             }
-            public void focusLost(java.awt.event.FocusEvent evt) {
-                if (searchField.getText().isEmpty()) {
-                    searchField.setText(PLACEHOLDER);
-                    searchField.setForeground(PLACEHOLDER_COLOR);
-                }
+        }
+        public void focusLost(java.awt.event.FocusEvent evt) {
+            if (searchField.getText().isEmpty()) {
+                searchField.setText(PLACEHOLDER);
+                searchField.setForeground(PLACEHOLDER_COLOR);
             }
-        });
-        
-        searchField.addActionListener(e -> applyFilters());
-        
-        JButton searchBtn = createModernButton("🔍 Tìm", new Color(33, 150, 243));
-        searchBtn.setPreferredSize(new Dimension(100, 42));
-        searchBtn.addActionListener(e -> applyFilters());
-        
-        JButton refreshBtn = createModernButton("🔄 Làm mới", new Color(76, 175, 80));
-        refreshBtn.setPreferredSize(new Dimension(130, 42));
-        refreshBtn.addActionListener(e -> resetFilters());
-        
-        searchPanel.add(searchField);
-        searchPanel.add(searchBtn);
-        searchPanel.add(refreshBtn);
-        
-        row1.add(leftPanel, BorderLayout.WEST);
-        row1.add(searchPanel, BorderLayout.EAST);
-        
-        // ROW 2 - WITH ADD RESIDENT BUTTON
-        JPanel row2 = new JPanel(new BorderLayout(20, 0));
-        row2.setBackground(Color.WHITE);
-        
-        countLabel = new JLabel();
-        countLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        countLabel.setForeground(UIConstants.PRIMARY_COLOR);
-        
-        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-        actionPanel.setBackground(Color.WHITE);
-        
-        // ADD RESIDENT BUTTON - NEW!
-        JButton addBtn = createModernButton("➕ Thêm Cư Dân", new Color(99, 102, 241));
-        addBtn.setPreferredSize(new Dimension(160, 42));
-        addBtn.addActionListener(e -> showAddResidentDialog());
-        
-        JButton statsBtn = createModernButton("📊 Thống kê", new Color(103, 58, 181));
-        statsBtn.setPreferredSize(new Dimension(140, 42));
-        statsBtn.addActionListener(e -> showStatistics());
-        
-        JButton exportBtn = createModernButton("📤 Xuất Excel", new Color(67, 160, 71));
-        exportBtn.setPreferredSize(new Dimension(140, 42));
-        exportBtn.addActionListener(e -> exportToExcel());
-        
-        actionPanel.add(addBtn);
-        actionPanel.add(statsBtn);
-        actionPanel.add(exportBtn);
-        
-        row2.add(countLabel, BorderLayout.WEST);
-        row2.add(actionPanel, BorderLayout.EAST);
-        
-        headerPanel.add(row1);
-        headerPanel.add(Box.createVerticalStrut(15));
-        headerPanel.add(row2);
-        
-        return headerPanel;
-    }
+        }
+    });
+    
+    searchField.addActionListener(e -> applyFilters());
+    
+    JButton searchBtn = createModernButton("🔍 Tìm", new Color(33, 150, 243));
+    searchBtn.setPreferredSize(new Dimension(100, 42));
+    searchBtn.addActionListener(e -> applyFilters());
+    
+    JButton refreshBtn = createModernButton("🔄 Làm mới", new Color(76, 175, 80));
+    refreshBtn.setPreferredSize(new Dimension(130, 42));
+    refreshBtn.addActionListener(e -> resetFilters());
+    
+    searchPanel.add(searchField);
+    searchPanel.add(searchBtn);
+    searchPanel.add(refreshBtn);
+    
+    row1.add(leftPanel, BorderLayout.WEST);
+    row1.add(searchPanel, BorderLayout.EAST);
+    
+    // ROW 2 - WITHOUT ADD RESIDENT BUTTON (REMOVED!)
+    JPanel row2 = new JPanel(new BorderLayout(20, 0));
+    row2.setBackground(Color.WHITE);
+    
+    countLabel = new JLabel();
+    countLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+    countLabel.setForeground(UIConstants.PRIMARY_COLOR);
+    
+    JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+    actionPanel.setBackground(Color.WHITE);
+    
+    // REMOVED: Add Resident Button
+    // Only keep Stats and Export buttons
+    
+    JButton statsBtn = createModernButton("📊 Thống kê", new Color(103, 58, 181));
+    statsBtn.setPreferredSize(new Dimension(140, 42));
+    statsBtn.addActionListener(e -> showStatistics());
+    
+    JButton exportBtn = createModernButton("📤 Xuất Excel", new Color(67, 160, 71));
+    exportBtn.setPreferredSize(new Dimension(140, 42));
+    exportBtn.addActionListener(e -> exportToExcel());
+    
+    actionPanel.add(statsBtn);
+    actionPanel.add(exportBtn);
+    
+    row2.add(countLabel, BorderLayout.WEST);
+    row2.add(actionPanel, BorderLayout.EAST);
+    
+    headerPanel.add(row1);
+    headerPanel.add(Box.createVerticalStrut(15));
+    headerPanel.add(row2);
+    
+    return headerPanel;
+}
     
     private JPanel createFilterBar() {
         JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
@@ -970,20 +967,7 @@ public class ResidentManagementPanel extends JPanel
         dialog.setVisible(true);
     }
     
-    /**
-     * Show add resident dialog - NEW METHOD
-     */
-    private void showAddResidentDialog() {
-        JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        ResidentFormDialog dialog = new ResidentFormDialog(parentFrame, null);
-        dialog.setVisible(true);
-        
-        if (dialog.isConfirmed()) {
-            // Reload data to refresh the list
-            loadInitialData();
-        }
-    }
-    
+   
     private void showStatistics() {
         if (buildingFilterCombo.getSelectedItem() == null) return;
         
