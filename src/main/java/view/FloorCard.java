@@ -19,7 +19,7 @@ public class FloorCard extends JPanel {
     private boolean isBuildingMaintenance;
     
     // Callback sự kiện
-    private Consumer<Floor> onSelect; // Hành động khi nhấn vào Card để xem căn hộ
+    private Consumer<Floor> onSelect; 
     private Consumer<Floor> onEdit;
     private Consumer<Floor> onDelete;
 
@@ -36,11 +36,34 @@ public class FloorCard extends JPanel {
         setPreferredSize(new Dimension(300, 160));
         
         // --- THIẾT LẬP SỰ KIỆN CLICK CHO TOÀN BỘ CARD ---
-        this.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        // Kiểm tra xem tầng này có đang bảo trì không
+        boolean isFloorMaintenance = isMaintenance(floor.getStatus());
+
+        // Đổi con trỏ chuột: Nếu bị khóa (do tòa nhà hoặc do tầng bảo trì) -> Con trỏ thường
+        if (isBuildingMaintenance || isFloorMaintenance) {
+            this.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+        } else {
+            this.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        }
+
         this.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                // Chuyển sang trang căn hộ khi nhấn vào vùng trống của Card
+                // 1. Ưu tiên kiểm tra Tòa nhà trước
+                if (isBuildingMaintenance) {
+                    return; // Đã xử lý chặn ở cấp BuildingManagementPanel, nhưng chặn thêm ở đây cho chắc
+                }
+
+                // 2. [LOGIC MỚI] Kiểm tra Tầng bảo trì
+                if (isMaintenance(floor.getStatus())) {
+                    JOptionPane.showMessageDialog(FloorCard.this, 
+                         floor.getName() + " đang trong quá trình bảo trì.\nTạm thời không thể truy cập danh sách căn hộ.", 
+                        "Quyền truy cập bị hạn chế", 
+                        JOptionPane.WARNING_MESSAGE);
+                    return; // Dừng lại, KHÔNG chuyển trang
+                }
+
+                // 3. Nếu bình thường -> Chuyển trang
                 if (onSelect != null) {
                     onSelect.accept(floor);
                 }
@@ -48,8 +71,8 @@ public class FloorCard extends JPanel {
 
             @Override
             public void mouseEntered(MouseEvent e) {
-                // Hiệu ứng hover: Đổi màu nền nhẹ (trừ khi đang bị mờ do bảo trì tòa nhà)
-                if (!isBuildingMaintenance) {
+                // Chỉ đổi màu nền hover nếu không bị khóa
+                if (!isBuildingMaintenance && !isMaintenance(floor.getStatus())) {
                     setBackground(new Color(252, 252, 252));
                     repaint();
                 }
@@ -67,8 +90,8 @@ public class FloorCard extends JPanel {
         // Tooltip thông minh
         if (isBuildingMaintenance) {
             setToolTipText("🔒 Tòa nhà đang bảo trì - Tạm thời bị khóa");
-        } else if (isMaintenance(floor.getStatus())) {
-            setToolTipText("⚠️ Tầng này đang bảo trì");
+        } else if (isFloorMaintenance) {
+            setToolTipText("⚠️ Tầng này đang bảo trì - Không thể truy cập");
         }
     }
 
@@ -90,7 +113,12 @@ public class FloorCard extends JPanel {
         // Tên Tầng
         JLabel lblName = new JLabel(floor.getName());
         lblName.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        lblName.setForeground(new Color(33, 33, 33));
+        // Nếu bảo trì -> Tên màu xám
+        if (isMaintenance(floor.getStatus())) {
+            lblName.setForeground(Color.GRAY);
+        } else {
+            lblName.setForeground(new Color(33, 33, 33));
+        }
         topPanel.add(lblName, BorderLayout.WEST);
 
         // BADGE TRẠNG THÁI
@@ -136,6 +164,7 @@ public class FloorCard extends JPanel {
         actionPanel.setOpaque(false);
         actionPanel.setBorder(new EmptyBorder(5, 0, 0, 0));
 
+        // Nút Sửa/Xóa vẫn nên cho phép để Admin có thể đổi lại trạng thái "Hoạt động"
         JButton btnEdit = createIconButton("EDIT", new Color(117, 117, 117));
         JButton btnDelete = createIconButton("DELETE", new Color(239, 83, 80));
 
@@ -146,7 +175,7 @@ public class FloorCard extends JPanel {
             btnEdit.addActionListener(e -> { if (onEdit != null) onEdit.accept(floor); });
             btnDelete.addActionListener(e -> { if (onDelete != null) onDelete.accept(floor); });
             
-            // NGĂN CHẶN CLICK LAN TỎA: Khi nhấn nút thì Card không nhận được sự kiện click
+            // Ngăn sự kiện click lan ra Card (để không bị hiện thông báo chặn khi nhấn nút Sửa)
             btnEdit.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
             btnDelete.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
         }
@@ -162,7 +191,7 @@ public class FloorCard extends JPanel {
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // Vẽ nền Card (Hỗ trợ đổi màu khi hover)
+        // Vẽ nền
         g2.setColor(getBackground() != null ? getBackground() : Color.WHITE);
         g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
         
@@ -170,14 +199,14 @@ public class FloorCard extends JPanel {
         g2.setColor(new Color(220, 220, 220));
         g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
 
-        // Hiệu ứng mờ khi bảo trì Tòa nhà
+        // Hiệu ứng mờ (Overlay) nếu đang bảo trì
         if (isBuildingMaintenance) {
             g2.setColor(new Color(245, 245, 245, 180));
             g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
         }
-        // Hiệu ứng mờ nhẹ khi bảo trì Tầng
         else if (isMaintenance(floor.getStatus())) {
-            g2.setColor(new Color(255, 253, 231, 50)); 
+            // Mờ màu vàng nhạt cảnh báo
+            g2.setColor(new Color(255, 243, 224, 80)); 
             g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
         }
 
@@ -224,7 +253,7 @@ public class FloorCard extends JPanel {
         public OccupancyBar(int rented, int total) {
             this.rented = rented;
             this.total = total;
-            setPreferredSize(new Dimension(200, 26)); // Chiều cao tiêu chuẩn
+            setPreferredSize(new Dimension(200, 26)); 
             setOpaque(false);
         }
 
@@ -236,25 +265,19 @@ public class FloorCard extends JPanel {
 
             int w = getWidth();
             int h = getHeight();
-            int arc = 10; // Độ bo góc thanh tiến độ
+            int arc = 10; 
             
-            // Tính toán phần trăm
             double percent = (total == 0) ? 0 : (double) rented / total;
             int filledWidth = (int) (w * percent);
 
-            // 1. Vẽ nền thanh (Màu xám nhạt/xanh nhạt)
             g2.setColor(new Color(240, 240, 240));
             g2.fillRoundRect(0, 0, w, h, arc, arc);
 
-            // 2. Vẽ phần đã thuê (Màu xanh thương hiệu)
             if (filledWidth > 0) {
-                // Sử dụng màu xanh giống UIConstants.PRIMARY_COLOR hoặc màu xanh lá
                 g2.setColor(new Color(33, 150, 243)); 
-                
                 if (rented == total && total > 0) {
-                    g2.fillRoundRect(0, 0, w, h, arc, arc); // Đầy 100%
+                    g2.fillRoundRect(0, 0, w, h, arc, arc); 
                 } else {
-                    // Vẽ phần bo góc bên trái và phẳng bên phải để nối tiếp
                     g2.fillRoundRect(0, 0, filledWidth, h, arc, arc);
                     if (filledWidth > arc) {
                         g2.fillRect(filledWidth - arc, 0, arc, h);
@@ -262,14 +285,12 @@ public class FloorCard extends JPanel {
                 }
             }
 
-            // 3. Vẽ văn bản hiển thị thông tin
             g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
             FontMetrics fm = g2.getFontMetrics();
             String statusText = rented + "/" + total + " Căn hộ đã thuê";
             int textX = (w - fm.stringWidth(statusText)) / 2;
             int textY = (h + fm.getAscent()) / 2 - 2;
 
-            // Đổi màu chữ thông minh dựa trên độ lấp đầy
             g2.setColor(percent > 0.5 ? Color.WHITE : new Color(100, 100, 100));
             g2.drawString(statusText, textX, textY);
 

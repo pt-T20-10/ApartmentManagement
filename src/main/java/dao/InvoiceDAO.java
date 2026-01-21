@@ -6,6 +6,7 @@ import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import model.InvoiceDetail;
 
 /**
  * DAO class for Invoice operations
@@ -284,4 +285,72 @@ public class InvoiceDAO {
         }
         return BigDecimal.ZERO;
     }
+    public Invoice getLatestInvoiceByApartmentId(Long apartmentId) {
+        // Query này Join với bảng contracts để tìm hóa đơn của căn hộ đó
+        // Giả định bảng contracts có cột id và apartment_id
+        String sql = "SELECT i.* FROM invoices i " +
+                     "JOIN contracts c ON i.contract_id = c.id " +
+                     "WHERE c.apartment_id = ? AND i.is_deleted = 0 " +
+                     "ORDER BY i.year DESC, i.month DESC, i.id DESC LIMIT 1";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setLong(1, apartmentId);
+            ResultSet rs = pstmt.executeQuery();
+            
+            if (rs.next()) {
+                Invoice invoice = new Invoice();
+                invoice.setId(rs.getLong("id"));
+                invoice.setContractId(rs.getLong("contract_id"));
+                invoice.setMonth(rs.getInt("month"));
+                invoice.setYear(rs.getInt("year"));
+                invoice.setTotalAmount(rs.getBigDecimal("total_amount"));
+                invoice.setStatus(rs.getString("status"));
+                
+                Timestamp createdAt = rs.getTimestamp("created_at");
+                if (createdAt != null) invoice.setCreatedAt(new java.util.Date(createdAt.getTime()));
+                
+                Timestamp paymentDate = rs.getTimestamp("payment_date");
+                if (paymentDate != null) invoice.setPaymentDate(new java.util.Date(paymentDate.getTime()));
+                
+                invoice.setDeleted(rs.getBoolean("is_deleted"));
+                return invoice;
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+
+    /**
+     * Lấy danh sách chi tiết dịch vụ của hóa đơn
+     */
+    public List<InvoiceDetail> getInvoiceDetails(Long invoiceId) {
+        List<InvoiceDetail> details = new ArrayList<>();
+        // Giả định bảng chi tiết tên là invoice_details
+        String sql = "SELECT * FROM invoice_details WHERE invoice_id = ?";
+        
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setLong(1, invoiceId);
+            ResultSet rs = pstmt.executeQuery();
+            
+            while (rs.next()) {
+                InvoiceDetail detail = new InvoiceDetail();
+                detail.setId(rs.getLong("id"));
+                detail.setInvoiceId(rs.getLong("invoice_id"));
+                detail.setServiceName(rs.getString("service_name"));
+                detail.setUnitPrice(rs.getBigDecimal("unit_price"));
+                detail.setQuantity(rs.getDouble("quantity"));
+                detail.setAmount(rs.getBigDecimal("amount"));
+                details.add(detail);
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return details;
+    }
+
 }

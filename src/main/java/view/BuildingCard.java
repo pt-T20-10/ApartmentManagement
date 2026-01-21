@@ -16,13 +16,12 @@ public class BuildingCard extends JPanel {
 
     private Building building;
     private BuildingStats stats;
-    // Thêm hành động khi chọn (click) vào Card
     private java.util.function.Consumer<Building> onSelect; 
     private java.util.function.Consumer<Building> onEdit;
     private java.util.function.Consumer<Building> onDelete;
 
     public BuildingCard(Building building, BuildingStats stats,
-                        java.util.function.Consumer<Building> onSelect, // THÊM MỚI
+                        java.util.function.Consumer<Building> onSelect,
                         java.util.function.Consumer<Building> onEdit,
                         java.util.function.Consumer<Building> onDelete) {
         this.building = building;
@@ -39,21 +38,41 @@ public class BuildingCard extends JPanel {
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(15, 20, 15, 20));
         
+        // Kiểm tra trạng thái bảo trì
+        boolean isMaintenance = "Đang bảo trì".equals(building.getStatus());
+
         // --- THIẾT LẬP SỰ KIỆN CLICK CHO TOÀN BỘ CARD ---
-        this.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        // 1. Chỉ hiện bàn tay nếu KHÔNG bảo trì
+        if (!isMaintenance) {
+            this.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        } else {
+            this.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
+        }
+
         this.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
+                // 2. Logic chặn click
+                if (isMaintenance) {
+                    JOptionPane.showMessageDialog(BuildingCard.this, 
+                        "Tòa nhà \"" + building.getName() + "\" đang bảo trì.\nKhông thể truy cập dữ liệu bên trong lúc này.", 
+                        "Quyền truy cập bị hạn chế", 
+                        JOptionPane.WARNING_MESSAGE);
+                    return; // Dừng lại, không gọi onSelect
+                }
+
                 if (onSelect != null) {
-                    onSelect.accept(building); // Chuyển sang quản lý tầng
+                    onSelect.accept(building); // Chỉ chạy khi không bảo trì
                 }
             }
 
             @Override
             public void mouseEntered(MouseEvent e) {
-                // Hiệu ứng đổi màu nền nhẹ khi di chuột vào card
-                setBackground(new Color(252, 252, 252));
-                repaint();
+                // Chỉ đổi màu nền nếu không bảo trì (hoặc đổi màu khác nếu muốn)
+                if (!isMaintenance) {
+                    setBackground(new Color(252, 252, 252));
+                    repaint();
+                }
             }
 
             @Override
@@ -67,8 +86,9 @@ public class BuildingCard extends JPanel {
         JPanel topPanel = new JPanel(new BorderLayout(20, 0));
         topPanel.setOpaque(false); 
 
-        // Icon Tòa nhà
-        JLabel iconLabel = new JLabel(new SimpleIcon("BUILDING_COMPLEX", 48, new Color(69, 90, 100))) {
+        // Icon Tòa nhà (Xám nếu bảo trì)
+        Color iconColor = isMaintenance ? Color.GRAY : new Color(69, 90, 100);
+        JLabel iconLabel = new JLabel(new SimpleIcon("BUILDING_COMPLEX", 48, iconColor)) {
             @Override protected void paintComponent(Graphics g) {
                 Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                 g2.setColor(new Color(227, 242, 253)); g2.fillRoundRect(0, 0, getWidth(), getHeight(), 16, 16);
@@ -85,7 +105,8 @@ public class BuildingCard extends JPanel {
 
         JLabel lblName = new JLabel(building.getName());
         lblName.setFont(new Font("Segoe UI", Font.BOLD, 19));
-        lblName.setForeground(new Color(33, 33, 33));
+        // Tên màu xám nếu bảo trì
+        lblName.setForeground(isMaintenance ? Color.GRAY : new Color(33, 33, 33));
 
         JLabel lblAddress = new JLabel(building.getAddress());
         lblAddress.setFont(new Font("Segoe UI", Font.PLAIN, 13));
@@ -124,15 +145,13 @@ public class BuildingCard extends JPanel {
 
         JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0)); bottomPanel.setOpaque(false); bottomPanel.setBorder(new EmptyBorder(10, 0, 0, 0));
         
-        // --- NÚT SỬA/XÓA ---
+        // --- NÚT SỬA/XÓA (Vẫn cho phép Sửa/Xóa dù bảo trì để Admin quản lý) ---
         JButton btnEdit = createIconButton("EDIT", new Color(117, 117, 117)); 
         btnEdit.addActionListener(e -> { if(onEdit != null) onEdit.accept(building); });
-        // Chặn sự kiện lan truyền lên Card khi nhấn nút
         btnEdit.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
         
         JButton btnDelete = createIconButton("DELETE", new Color(239, 83, 80)); 
         btnDelete.addActionListener(e -> { if(onDelete != null) onDelete.accept(building); });
-        // Chặn sự kiện lan truyền lên Card khi nhấn nút
         btnDelete.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
         
         bottomPanel.add(btnEdit); bottomPanel.add(btnDelete);
@@ -145,12 +164,12 @@ public class BuildingCard extends JPanel {
     @Override
     protected void paintComponent(Graphics g) {
         Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g2.setColor(getBackground() != null ? getBackground() : Color.WHITE); // Đổi màu nền khi hover
+        g2.setColor(getBackground() != null ? getBackground() : Color.WHITE);
         g2.fillRoundRect(0, 0, getWidth()-1, getHeight()-1, 20, 20);
         g2.setColor(new Color(220, 220, 220)); g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 20, 20); g2.dispose();
     }
 
-    // --- Inner Classes giữ nguyên như cũ ---
+    // --- Inner Classes ---
     private static class StatusBadge extends JLabel {
         private Color bgColor, textColor;
         public StatusBadge(String status) {
