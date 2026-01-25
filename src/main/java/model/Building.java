@@ -4,41 +4,31 @@ public class Building {
     private Long id;
     private String name;
     private String address;
-    private String managerName;
     private String description;
+    
+    // [QUAN TRỌNG] Thêm ID để liên kết với bảng Users
+    private Long managerUserId;
+    private String managerName; // Giữ lại để hiển thị tên (lấy từ JOIN)
     
     private String status; 
     private boolean isDeleted;
 
-    // --- Constructor mặc định ---
     public Building() {
         this.status = "Đang hoạt động";
     }
 
-    // --- Constructor đầy đủ (dùng khi load từ DB) ---
-    public Building(Long id, String name, String address, String managerName, String description, 
-                    String status, boolean isDeleted) {
+    public Building(Long id, String name, String address, String managerName, String description, String đang_hoạt_động, boolean isDeleted) {
         this.id = id;
         this.name = name;
         this.address = address;
+        this.managerUserId = managerUserId;
         this.managerName = managerName;
         this.description = description;
         this.status = status;
         this.isDeleted = isDeleted;
     }
 
-    // --- Constructor thêm mới (dùng khi tạo mới) ---
-    public Building(String name, String address, String managerName, String description,
-                    String status) {
-        this.name = name;
-        this.address = address;
-        this.managerName = managerName;
-        this.description = description;
-        this.status = status;
-        this.isDeleted = false;
-    }
-
-    // --- Getters & Setters ---
+    // Getters & Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -47,6 +37,10 @@ public class Building {
 
     public String getAddress() { return address; }
     public void setAddress(String address) { this.address = address; }
+
+    // [MỚI] Getter/Setter cho Manager ID
+    public Long getManagerUserId() { return managerUserId; }
+    public void setManagerUserId(Long managerUserId) { this.managerUserId = managerUserId; }
 
     public String getManagerName() { return managerName; }
     public void setManagerName(String managerName) { this.managerName = managerName; }

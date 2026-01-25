@@ -50,6 +50,9 @@ public class Contract {
     private Date createdAt;
     private Date updatedAt;
     
+    private String tenantName;
+    private String tenantPhone;
+    
     // ===== CONSTRUCTORS =====
     
     public Contract() {
@@ -168,6 +171,13 @@ public class Contract {
     public void setMonthlyRent(BigDecimal monthlyRent) {
         this.monthlyRent = monthlyRent;
     }
+    
+    // --- [QUAN TRỌNG] Getters/Setters cho Tenant ---
+    public String getTenantName() { return tenantName; }
+    public void setTenantName(String tenantName) { this.tenantName = tenantName; }
+
+    public String getTenantPhone() { return tenantPhone; }
+    public void setTenantPhone(String tenantPhone) { this.tenantPhone = tenantPhone; }
     
     public String getStatus() {
         return status;
