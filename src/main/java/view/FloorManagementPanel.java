@@ -211,15 +211,16 @@ public class FloorManagementPanel extends JPanel {
             return;
         }
 
-        if ("Đang bảo trì".equals(currentBuilding.getStatus())) {
-            setButtonsEnabled(false);
-            showEmptyMessage("TÒA NHÀ ĐANG BẢO TRÌ\nKhông thể truy cập dữ liệu tầng.", true);
-            cardsContainer.revalidate();
-            cardsContainer.repaint();
-            return;
+        // Kiểm tra Tòa nhà bảo trì -> Chặn thêm mới, nhưng vẫn cho xem (hoặc chặn tùy logic của bạn)
+        // Ở đây ta chặn nút thêm, nhưng vẫn load danh sách để xem
+        boolean isBuildingMaintenance = "Đang bảo trì".equals(currentBuilding.getStatus()) || 
+                                        "MAINTENANCE".equalsIgnoreCase(currentBuilding.getStatus());
+        
+        if (isBuildingMaintenance) {
+            setButtonsEnabled(false); // Khóa chức năng thêm khi tòa nhà bảo trì
+        } else {
+            setButtonsEnabled(true);
         }
-
-        setButtonsEnabled(true);
 
         SwingWorker<List<dao.FloorDAO.FloorWithStats>, Void> worker = new SwingWorker<>() {
             @Override
@@ -244,7 +245,7 @@ public class FloorManagementPanel extends JPanel {
                             FloorCard card = new FloorCard(
                                 item.floor, 
                                 item.stats, 
-                                false, 
+                                isBuildingMaintenance, 
                                 onFloorSelect, 
                                 FloorManagementPanel.this::editFloor, 
                                 FloorManagementPanel.this::deleteFloor
@@ -336,7 +337,6 @@ public class FloorManagementPanel extends JPanel {
         // Gán Building ID vào object Floor
         newFloor.setBuildingId(currentBuilding.getId());
         
-        // [SỬA LỖI] Chỉ truyền 2 tham số: parent và object floor
         FloorDialog dialog = new FloorDialog(parent, newFloor); 
         
         dialog.setVisible(true);
@@ -350,7 +350,6 @@ public class FloorManagementPanel extends JPanel {
     private void editFloor(Floor floor) {
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
         
-        // [SỬA LỖI] Chỉ truyền 2 tham số: parent và object floor
         FloorDialog dialog = new FloorDialog(parent, floor); 
         
         dialog.setVisible(true);
@@ -361,11 +360,38 @@ public class FloorManagementPanel extends JPanel {
         }
     }
 
+    // --- [LOGIC XÓA AN TOÀN] ---
     private void deleteFloor(Floor floor) {
-        int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa " + floor.getName() + "?", "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
+        // 1. Kiểm tra điều kiện xóa chặt chẽ thông qua DAO
+        // canDeleteFloor sẽ kiểm tra: 
+        // - Còn căn hộ chưa xóa không? (COUNT > 0)
+        // - Còn hợp đồng active không?
+        if (!floorDAO.canDeleteFloor(floor.getId())) {
+            JOptionPane.showMessageDialog(this, 
+                "KHÔNG THỂ XÓA TẦNG NÀY!\n\n" +
+                "Điều kiện để xóa tầng:\n" +
+                "1. Tầng phải TRỐNG (Không còn căn hộ nào, hãy xóa hết căn hộ trước).\n" +
+                "2. Không còn hợp đồng thuê active liên quan.\n\n" +
+                "Vui lòng vào chi tiết tầng và xử lý dữ liệu con trước.",
+                "Thao tác bị chặn", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // 2. Nếu an toàn -> Xác nhận Xóa Mềm
+        int confirm = JOptionPane.showConfirmDialog(this, 
+            "Bạn có chắc chắn muốn xóa \"" + floor.getName() + "\"?\n" +
+            "Dữ liệu sẽ bị xóa mềm (ẩn đi).", 
+            "Xác nhận xóa", 
+            JOptionPane.YES_NO_OPTION);
+
         if (confirm == JOptionPane.YES_OPTION) {
-            if (floorDAO.deleteFloor(floor.getId())) { loadFloors(); } 
-            else { JOptionPane.showMessageDialog(this, "Xóa thất bại!"); }
+            if (floorDAO.deleteFloor(floor.getId())) {
+                JOptionPane.showMessageDialog(this, "Đã xóa tầng thành công!");
+                loadFloors(); // Tải lại danh sách
+            } else {
+                JOptionPane.showMessageDialog(this, "Xóa thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            }
         }
     }
 

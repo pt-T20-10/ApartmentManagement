@@ -1,6 +1,9 @@
 package view;
 
+import dao.BuildingDAO;
+import dao.UserDAO;
 import model.Building;
+import model.User;
 import util.UIConstants;
 
 import javax.swing.*;
@@ -13,22 +16,30 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.geom.Path2D;
+import java.util.List;
 
 public class BuildingDialog extends JDialog {
 
-    private JTextField txtName, txtAddress, txtManager;
+    private JTextField txtName, txtAddress;
+    private JComboBox<User> cbbManager;
     private JComboBox<String> cbbStatus;
     private JTextArea txtDesc;
     
     private boolean confirmed = false;
     private Building building;
     private boolean dataChanged = false;
-
+    
+    private UserDAO userDAO;
+    private BuildingDAO buildingDAO;
+    
     public BuildingDialog(Frame owner, Building building) {
         super(owner, building == null || building.getId() == null ? "Thêm Mới Tòa Nhà" : "Chi Tiết Tòa Nhà", true);
         this.building = (building == null) ? new Building() : building;
+        this.userDAO = new UserDAO();
+        this.buildingDAO = new BuildingDAO();
         
         initUI();
+        loadManagers();
         fillData();
         
         dataChanged = false;
@@ -42,7 +53,7 @@ public class BuildingDialog extends JDialog {
         setLayout(new BorderLayout());
         getContentPane().setBackground(new Color(245, 245, 250)); 
 
-        // === 1. HEADER ===
+        // === HEADER ===
         JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 15));
         headerPanel.setBackground(Color.WHITE); 
         headerPanel.setBorder(new MatteBorder(0, 0, 1, 0, new Color(230, 230, 230))); 
@@ -56,16 +67,34 @@ public class BuildingDialog extends JDialog {
         headerPanel.add(titleLabel);
         add(headerPanel, BorderLayout.NORTH);
 
-        // === 2. BODY ===
+        // === BODY ===
         JPanel bodyPanel = new JPanel();
         bodyPanel.setLayout(new BoxLayout(bodyPanel, BoxLayout.Y_AXIS));
         bodyPanel.setBackground(new Color(245, 245, 250));
         bodyPanel.setBorder(new EmptyBorder(15, 15, 15, 15));
 
-        // Khởi tạo Components
+        // Init Fields
         txtName = createRoundedField();
         txtAddress = createRoundedField();
-        txtManager = createRoundedField();
+        
+        // Cấu hình Dropdown Manager
+        cbbManager = new JComboBox<>();
+        cbbManager.setFont(UIConstants.FONT_REGULAR);
+        cbbManager.setBackground(Color.WHITE);
+        cbbManager.setPreferredSize(new Dimension(200, 35));
+        
+        // Custom Renderer
+        cbbManager.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof User) {
+                    User u = (User) value;
+                    setText(u.getFullName() + " (" + u.getUsername() + ")");
+                }
+                return this;
+            }
+        });
         
         cbbStatus = new JComboBox<>(new String[]{"Đang hoạt động", "Đang bảo trì"});
         cbbStatus.setFont(UIConstants.FONT_REGULAR);
@@ -79,15 +108,15 @@ public class BuildingDialog extends JDialog {
         JScrollPane scrollDesc = new JScrollPane(txtDesc);
         scrollDesc.setBorder(new LineBorder(new Color(200, 200, 200), 1));
 
-        // --- LẮNG NGHE THAY ĐỔI DỮ LIỆU ---
+        // Listeners
         SimpleDocumentListener docListener = new SimpleDocumentListener(() -> dataChanged = true);
         txtName.getDocument().addDocumentListener(docListener);
         txtAddress.getDocument().addDocumentListener(docListener);
-        txtManager.getDocument().addDocumentListener(docListener);
         txtDesc.getDocument().addDocumentListener(docListener);
         cbbStatus.addActionListener(e -> dataChanged = true);
+        cbbManager.addActionListener(e -> dataChanged = true);
 
-        // SECTION 1
+        // Layout Form
         JPanel pnlGeneral = createSectionPanel("Thông Tin Cơ Bản");
         JPanel row1 = new JPanel(new GridLayout(1, 2, 15, 0)); 
         row1.setOpaque(false);
@@ -95,11 +124,11 @@ public class BuildingDialog extends JDialog {
         row1.add(createFieldGroup("Trạng Thái", cbbStatus));
         pnlGeneral.add(row1);
         pnlGeneral.add(Box.createVerticalStrut(15));
+        
         pnlGeneral.add(createFieldGroup("Địa Chỉ Chi Tiết (*)", txtAddress));
 
-        // SECTION 2
         JPanel pnlExtra = createSectionPanel("Quản Lý & Ghi Chú");
-        pnlExtra.add(createFieldGroup("Người Quản Lý", txtManager));
+        pnlExtra.add(createFieldGroup("Người Quản Lý (*)", cbbManager));
         pnlExtra.add(Box.createVerticalStrut(15));
         pnlExtra.add(createFieldGroup("Mô Tả Thêm", scrollDesc));
 
@@ -108,7 +137,7 @@ public class BuildingDialog extends JDialog {
         bodyPanel.add(pnlExtra);
         add(bodyPanel, BorderLayout.CENTER);
 
-        // === 3. FOOTER ===
+        // === FOOTER ===
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 15));
         buttonPanel.setBackground(Color.WHITE); 
         buttonPanel.setBorder(new MatteBorder(1, 0, 0, 0, new Color(230, 230, 230))); 
@@ -129,33 +158,38 @@ public class BuildingDialog extends JDialog {
         buttonPanel.add(btnSave);
         add(buttonPanel, BorderLayout.SOUTH);
 
-        // Cấu hình phím tắt (Enter/Esc)
         configureShortcuts(btnSave);
 
-        // Chặn đóng cửa sổ để hỏi xác nhận
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
         addWindowListener(new WindowAdapter() {
-            @Override
-            public void windowClosing(WindowEvent e) {
-                handleCancel();
-            }
+            @Override public void windowClosing(WindowEvent e) { handleCancel(); }
         });
+    }
+
+    private void loadManagers() {
+        cbbManager.removeAllItems();
+        try {
+            List<User> users = userDAO.getAllUsers(); 
+            for (User u : users) {
+                if (u.isActive()) {
+                    cbbManager.addItem(u);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Lỗi tải danh sách người quản lý: " + e.getMessage());
+        }
     }
 
     private void configureShortcuts(JButton defaultButton) {
         getRootPane().setDefaultButton(defaultButton);
         getRootPane().getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
             .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
-            
         getRootPane().getActionMap().put("cancel", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                handleCancel();
-            }
+            @Override public void actionPerformed(ActionEvent e) { handleCancel(); }
         });
     }
 
-    // --- [SỬA ĐỔI] LUÔN HỎI XÁC NHẬN KHI THOÁT ---
     private void handleCancel() {
         int choice = JOptionPane.showConfirmDialog(
             this, 
@@ -164,66 +198,160 @@ public class BuildingDialog extends JDialog {
             JOptionPane.YES_NO_OPTION, 
             JOptionPane.WARNING_MESSAGE
         );
-
-        if (choice == JOptionPane.YES_OPTION) {
-            dispose();
-        }
+        if (choice == JOptionPane.YES_OPTION) dispose();
     }
 
     private void onSave() {
+        // 1. Lấy dữ liệu từ Form
         String name = txtName.getText().trim();
-        String addr = txtAddress.getText().trim();
+        String address = txtAddress.getText().trim();
+        User selectedManager = (User) cbbManager.getSelectedItem();
+        String uiStatus = (String) cbbStatus.getSelectedItem(); 
 
-        if (name.isEmpty() || addr.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Tên tòa nhà và Địa chỉ không được để trống!", "Thiếu thông tin", JOptionPane.WARNING_MESSAGE);
+        // 2. Validation (Kiểm tra dữ liệu)
+        StringBuilder errors = new StringBuilder();
+        if (name.isEmpty()) errors.append("- Tên tòa nhà không được để trống.\n");
+        if (address.isEmpty()) errors.append("- Địa chỉ không được để trống.\n");
+        if (selectedManager == null) errors.append("- Vui lòng chọn Người quản lý.\n");
+
+        if (errors.length() > 0) {
+            JOptionPane.showMessageDialog(this, 
+                "Vui lòng kiểm tra lại:\n" + errors.toString(), 
+                "Dữ liệu không hợp lệ", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        // Hỏi xác nhận trước khi lưu
-        String itemName = building.getId() == null ? "tòa nhà mới" : "thay đổi thông tin";
-        int choice = JOptionPane.showConfirmDialog(this, 
-            "Bạn có chắc chắn muốn lưu " + itemName + " này không?", 
-            "Xác nhận lưu", 
-            JOptionPane.YES_NO_OPTION, 
-            JOptionPane.QUESTION_MESSAGE);
+        // 3. Chuẩn bị Trạng thái Mới & Cũ
+        String oldStatus = (building.getStatus() == null) ? "ACTIVE" : building.getStatus();
+        String newStatus = "ACTIVE"; // Mặc định
+        
+        if ("Đang bảo trì".equals(uiStatus)) newStatus = "MAINTENANCE";
+        else if ("Ngưng sử dụng".equals(uiStatus)) newStatus = "INACTIVE";
+        else if ("Đang hoạt động".equals(uiStatus)) newStatus = "ACTIVE";
 
-        if (choice != JOptionPane.YES_OPTION) {
-            return;
+        boolean isStatusChanged = !newStatus.equals(oldStatus) && building.getId() != null;
+
+        // 4. [LOGIC CHẶN] Kiểm tra điều kiện nếu chuyển sang BẢO TRÌ
+        if ("MAINTENANCE".equals(newStatus) && building.getId() != null) {
+            if (buildingDAO.hasActiveContracts(building.getId())) {
+                JOptionPane.showMessageDialog(this, 
+                    "KHÔNG THỂ CHUYỂN SANG BẢO TRÌ!\n\n" +
+                    "Lý do: Tòa nhà đang có hợp đồng thuê ACTIVE (Đang hiệu lực).\n" +
+                    "Bạn phải thanh lý hết hợp đồng trước khi bảo trì tòa nhà.",
+                    "Xung đột trạng thái", 
+                    JOptionPane.ERROR_MESSAGE);
+                
+                fillData(); // Reset lại UI về trạng thái cũ
+                return; 
+            }
         }
 
+        // 5. Tạo thông báo xác nhận (Tùy biến theo hành động)
+        String confirmMsg = "Bạn có chắc chắn muốn lưu thông tin này?";
+        int msgType = JOptionPane.QUESTION_MESSAGE;
+
+        if (isStatusChanged) {
+            if ("MAINTENANCE".equals(newStatus)) {
+                confirmMsg = "<html><b>CẢNH BÁO QUAN TRỌNG:</b><br>" +
+                             "Bạn đang chuyển trạng thái sang <b>ĐANG BẢO TRÌ</b>.<br>" +
+                             "- Tất cả Tầng và Căn hộ trong tòa sẽ tự động chuyển sang Bảo trì.<br>" +
+                             "- Các chức năng thuê mới sẽ bị khóa.<br><br>" +
+                             "Bạn có chắc chắn muốn tiếp tục?</html>";
+                msgType = JOptionPane.WARNING_MESSAGE;
+            } else if ("ACTIVE".equals(newStatus) && "MAINTENANCE".equals(oldStatus)) {
+                confirmMsg = "<html><b>KÍCH HOẠT LẠI TÒA NHÀ:</b><br>" +
+                             "Hệ thống sẽ mở khóa (Set Active/Available) cho tất cả Tầng và Căn hộ.<br>" +
+                             "Tiếp tục?</html>";
+                msgType = JOptionPane.INFORMATION_MESSAGE;
+            }
+        }
+
+        int choice = JOptionPane.showConfirmDialog(this, confirmMsg, "Xác nhận lưu", JOptionPane.YES_NO_OPTION, msgType);
+        if (choice != JOptionPane.YES_OPTION) return;
+
+        // 6. Cập nhật dữ liệu vào Object
         building.setName(name);
-        building.setAddress(addr);
-        building.setManagerName(txtManager.getText().trim());
+        building.setAddress(address);
         building.setDescription(txtDesc.getText().trim());
-        building.setStatus((String) cbbStatus.getSelectedItem());
+        building.setStatus(newStatus);
+        
+        if (selectedManager != null) {
+            building.setManagerUserId(selectedManager.getId());
+            building.setManagerName(selectedManager.getFullName());
+        }
+        
+        if (building.getId() == null) building.setDeleted(false);
+
+        // 7. Gọi DAO để Lưu xuống Database
+        boolean success = false;
         
         if (building.getId() == null) {
-            building.setDeleted(false);
+            // Trường hợp: THÊM MỚI
+            success = buildingDAO.insertBuilding(building);
+        } else {
+            // Trường hợp: CẬP NHẬT
+            if (isStatusChanged) {
+                // Nếu đổi trạng thái -> Gọi hàm Cascade (Cập nhật lan truyền xuống Tầng/Căn hộ)
+                // Lưu ý: Cần update thông tin cơ bản trước, rồi update status sau hoặc gộp chung
+                buildingDAO.updateBuilding(building); // Lưu tên, địa chỉ...
+                success = buildingDAO.updateStatusCascade(building.getId(), newStatus); // Lưu status + lan truyền
+            } else {
+                // Nếu chỉ sửa tên/địa chỉ bình thường
+                success = buildingDAO.updateBuilding(building);
+            }
         }
 
-        confirmed = true;
-        dataChanged = false;
-        dispose();
+        // 8. Kết thúc
+        if (success) {
+            confirmed = true;
+            dataChanged = false;
+            dispose();
+        } else {
+            JOptionPane.showMessageDialog(this, "Lưu dữ liệu thất bại! Vui lòng thử lại.", "Lỗi hệ thống", JOptionPane.ERROR_MESSAGE);
+        }
     }
 
     private void fillData() {
         if (building.getId() != null) {
             txtName.setText(building.getName());
             txtAddress.setText(building.getAddress());
-            txtManager.setText(building.getManagerName());
             txtDesc.setText(building.getDescription());
-            if (building.getStatus() != null) cbbStatus.setSelectedItem(building.getStatus());
+            String dbStatus = building.getStatus(); 
+            
+            // Map sang tiếng Việt để ComboBox hiển thị đúng
+            if (dbStatus != null) {
+                if (dbStatus.equalsIgnoreCase("ACTIVE")) {
+                    cbbStatus.setSelectedItem("Đang hoạt động");
+                } else if (dbStatus.equalsIgnoreCase("MAINTENANCE") || dbStatus.toLowerCase().contains("bảo trì")) {
+                    cbbStatus.setSelectedItem("Đang bảo trì");
+                }
+            }
+            
+            // [CẬP NHẬT] Chọn đúng Manager dựa trên ID trước, nếu không có thì dùng tên
+            Long mgrId = building.getManagerUserId();
+            String mgrName = building.getManagerName();
+            
+            for (int i = 0; i < cbbManager.getItemCount(); i++) {
+                User u = cbbManager.getItemAt(i);
+                
+                // Ưu tiên so khớp theo ID (chính xác nhất)
+                if (mgrId != null && u.getId() != null && u.getId().equals(mgrId)) {
+                    cbbManager.setSelectedIndex(i);
+                    break;
+                }
+                // Fallback: So khớp theo tên nếu dữ liệu cũ chưa có ID
+                else if (mgrId == null && mgrName != null && u.getFullName().equalsIgnoreCase(mgrName)) {
+                    cbbManager.setSelectedIndex(i);
+                    break;
+                }
+            }
         }
     }
 
-    private static class SimpleDocumentListener implements DocumentListener {
-        private Runnable onChange;
-        public SimpleDocumentListener(Runnable onChange) { this.onChange = onChange; }
-        @Override public void insertUpdate(DocumentEvent e) { onChange.run(); }
-        @Override public void removeUpdate(DocumentEvent e) { onChange.run(); }
-        @Override public void changedUpdate(DocumentEvent e) { onChange.run(); }
-    }
-
+    public boolean isConfirmed() { return confirmed; }
+    public Building getBuilding() { return building; }
+    
+    // --- UI Helpers ---
     private JPanel createSectionPanel(String title) {
         JPanel panel = new JPanel();
         panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
@@ -245,15 +373,20 @@ public class BuildingDialog extends JDialog {
         panel.add(field, BorderLayout.CENTER);
         return panel;
     }
-
-    public boolean isConfirmed() { return confirmed; }
-    public Building getBuilding() { return building; }
     
     private JTextField createRoundedField() { 
         JTextField f = new RoundedTextField(8); 
         f.setFont(UIConstants.FONT_REGULAR); 
         f.setPreferredSize(new Dimension(100, 35)); 
         return f; 
+    }
+
+    private static class SimpleDocumentListener implements DocumentListener {
+        private Runnable onChange;
+        public SimpleDocumentListener(Runnable onChange) { this.onChange = onChange; }
+        @Override public void insertUpdate(DocumentEvent e) { onChange.run(); }
+        @Override public void removeUpdate(DocumentEvent e) { onChange.run(); }
+        @Override public void changedUpdate(DocumentEvent e) { onChange.run(); }
     }
 
     private static class RoundedTextField extends JTextField { 
@@ -270,11 +403,8 @@ public class BuildingDialog extends JDialog {
         private String type; private int size; private Color color; public SimpleIcon(String type, int size, Color color) { this.type = type; this.size = size; this.color = color; } 
         @Override public void paintIcon(Component c, Graphics g, int x, int y) { 
             Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(color); g2.translate(x, y); 
-            if ("BUILDING_BIG".equals(type)) { 
-                g2.fillRect(size/4, size/4, size/2, size/2); 
-            } else if ("CHECK".equals(type)) { 
-                g2.setStroke(new BasicStroke(2.5f)); Path2D p = new Path2D.Float(); p.moveTo(2, size/2); p.lineTo(size/2 - 2, size - 3); p.lineTo(size - 2, 3); g2.draw(p); 
-            } g2.dispose(); 
+            if ("BUILDING_BIG".equals(type)) { g2.fillRect(size/4, size/4, size/2, size/2); } 
+            else if ("CHECK".equals(type)) { g2.setStroke(new BasicStroke(2.5f)); Path2D p = new Path2D.Float(); p.moveTo(2, size/2); p.lineTo(size/2 - 2, size - 3); p.lineTo(size - 2, 3); g2.draw(p); } g2.dispose(); 
         } 
         @Override public int getIconWidth() { return size; } @Override public int getIconHeight() { return size; } 
     }

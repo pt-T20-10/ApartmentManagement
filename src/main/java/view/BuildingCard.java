@@ -147,8 +147,14 @@ public class BuildingCard extends JPanel {
         
         // --- NÚT SỬA/XÓA (Vẫn cho phép Sửa/Xóa dù bảo trì để Admin quản lý) ---
         JButton btnEdit = createIconButton("EDIT", new Color(117, 117, 117)); 
-        btnEdit.addActionListener(e -> { if(onEdit != null) onEdit.accept(building); });
-        btnEdit.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
+        btnEdit.addActionListener(e -> { 
+        if(onEdit != null) onEdit.accept(building); 
+    });
+
+    // Ngăn sự kiện click xuyên qua (để không kích hoạt logic chặn của Card)
+    btnEdit.addMouseListener(new MouseAdapter() { 
+        @Override public void mousePressed(MouseEvent e) { e.consume(); } 
+    });
         
         JButton btnDelete = createIconButton("DELETE", new Color(239, 83, 80)); 
         btnDelete.addActionListener(e -> { if(onDelete != null) onDelete.accept(building); });
@@ -172,16 +178,50 @@ public class BuildingCard extends JPanel {
     // --- Inner Classes ---
     private static class StatusBadge extends JLabel {
         private Color bgColor, textColor;
-        public StatusBadge(String status) {
-            super(status); setFont(new Font("Segoe UI", Font.BOLD, 12)); setBorder(new EmptyBorder(5, 12, 5, 12));
-            if ("Đang hoạt động".equals(status)) { bgColor = new Color(232, 245, 233); textColor = new Color(46, 125, 50); } 
-            else if ("Đang bảo trì".equals(status)) { bgColor = new Color(255, 243, 224); textColor = new Color(239, 108, 0); } 
-            else { bgColor = new Color(245, 245, 245); textColor = new Color(97, 97, 97); }
+
+        public StatusBadge(String rawStatus) {
+            // 1. Xử lý logic hiển thị: Map từ Database (Tiếng Anh/Việt) sang Hiển thị chuẩn
+            String displayText = (rawStatus == null) ? "Không xác định" : rawStatus;
+            String normalized = (rawStatus == null) ? "" : rawStatus.trim();
+
+            // Case 1: Hoạt động (Xanh lá)
+            if (normalized.equalsIgnoreCase("ACTIVE") || 
+                normalized.equalsIgnoreCase("Hoạt động") || 
+                normalized.equalsIgnoreCase("Đang hoạt động")) {
+                
+                displayText = "Đang hoạt động"; // Luôn hiển thị dòng này
+                bgColor = new Color(232, 245, 233); // Nền xanh nhạt
+                textColor = new Color(46, 125, 50); // Chữ xanh đậm
+            } 
+            // Case 2: Bảo trì (Cam)
+            else if (normalized.equalsIgnoreCase("MAINTENANCE") || 
+                     normalized.toLowerCase().contains("bảo trì")) {
+                
+                displayText = "Đang bảo trì";
+                bgColor = new Color(255, 243, 224); // Nền cam nhạt
+                textColor = new Color(239, 108, 0); // Chữ cam đậm
+            } 
+            // Case 3: Các trạng thái khác (Xám)
+            else {
+                bgColor = new Color(245, 245, 245);
+                textColor = new Color(97, 97, 97);
+            }
+
+            // 2. Setup UI
+            setText(displayText);
+            setFont(new Font("Segoe UI", Font.BOLD, 12));
+            setBorder(new EmptyBorder(5, 12, 5, 12));
             setForeground(textColor);
         }
-        @Override protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(bgColor); g2.fillRoundRect(0, 0, getWidth(), getHeight(), 20, 20); g2.dispose(); super.paintComponent(g);
+
+        @Override 
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create(); 
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(bgColor); 
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 20, 20); // Bo góc tròn
+            g2.dispose(); 
+            super.paintComponent(g);
         }
     }
 
