@@ -1,5 +1,7 @@
 package view;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import util.UIConstants;
 import util.PermissionManager;
 import connection.Db_connection;
@@ -410,9 +412,15 @@ public class MainDashboard extends JFrame {
     private void showUsersPanel() { showPanel(new UserManagementPanel(), "Quản Lý Tài Khoản", btnUsers); }
     
     private void testDatabaseConnection() {
-        try { if (Db_connection.getConnection() != null) System.out.println("✅ Database connection successful!"); } catch (Exception e) {}
+    try (Connection conn = Db_connection.getConnection()) {
+        if (conn != null && !conn.isClosed()) {
+            System.out.println("✅ Database connection successful!");
+        }
+    } catch (SQLException e) {
+        System.err.println("❌ Database connection failed!");
+        e.printStackTrace();
     }
-    
+}
     private void performLogout() {
         if (JOptionPane.showConfirmDialog(this, "Bạn có chắc chắn muốn đăng xuất?", "Xác Nhận", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
             SessionManager.getInstance().logout();
