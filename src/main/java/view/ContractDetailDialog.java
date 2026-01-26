@@ -16,6 +16,7 @@ import java.util.Locale;
 
 /**
  * Dialog for viewing contract details
+ * UPDATED: Added History tab + FIXED button text colors
  */
 public class ContractDetailDialog extends JDialog {
     
@@ -31,6 +32,9 @@ public class ContractDetailDialog extends JDialog {
     
     private SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
     private NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(new Locale("vi", "VN"));
+    
+    // History panel
+    private ContractHistoryPanel historyPanel;
     
     public ContractDetailDialog(JFrame parent, Long contractId) {
         super(parent, "Chi Tiết Hợp Đồng", true);
@@ -57,7 +61,7 @@ public class ContractDetailDialog extends JDialog {
         
         initComponents();
         
-        setSize(900, 750);
+        setSize(950, 800);
         setLocationRelativeTo(parent);
     }
     
@@ -65,45 +69,12 @@ public class ContractDetailDialog extends JDialog {
         setLayout(new BorderLayout(0, 0));
         getContentPane().setBackground(UIConstants.BACKGROUND_COLOR);
         
-        // Main panel with scroll
-        JPanel mainPanel = new JPanel();
-        mainPanel.setLayout(new BoxLayout(mainPanel, BoxLayout.Y_AXIS));
-        mainPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        mainPanel.setBorder(new EmptyBorder(20, 25, 20, 25));
-        
         // Header
-        mainPanel.add(createHeader());
-        mainPanel.add(Box.createVerticalStrut(20));
+        add(createHeader(), BorderLayout.NORTH);
         
-        // Status Badge
-        mainPanel.add(createStatusBadge());
-        mainPanel.add(Box.createVerticalStrut(15));
-        
-        // Contract Info Section
-        mainPanel.add(createContractInfoSection());
-        mainPanel.add(Box.createVerticalStrut(15));
-        
-        // Apartment Info Section
-        mainPanel.add(createApartmentInfoSection());
-        mainPanel.add(Box.createVerticalStrut(15));
-        
-        // Resident Info Section
-        mainPanel.add(createResidentInfoSection());
-        mainPanel.add(Box.createVerticalStrut(15));
-        
-        // Services Section
-        mainPanel.add(createServicesSection());
-        mainPanel.add(Box.createVerticalStrut(15));
-        
-        // Notes Section (if exists)
-        if (contract.getNotes() != null && !contract.getNotes().trim().isEmpty()) {
-            mainPanel.add(createNotesSection());
-        }
-        
-        JScrollPane scrollPane = new JScrollPane(mainPanel);
-        scrollPane.setBorder(null);
-        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
-        add(scrollPane, BorderLayout.CENTER);
+        // Tabbed Pane (Main content)
+        JTabbedPane tabbedPane = createTabbedPane();
+        add(tabbedPane, BorderLayout.CENTER);
         
         // Buttons
         add(createButtonPanel(), BorderLayout.SOUTH);
@@ -113,7 +84,7 @@ public class ContractDetailDialog extends JDialog {
         JPanel headerPanel = new JPanel(new BorderLayout(15, 0));
         headerPanel.setBackground(Color.WHITE);
         headerPanel.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1, true),
+            BorderFactory.createMatteBorder(0, 0, 1, 0, UIConstants.BORDER_COLOR),
             new EmptyBorder(20, 25, 20, 25)
         ));
         
@@ -142,17 +113,17 @@ public class ContractDetailDialog extends JDialog {
         leftPanel.add(iconLabel);
         leftPanel.add(textPanel);
         
+        // Status Badge
+        JPanel statusBadge = createStatusBadge();
+        
         headerPanel.add(leftPanel, BorderLayout.WEST);
+        headerPanel.add(statusBadge, BorderLayout.EAST);
         
         return headerPanel;
     }
     
     private JPanel createStatusBadge() {
-        JPanel badgePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
-        badgePanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        
-        JPanel badge = new JPanel();
-        badge.setLayout(new FlowLayout(FlowLayout.CENTER, 20, 15));
+        JPanel badge = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 10));
         
         String status = contract.getStatusDisplay();
         Color bgColor, fgColor;
@@ -183,13 +154,120 @@ public class ContractDetailDialog extends JDialog {
         ));
         
         JLabel statusLabel = new JLabel(icon + " " + status);
-        statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 16));
         statusLabel.setForeground(fgColor);
         
         badge.add(statusLabel);
-        badgePanel.add(badge);
         
-        return badgePanel;
+        return badge;
+    }
+    
+    private JTabbedPane createTabbedPane() {
+        JTabbedPane tabbedPane = new JTabbedPane();
+        tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        tabbedPane.setBackground(UIConstants.BACKGROUND_COLOR);
+        
+        // Tab 1: Thông tin
+        JPanel infoPanel = createInfoPanel();
+        tabbedPane.addTab("📋 Thông tin", infoPanel);
+        
+        // Tab 2: Dịch vụ
+        JPanel servicesPanel = createServicesPanel();
+        tabbedPane.addTab("🔧 Dịch vụ", servicesPanel);
+        
+        // Tab 3: Lịch sử (NEW!)
+        historyPanel = new ContractHistoryPanel(contract.getId());
+        tabbedPane.addTab("📜 Lịch sử", historyPanel);
+        
+        return tabbedPane;
+    }
+    
+    private JPanel createInfoPanel() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setBackground(UIConstants.BACKGROUND_COLOR);
+        panel.setBorder(new EmptyBorder(20, 25, 20, 25));
+        
+        JScrollPane scrollPane = new JScrollPane(panel);
+        scrollPane.setBorder(null);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.setBackground(UIConstants.BACKGROUND_COLOR);
+        
+        // Contract Info Section
+        panel.add(createContractInfoSection());
+        panel.add(Box.createVerticalStrut(15));
+        
+        // Apartment Info Section
+        panel.add(createApartmentInfoSection());
+        panel.add(Box.createVerticalStrut(15));
+        
+        // Resident Info Section
+        panel.add(createResidentInfoSection());
+        panel.add(Box.createVerticalStrut(15));
+        
+        // Notes Section (if exists)
+        if (contract.getNotes() != null && !contract.getNotes().trim().isEmpty()) {
+            panel.add(createNotesSection());
+        }
+        
+        JPanel wrapperPanel = new JPanel(new BorderLayout());
+        wrapperPanel.add(scrollPane, BorderLayout.CENTER);
+        
+        return wrapperPanel;
+    }
+    
+    private JPanel createServicesPanel() {
+        JPanel panel = new JPanel(new BorderLayout(0, 15));
+        panel.setBackground(UIConstants.BACKGROUND_COLOR);
+        panel.setBorder(new EmptyBorder(20, 25, 20, 25));
+        
+        // Load services
+        List<ContractService> services = contractServiceDAO.getServicesByContract(contract.getId());
+        
+        if (services.isEmpty()) {
+            JPanel emptyPanel = new JPanel(new GridBagLayout());
+            emptyPanel.setBackground(Color.WHITE);
+            emptyPanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
+            
+            JLabel noDataLabel = new JLabel("Chưa có dịch vụ nào");
+            noDataLabel.setFont(new Font("Segoe UI", Font.ITALIC, 16));
+            noDataLabel.setForeground(new Color(158, 158, 158));
+            
+            emptyPanel.add(noDataLabel);
+            panel.add(emptyPanel, BorderLayout.CENTER);
+        } else {
+            String[] columns = {"Dịch vụ", "Đơn giá", "Đơn vị", "Ngày áp dụng", "Trạng thái"};
+            DefaultTableModel model = new DefaultTableModel(columns, 0) {
+                @Override
+                public boolean isCellEditable(int row, int column) {
+                    return false;
+                }
+            };
+            
+            for (ContractService cs : services) {
+                Object[] row = {
+                    cs.getServiceName(),
+                    currencyFormat.format(cs.getUnitPrice()),
+                    cs.getUnitTypeDisplay(),
+                    dateFormat.format(cs.getAppliedDate()),
+                    cs.getActiveStatusDisplay()
+                };
+                model.addRow(row);
+            }
+            
+            JTable table = new JTable(model);
+            table.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+            table.setRowHeight(40);
+            table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
+            table.getTableHeader().setBackground(new Color(250, 250, 250));
+            
+            JScrollPane scrollPane = new JScrollPane(table);
+            scrollPane.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
+            
+            panel.add(scrollPane, BorderLayout.CENTER);
+        }
+        
+        return panel;
     }
     
     private JPanel createContractInfoSection() {
@@ -286,57 +364,6 @@ public class ContractDetailDialog extends JDialog {
         return section;
     }
     
-    private JPanel createServicesSection() {
-        JPanel section = createSection("🔧 Dịch Vụ Áp Dụng");
-        section.setLayout(new BorderLayout(0, 10));
-        section.setBorder(BorderFactory.createCompoundBorder(
-            section.getBorder(),
-            new EmptyBorder(15, 20, 15, 20)
-        ));
-        
-        // Load services
-        List<ContractService> services = contractServiceDAO.getServicesByContract(contract.getId());
-        
-        if (services.isEmpty()) {
-            JLabel noDataLabel = new JLabel("Chưa có dịch vụ nào");
-            noDataLabel.setFont(new Font("Segoe UI", Font.ITALIC, 14));
-            noDataLabel.setForeground(new Color(158, 158, 158));
-            noDataLabel.setHorizontalAlignment(SwingConstants.CENTER);
-            section.add(noDataLabel, BorderLayout.CENTER);
-        } else {
-            String[] columns = {"Dịch vụ", "Đơn giá", "Đơn vị", "Ngày áp dụng", "Trạng thái"};
-            DefaultTableModel model = new DefaultTableModel(columns, 0) {
-                @Override
-                public boolean isCellEditable(int row, int column) {
-                    return false;
-                }
-            };
-            
-            for (ContractService cs : services) {
-                Object[] row = {
-                    cs.getServiceName(),
-                    currencyFormat.format(cs.getUnitPrice()),
-                    cs.getUnitTypeDisplay(),
-                    dateFormat.format(cs.getAppliedDate()),
-                    cs.getActiveStatusDisplay()
-                };
-                model.addRow(row);
-            }
-            
-            JTable table = new JTable(model);
-            table.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-            table.setRowHeight(35);
-            table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
-            table.getTableHeader().setBackground(new Color(250, 250, 250));
-            
-            JScrollPane scrollPane = new JScrollPane(table);
-            scrollPane.setPreferredSize(new Dimension(0, 150));
-            section.add(scrollPane, BorderLayout.CENTER);
-        }
-        
-        return section;
-    }
-    
     private JPanel createNotesSection() {
         JPanel section = createSection("📝 Ghi Chú");
         section.setLayout(new BorderLayout(0, 10));
@@ -366,11 +393,15 @@ public class ContractDetailDialog extends JDialog {
         JButton btnEdit = createButton("✏️ Sửa", new Color(33, 150, 243));
         btnEdit.addActionListener(e -> editContract());
         
+        // ✅ NÚT GIA HẠN - FIX CỨNG MÀU CHỮ TRẮNG
         JButton btnRenew = createButton("🔄 Gia hạn", new Color(76, 175, 80));
+        btnRenew.setForeground(Color.WHITE);  // ← FIX CỨNG
         btnRenew.addActionListener(e -> renewContract());
         btnRenew.setEnabled(contract.isActive());
         
+        // ✅ NÚT KẾT THÚC - FIX CỨNG MÀU CHỮ TRẮNG
         JButton btnTerminate = createButton("❌ Kết thúc", new Color(244, 67, 54));
+        btnTerminate.setForeground(Color.WHITE);  // ← FIX CỨNG
         btnTerminate.addActionListener(e -> terminateContract());
         btnTerminate.setEnabled(contract.isActive());
         
@@ -415,11 +446,14 @@ public class ContractDetailDialog extends JDialog {
         return label;
     }
     
+    // ✅ FIXED: Button with white text
     private JButton createButton(String text, Color bgColor) {
         JButton btn = new JButton(text);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        btn.setForeground(Color.WHITE);
         btn.setBackground(bgColor);
+        btn.setForeground(Color.WHITE);
+        btn.setOpaque(true);              // ← CRITICAL: Makes background visible
+        btn.setContentAreaFilled(true);   // ← CRITICAL: Fills the background
         btn.setFocusPainted(false);
         btn.setBorderPainted(false);
         btn.setPreferredSize(new Dimension(130, 40));
@@ -437,6 +471,12 @@ public class ContractDetailDialog extends JDialog {
         if (dialog.isConfirmed()) {
             // Reload contract data
             contract = contractDAO.getContractById(contract.getId());
+            
+            // Refresh history panel
+            if (historyPanel != null) {
+                historyPanel.refresh();
+            }
+            
             dispose();
             
             // Show success message
@@ -483,6 +523,11 @@ public class ContractDetailDialog extends JDialog {
                         "Thành công",
                         JOptionPane.INFORMATION_MESSAGE);
                     
+                    // Refresh history
+                    if (historyPanel != null) {
+                        historyPanel.refresh();
+                    }
+                    
                     // Reload
                     contract = contractDAO.getContractById(contract.getId());
                     dispose();
@@ -520,6 +565,12 @@ public class ContractDetailDialog extends JDialog {
                         "Kết thúc hợp đồng thành công!",
                         "Thành công",
                         JOptionPane.INFORMATION_MESSAGE);
+                    
+                    // Refresh history
+                    if (historyPanel != null) {
+                        historyPanel.refresh();
+                    }
+                    
                     dispose();
                 } else {
                     JOptionPane.showMessageDialog(this,

@@ -14,6 +14,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
 import java.util.ArrayList;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.JList;
 
 /**
  * Compact Contract Form Dialog with Cascade Building → Floor → Apartment
@@ -239,6 +241,46 @@ public class ContractFormDialog extends JDialog {
         cmbApartment.setPreferredSize(new Dimension(0, 32));
         section.add(cmbApartment, gbc);
         
+        // ✅ THÊM: Custom renderers cho placeholders
+        cmbBuilding.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, 
+                                                          int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value == null) {
+                    setText("-- Chọn tòa nhà --");
+                    setForeground(new Color(158, 158, 158));
+                }
+                return this;
+            }
+        });
+        
+        cmbFloor.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, 
+                                                          int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value == null) {
+                    setText("-- Chọn tầng --");
+                    setForeground(new Color(158, 158, 158));
+                }
+                return this;
+            }
+        });
+        
+        cmbApartment.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public Component getListCellRendererComponent(JList<?> list, Object value, 
+                                                          int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value == null) {
+                    setText("-- Chọn căn hộ --");
+                    setForeground(new Color(158, 158, 158));
+                }
+                return this;
+            }
+        });
+        
         return section;
     }
     
@@ -431,7 +473,9 @@ public class ContractFormDialog extends JDialog {
         BuildingDisplay selected = (BuildingDisplay) cmbBuilding.getSelectedItem();
         if (selected == null) {
             cmbFloor.removeAllItems();
+            cmbFloor.addItem(null);
             cmbApartment.removeAllItems();
+            cmbApartment.addItem(null);
             return;
         }
         
@@ -441,21 +485,26 @@ public class ContractFormDialog extends JDialog {
             List<Floor> floors = floorDAO.getFloorsByBuildingId(selected.building.getId());
             
             cmbFloor.removeAllItems();
+            cmbFloor.addItem(null);  // Item trống
             for (Floor floor : floors) {
                 cmbFloor.addItem(new FloorDisplay(floor));
             }
+            cmbFloor.setSelectedIndex(0);  // ← THÊM: Chọn item trống
             
             cmbApartment.removeAllItems();
+            cmbApartment.addItem(null);
+            cmbApartment.setSelectedIndex(0);  // ← THÊM: Chọn item trống
             
         } finally {
             isUpdatingCombos = false;
         }
     }
     
-    private void onFloorChanged() {
+     private void onFloorChanged() {
         FloorDisplay selected = (FloorDisplay) cmbFloor.getSelectedItem();
         if (selected == null) {
             cmbApartment.removeAllItems();
+            cmbApartment.addItem(null);
             return;
         }
         
@@ -466,29 +515,41 @@ public class ContractFormDialog extends JDialog {
             
             // Filter only AVAILABLE apartments for new contracts
             cmbApartment.removeAllItems();
+            cmbApartment.addItem(null);  // Item trống
             for (Apartment apt : apartments) {
                 if (isEditMode || "AVAILABLE".equals(apt.getStatus())) {
                     cmbApartment.addItem(new ApartmentDisplay(apt));
                 }
             }
+            cmbApartment.setSelectedIndex(0);  // ← THÊM: Chọn item trống
             
         } finally {
             isUpdatingCombos = false;
         }
     }
+
     
     // ===== DATA LOADING =====
     
     private void loadData() {
-        // Load buildings
-        List<Building> buildings = buildingDAO.getAllBuildings();
-        for (Building building : buildings) {
-            cmbBuilding.addItem(new BuildingDisplay(building));
-        }
-        
-        // Load services
-        loadServices();
+    // ✅ THÊM: Load buildings - Thêm item null cho mode tạo mới
+    if (!isEditMode) {
+        cmbBuilding.addItem(null);  // ← THÊM DÒNG NÀY
     }
+    
+    List<Building> buildings = buildingDAO.getAllBuildings();
+    for (Building building : buildings) {
+        cmbBuilding.addItem(new BuildingDisplay(building));
+    }
+    
+    // ✅ THÊM: Chọn item trống (null) khi tạo mới
+    if (!isEditMode) {
+        cmbBuilding.setSelectedIndex(0);  // ← THÊM DÒNG NÀY
+    }
+    
+    // Load services
+    loadServices();
+}
     
     private void loadServices() {
         List<Service> services = serviceDAO.getAllServices();
@@ -794,28 +855,45 @@ public class ContractFormDialog extends JDialog {
         }
     }
     
-    private void saveContractServices() {
-        // TODO: Fix this method based on actual ContractServiceDAO methods
-        // For now, skip to allow compilation
-        
-        /*
-        // Delete old services if editing
-        if (isEditMode) {
-            // contractServiceDAO has deleteByContractId or similar?
-        }
-        
-        // Insert selected services
-        List<Long> selectedServiceIds = new ArrayList<>();
-        for (JCheckBox cb : serviceCheckboxes) {
-            if (cb.isSelected()) {
-                Service service = (Service) cb.getClientProperty("service");
-                selectedServiceIds.add(service.getId());
+     private void saveContractServices() {
+        try {
+            // Collect selected service IDs
+            List<Long> selectedServiceIds = new ArrayList<>();
+            for (JCheckBox cb : serviceCheckboxes) {
+                if (cb.isSelected()) {
+                    Service service = (Service) cb.getClientProperty("service");
+                    if (service != null && service.getId() != null) {
+                        selectedServiceIds.add(service.getId());
+                    }
+                }
             }
+            
+            // If no services selected, skip
+            if (selectedServiceIds.isEmpty()) {
+                return;
+            }
+            
+            // Get applied date (use contract start date)
+            Date appliedDate = contract.getStartDate();
+            if (appliedDate == null) {
+                appliedDate = new Date(); // Fallback to today
+            }
+            
+            // Insert services using batch method
+            boolean success = contractServiceDAO.insertServicesForContract(
+                contract.getId(), 
+                selectedServiceIds, 
+                appliedDate
+            );
+            
+            if (!success) {
+                System.err.println("Warning: Failed to save some contract services");
+            }
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.err.println("Error saving contract services: " + e.getMessage());
         }
-        
-        // Check actual method signature in ContractServiceDAO
-        // contractServiceDAO.insertServicesForContract(...);
-        */
     }
     
     // ===== HELPER METHODS =====

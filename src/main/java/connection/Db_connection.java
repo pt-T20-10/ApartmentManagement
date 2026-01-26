@@ -1,36 +1,34 @@
-
 package connection;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.SQLException;
 
-/**
- *
- * @author acer
- */
+
 public class Db_connection {
-
-    private static Connection conn = null;
-
-    public static Connection getConnection() {
-    try {
-        // 1. Nạp Driver (Bỏ .newInstance() đi vì nó thừa và deprecated)
-        Class.forName("com.mysql.cj.jdbc.Driver");
-        
-        // 2. Cấu hình đúng: Port 3307 và Pass là rootpassword
-        String url = "jdbc:mysql://localhost:3307/DB_QuanLyChungCu?useUnicode=true&characterEncoding=utf-8";
-        String user = "root";
-        String password = "root"; // <-- Phải điền pass vào đây
-        
-        conn = DriverManager.getConnection(url, user, password);
-        
-        System.out.println("Kết nối thành công!");
-    } catch (Exception er) {
-        System.out.println("Kết nối thất bại!");
-        er.printStackTrace();
+    
+    private static final String URL = "jdbc:mysql://localhost:3307/DB_QuanLyChungCu?useUnicode=true&characterEncoding=utf-8&autoReconnect=true&useSSL=false";
+    private static final String USER = "root";
+    private static final String PASSWORD = "root";
+    
+    // Load driver một lần duy nhất
+    static {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            System.out.println("✅ MySQL Driver loaded!");
+        } catch (ClassNotFoundException e) {
+            System.err.println("❌ MySQL Driver not found!");
+            e.printStackTrace();
+        }
     }
-    return conn;
-}
-
-  
+    
+    /**
+     * Get a NEW database connection
+     * IMPORTANT: Caller MUST close this connection!
+     */
+    public static Connection getConnection() throws SQLException {
+        Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
+        System.out.println("✅ Kết nối thành công!");
+        return conn;
+    }
 }
