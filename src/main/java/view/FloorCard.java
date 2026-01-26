@@ -36,11 +36,8 @@ public class FloorCard extends JPanel {
         setPreferredSize(new Dimension(300, 160));
         
         // --- THIẾT LẬP SỰ KIỆN CLICK CHO TOÀN BỘ CARD ---
-        // Kiểm tra xem tầng này có đang bảo trì không
-        boolean isFloorMaintenance = isMaintenance(floor.getStatus());
-
-        // Đổi con trỏ chuột: Nếu bị khóa (do tòa nhà hoặc do tầng bảo trì) -> Con trỏ thường
-        if (isBuildingMaintenance || isFloorMaintenance) {
+        // Đổi con trỏ chuột: Chỉ khóa khi TÒA NHÀ bảo trì
+        if (isBuildingMaintenance) {
             this.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
         } else {
             this.setCursor(new Cursor(Cursor.HAND_CURSOR));
@@ -49,21 +46,15 @@ public class FloorCard extends JPanel {
         this.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                // 1. Ưu tiên kiểm tra Tòa nhà trước
+                // 1. Kiểm tra Tòa nhà bảo trì (Cấp cha) -> CHẶN
                 if (isBuildingMaintenance) {
-                    return; // Đã xử lý chặn ở cấp BuildingManagementPanel, nhưng chặn thêm ở đây cho chắc
+                    return; 
                 }
 
-                // 2. [LOGIC MỚI] Kiểm tra Tầng bảo trì
-                if (isMaintenance(floor.getStatus())) {
-                    JOptionPane.showMessageDialog(FloorCard.this, 
-                         floor.getName() + " đang trong quá trình bảo trì.\nTạm thời không thể truy cập danh sách căn hộ.", 
-                        "Quyền truy cập bị hạn chế", 
-                        JOptionPane.WARNING_MESSAGE);
-                    return; // Dừng lại, KHÔNG chuyển trang
-                }
-
-                // 3. Nếu bình thường -> Chuyển trang
+                // 2. Kiểm tra Tầng bảo trì -> VẪN CHO VÀO (Để xóa/sửa căn hộ)
+                // [ĐÃ SỬA]: Bỏ đoạn JOptionPane chặn và return
+                
+                // 3. Chuyển trang (Vào danh sách căn hộ)
                 if (onSelect != null) {
                     onSelect.accept(floor);
                 }
@@ -71,8 +62,8 @@ public class FloorCard extends JPanel {
 
             @Override
             public void mouseEntered(MouseEvent e) {
-                // Chỉ đổi màu nền hover nếu không bị khóa
-                if (!isBuildingMaintenance && !isMaintenance(floor.getStatus())) {
+                // Chỉ đổi màu nền hover nếu không bị khóa bởi tòa nhà
+                if (!isBuildingMaintenance) {
                     setBackground(new Color(252, 252, 252));
                     repaint();
                 }
@@ -87,11 +78,11 @@ public class FloorCard extends JPanel {
 
         initCardUI();
 
-        // Tooltip thông minh
+        // Tooltip
         if (isBuildingMaintenance) {
             setToolTipText("🔒 Tòa nhà đang bảo trì - Tạm thời bị khóa");
-        } else if (isFloorMaintenance) {
-            setToolTipText("⚠️ Tầng này đang bảo trì - Không thể truy cập");
+        } else if (isMaintenance(floor.getStatus())) {
+            setToolTipText("⚠️ Tầng đang bảo trì - Click để quản lý căn hộ");
         }
     }
 
@@ -164,7 +155,6 @@ public class FloorCard extends JPanel {
         actionPanel.setOpaque(false);
         actionPanel.setBorder(new EmptyBorder(5, 0, 0, 0));
 
-        // Nút Sửa/Xóa vẫn nên cho phép để Admin có thể đổi lại trạng thái "Hoạt động"
         JButton btnEdit = createIconButton("EDIT", new Color(117, 117, 117));
         JButton btnDelete = createIconButton("DELETE", new Color(239, 83, 80));
 
@@ -175,7 +165,7 @@ public class FloorCard extends JPanel {
             btnEdit.addActionListener(e -> { if (onEdit != null) onEdit.accept(floor); });
             btnDelete.addActionListener(e -> { if (onDelete != null) onDelete.accept(floor); });
             
-            // Ngăn sự kiện click lan ra Card (để không bị hiện thông báo chặn khi nhấn nút Sửa)
+            // Ngăn sự kiện click lan ra Card
             btnEdit.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
             btnDelete.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
         }
@@ -199,14 +189,15 @@ public class FloorCard extends JPanel {
         g2.setColor(new Color(220, 220, 220));
         g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
 
-        // Hiệu ứng mờ (Overlay) nếu đang bảo trì
+        // Hiệu ứng mờ (Overlay)
         if (isBuildingMaintenance) {
+            // Nếu tòa nhà bảo trì -> Mờ đậm
             g2.setColor(new Color(245, 245, 245, 180));
             g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
         }
         else if (isMaintenance(floor.getStatus())) {
-            // Mờ màu vàng nhạt cảnh báo
-            g2.setColor(new Color(255, 243, 224, 80)); 
+            // Nếu tầng bảo trì -> Mờ nhẹ màu vàng cam (Cảnh báo)
+            g2.setColor(new Color(255, 243, 224, 60)); 
             g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
         }
 

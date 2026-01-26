@@ -44,11 +44,11 @@ public class ContractDAO {
         if (signedDate != null) {
             contract.setSignedDate(new java.util.Date(signedDate.getTime()));
         }
+        contract.setApartmentId(rs.getLong("apartment_id"));
+        contract.setResidentId(rs.getLong("resident_id"));
         
         java.sql.Date startDate = rs.getDate("start_date");
-        if (startDate != null) {
-            contract.setStartDate(new java.util.Date(startDate.getTime()));
-        }
+        if (startDate != null) contract.setStartDate(new java.util.Date(startDate.getTime()));
         
         java.sql.Date endDate = rs.getDate("end_date");
         if (endDate != null) {
@@ -74,6 +74,16 @@ public class ContractDAO {
         if (updatedAt != null) {
             contract.setUpdatedAt(new java.util.Date(updatedAt.getTime()));
         }
+        if (endDate != null) contract.setEndDate(new java.util.Date(endDate.getTime()));
+        
+        contract.setDepositAmount(rs.getBigDecimal("deposit_amount"));
+        contract.setStatus(rs.getString("status"));
+        contract.setDeleted(rs.getBoolean("is_deleted"));
+        
+        // Các trường này SQL chưa có, nên ta try-catch hoặc bỏ qua để tránh lỗi
+        try { contract.setContractNumber(rs.getString("contract_number")); } catch (SQLException e) {}
+        try { contract.setContractType(rs.getString("contract_type")); } catch (SQLException e) {}
+        try { contract.setNotes(rs.getString("notes")); } catch (SQLException e) {}
         
         return contract;
     }
@@ -182,6 +192,42 @@ public class ContractDAO {
     }
     
     // --- CHECK IF APARTMENT HAS ACTIVE CONTRACT ---
+    // --- [MỚI] LẤY 1 HỢP ĐỒNG ACTIVE DUY NHẤT (CHO VIEW) ---
+    public Contract getActiveContractByApartmentId(Long apartmentId) {
+        String sql = 
+            "SELECT c.*, r.full_name AS tenant_name, r.phone AS tenant_phone " +
+            "FROM contracts c " +
+            "JOIN residents r ON c.resident_id = r.id " +
+            "WHERE c.apartment_id = ? " +
+            "  AND c.status = 'ACTIVE' " +
+            "  AND c.is_deleted = 0 " +
+            "ORDER BY c.end_date DESC LIMIT 1";
+
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setLong(1, apartmentId);
+            
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    Contract c = mapResultSetToContract(rs);
+                    // Map thêm thông tin người thuê
+                    try {
+                        c.setTenantName(rs.getString("tenant_name"));
+                        c.setTenantPhone(rs.getString("tenant_phone"));
+                    } catch (SQLException e) {
+                        System.out.println("Lỗi map tenant info: " + e.getMessage());
+                    }
+                    return c;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return null;
+    }
+    
+    // --- NEW: CHECK IF APARTMENT HAS ACTIVE CONTRACT ---
     public boolean hasActiveContract(Long apartmentId) {
         List<Contract> activeContracts = getActiveContractsByApartment(apartmentId);
         return !activeContracts.isEmpty();

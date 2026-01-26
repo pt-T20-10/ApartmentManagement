@@ -208,4 +208,22 @@ public class ApartmentDAO {
 
     public int countAvailableApartments() { return countApartmentsByStatus("AVAILABLE"); }
     public int countRentedApartments() { return countApartmentsByStatus("RENTED"); }
+    public boolean hasHistory(Long apartmentId) {
+        // Kiểm tra xem căn hộ này đã từng có hợp đồng nào chưa (kể cả đã kết thúc)
+        String sql = "SELECT COUNT(*) FROM contracts WHERE apartment_id = ?";
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setLong(1, apartmentId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+
+
 }

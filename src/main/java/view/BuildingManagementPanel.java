@@ -94,15 +94,24 @@ public class BuildingManagementPanel extends JPanel {
         cardsContainer.removeAll();
         List<Building> list = buildingDAO.getAllBuildings();
         
-        for (Building b : list) {
-            BuildingStats stats = buildingDAO.getBuildingStatistics(b.getId());
-            cardsContainer.add(new BuildingCard(
-                b, 
-                stats, 
-                onBuildingSelect, // Card tự xử lý chặn click
-                this::editBuilding, 
-                this::deleteBuilding
-            ));
+        if (list.isEmpty()) {
+            cardsContainer.setLayout(new BorderLayout());
+            JLabel lblEmpty = new JLabel("<html><center>Chưa có tòa nhà nào.<br>Nhấn 'Thêm Tòa Nhà' để bắt đầu.</center></html>", SwingConstants.CENTER);
+            lblEmpty.setFont(new Font("Segoe UI", Font.ITALIC, 16));
+            lblEmpty.setForeground(Color.GRAY);
+            cardsContainer.add(lblEmpty, BorderLayout.CENTER);
+        } else {
+            cardsContainer.setLayout(new GridLayout(0, 2, 25, 25));
+            for (Building b : list) {
+                BuildingStats stats = buildingDAO.getBuildingStatistics(b.getId());
+                cardsContainer.add(new BuildingCard(
+                    b, 
+                    stats, 
+                    onBuildingSelect, 
+                    this::editBuilding, 
+                    this::deleteBuilding
+                ));
+            }
         }
         
         cardsContainer.revalidate();
@@ -139,16 +148,33 @@ public class BuildingManagementPanel extends JPanel {
         }
     }
 
-    private void deleteBuilding(Building b) {
+    // --- [QUAN TRỌNG] LOGIC XÓA AN TOÀN ---
+    private void deleteBuilding(Building building) {
+     // 1. Kiểm tra Hợp đồng ACTIVE
+        if (buildingDAO.hasActiveContracts(building.getId())) {
+            JOptionPane.showMessageDialog(this, 
+                "KHÔNG THỂ XÓA TÒA NHÀ NÀY!\n\n" +
+                "Lý do: Tòa nhà đang có hợp đồng thuê ACTIVE (Đang hiệu lực).\n" +
+                "Vui lòng thanh lý hoặc kết thúc các hợp đồng liên quan trước.", 
+                "Bị chặn bởi ràng buộc dữ liệu", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        // 2. Nếu an toàn -> Xác nhận Xóa Mềm
         int confirm = JOptionPane.showConfirmDialog(this, 
-            "Bạn có chắc muốn xóa tòa nhà " + b.getName() + "?\nCác tầng và căn hộ bên trong cũng sẽ bị ảnh hưởng.", 
-            "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
-            
+            "Bạn có chắc chắn muốn xóa tòa nhà \"" + building.getName() + "\"?\n" +
+            "- Các tầng và căn hộ bên trong sẽ bị ẩn.\n" +
+            "- Dữ liệu lịch sử vẫn được giữ lại trong Database.", 
+            "Xác nhận xóa mềm", 
+            JOptionPane.YES_NO_OPTION);
+
         if (confirm == JOptionPane.YES_OPTION) {
-            if (buildingDAO.deleteBuilding(b.getId())) {
-                loadBuildings();
+            if (buildingDAO.deleteBuilding(building.getId())) {
+               JOptionPane.showMessageDialog(this, "Đã xóa tòa nhà thành công!");
+               loadBuildings(); // Tải lại danh sách
             } else {
-                JOptionPane.showMessageDialog(this, "Xóa thất bại!");
+                JOptionPane.showMessageDialog(this, "Lỗi khi xóa!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
         }
     }

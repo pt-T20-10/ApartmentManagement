@@ -13,17 +13,31 @@ public class BuildingDAO {
         building.setId(rs.getLong("id"));
         building.setName(rs.getString("name"));
         building.setAddress(rs.getString("address"));
-        building.setManagerName(rs.getString("manager_name"));
         building.setDescription(rs.getString("description"));
         building.setStatus(rs.getString("status"));
-        // Đã XÓA hoàn toàn operation_date
         building.setDeleted(rs.getBoolean("is_deleted"));
+        
+        // [MỚI] Map thông tin quản lý từ kết quả JOIN
+        building.setManagerUserId(rs.getLong("manager_user_id"));
+        // Lấy tên từ bảng users (đã được join)
+        try {
+            building.setManagerName(rs.getString("manager_full_name"));
+        } catch (SQLException e) {
+            // Trường hợp query không join, để trống tên hoặc set mặc định
+            building.setManagerName("N/A");
+        }
+        
         return building;
     }
 
     public List<Building> getAllBuildings() {
         List<Building> buildings = new ArrayList<>();
-        String sql = "SELECT * FROM buildings WHERE is_deleted = 0 ORDER BY id DESC";
+        // [MỚI] JOIN với bảng users để lấy tên người quản lý
+        String sql = "SELECT b.*, u.full_name as manager_full_name " +
+                     "FROM buildings b " +
+                     "LEFT JOIN users u ON b.manager_user_id = u.id " +
+                     "WHERE b.is_deleted = 0 ORDER BY b.id DESC";
+                     
         try (Connection conn = Db_connection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
@@ -44,32 +58,43 @@ public class BuildingDAO {
     }
 
     public boolean insertBuilding(Building building) {
-        // XÓA operation_date khỏi câu lệnh SQL
-        String sql = "INSERT INTO buildings (name, address, manager_name, description, status, is_deleted) VALUES (?, ?, ?, ?, ?, 0)";
+        // [MỚI] Insert vào cột manager_user_id thay vì manager_name
+        String sql = "INSERT INTO buildings (name, address, manager_user_id, description, status, is_deleted) VALUES (?, ?, ?, ?, ?, 0)";
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, building.getName());
             pstmt.setString(2, building.getAddress());
-            pstmt.setString(3, building.getManagerName());
+            
+            // Set ID người quản lý (nếu null thì set NULL hoặc mặc định)
+            if (building.getManagerUserId() != null) {
+                pstmt.setLong(3, building.getManagerUserId());
+            } else {
+                pstmt.setNull(3, Types.BIGINT);
+            }
+            
             pstmt.setString(4, building.getDescription());
             pstmt.setString(5, building.getStatus());
-            // Bỏ dòng setDate
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) { e.printStackTrace(); }
         return false;
     }
     
     public boolean updateBuilding(Building building) {
-        // XÓA operation_date khỏi câu lệnh SQL
-        String sql = "UPDATE buildings SET name=?, address=?, manager_name=?, description=?, status=? WHERE id=?";
+        // [MỚI] Update cột manager_user_id
+        String sql = "UPDATE buildings SET name=?, address=?, manager_user_id=?, description=?, status=? WHERE id=?";
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, building.getName());
             pstmt.setString(2, building.getAddress());
-            pstmt.setString(3, building.getManagerName());
+            
+            if (building.getManagerUserId() != null) {
+                pstmt.setLong(3, building.getManagerUserId());
+            } else {
+                pstmt.setNull(3, Types.BIGINT);
+            }
+            
             pstmt.setString(4, building.getDescription());
             pstmt.setString(5, building.getStatus());
-            // Bỏ dòng setDate, setLong id giờ là tham số thứ 6
             pstmt.setLong(6, building.getId());
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) { e.printStackTrace(); }
@@ -134,6 +159,7 @@ public class BuildingDAO {
         } catch (SQLException e) { e.printStackTrace(); }
         return stats;
     }
+
     
     public int countBuildings() {
         String sql = "SELECT COUNT(*) FROM buildings WHERE is_deleted = 0";
@@ -145,5 +171,101 @@ public class BuildingDAO {
             e.printStackTrace();
         }
         return 0;
+    }
+    public boolean hasActiveContracts(Long buildingId) {
+        // JOIN 3 bảng: Contracts -> Apartments -> Floors -> Buildings
+        String sql = "SELECT COUNT(*) FROM contracts c " +
+                     "JOIN apartments a ON c.apartment_id = a.id " +
+                     "JOIN floors f ON a.floor_id = f.id " +
+                     "WHERE f.building_id = ? " +
+                     "AND c.status = 'ACTIVE' " +  // Chỉ tính hợp đồng đang hiệu lực
+                     "AND c.is_deleted = 0";       // Và hợp đồng chưa bị xóa
+
+       try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        
+            pstmt.setLong(1, buildingId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0; // Trả về true nếu có > 0 hợp đồng
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+    public boolean updateStatusCascade(Long buildingId, String newStatus) {
+        Connection conn = null;
+        PreparedStatement pstBuilding = null;
+        PreparedStatement pstFloors = null;
+        PreparedStatement pstApartments = null;
+        
+        try {
+            conn = Db_connection.getConnection();
+            conn.setAutoCommit(false); // Bắt đầu Transaction (để đảm bảo an toàn dữ liệu)
+
+            // 1. Cập nhật trạng thái Tòa nhà
+            String sqlBuilding = "UPDATE buildings SET status = ? WHERE id = ?";
+            pstBuilding = conn.prepareStatement(sqlBuilding);
+            pstBuilding.setString(1, newStatus);
+            pstBuilding.setLong(2, buildingId);
+            pstBuilding.executeUpdate();
+
+            // 2. Xử lý Logic Lan truyền
+            if ("MAINTENANCE".equalsIgnoreCase(newStatus)) {
+                // === CHUYỂN SANG BẢO TRÌ ===
+                
+                // Tầng -> MAINTENANCE
+                String sqlFloor = "UPDATE floors SET status = 'MAINTENANCE' WHERE building_id = ? AND is_deleted = 0";
+                pstFloors = conn.prepareStatement(sqlFloor);
+                pstFloors.setLong(1, buildingId);
+                pstFloors.executeUpdate();
+
+                // Căn hộ -> MAINTENANCE (Chỉ cập nhật những căn đang Trống hoặc Bảo trì, KHÔNG đụng vào căn đã xóa)
+                // Lưu ý: Logic check hợp đồng active đã được làm ở Dialog, nên ở đây cứ update thoải mái
+                String sqlApt = "UPDATE apartments SET status = 'MAINTENANCE' " +
+                                "WHERE floor_id IN (SELECT id FROM floors WHERE building_id = ?) " +
+                                "AND is_deleted = 0";
+                pstApartments = conn.prepareStatement(sqlApt);
+                pstApartments.setLong(1, buildingId);
+                pstApartments.executeUpdate();
+
+            } else if ("ACTIVE".equalsIgnoreCase(newStatus)) {
+                // === CHUYỂN SANG HOẠT ĐỘNG ===
+                
+                // Tầng -> ACTIVE (Hoạt động)
+                String sqlFloor = "UPDATE floors SET status = 'ACTIVE' WHERE building_id = ? AND is_deleted = 0";
+                pstFloors = conn.prepareStatement(sqlFloor);
+                pstFloors.setLong(1, buildingId);
+                pstFloors.executeUpdate();
+
+                // Căn hộ -> AVAILABLE (Trống)
+                // CHỈ mở khóa những căn đang ở trạng thái MAINTENANCE. 
+                // Nếu căn đó đang là RENTED (logic lỗi) hoặc trạng thái khác thì giữ nguyên cho an toàn.
+                String sqlApt = "UPDATE apartments SET status = 'AVAILABLE' " +
+                                "WHERE floor_id IN (SELECT id FROM floors WHERE building_id = ?) " +
+                                "AND status = 'MAINTENANCE' " + // Chỉ mở những căn đang bị khóa bảo trì
+                                "AND is_deleted = 0";
+                pstApartments = conn.prepareStatement(sqlApt);
+                pstApartments.setLong(1, buildingId);
+                pstApartments.executeUpdate();
+            }
+
+            conn.commit(); // Xác nhận lưu tất cả thay đổi
+            return true;
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            try { if (conn != null) conn.rollback(); } catch (SQLException ex) { ex.printStackTrace(); } // Hoàn tác nếu lỗi
+            return false;
+        } finally {
+            try {
+                if (pstBuilding != null) pstBuilding.close();
+                if (pstFloors != null) pstFloors.close();
+                if (pstApartments != null) pstApartments.close();
+                if (conn != null) { conn.setAutoCommit(true); conn.close(); }
+            } catch (SQLException e) { e.printStackTrace(); }
+        }
     }
 }

@@ -2,9 +2,11 @@ package view;
 
 import dao.ApartmentDAO;
 import dao.BuildingDAO;
+import dao.ContractDAO; 
 import dao.FloorDAO;
 import model.Apartment;
 import model.Building;
+import model.Contract; 
 import model.Floor;
 import util.UIConstants;
 
@@ -17,13 +19,13 @@ import java.awt.geom.Path2D;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Random;
 
 public class ApartmentManagementPanel extends JPanel {
 
     private ApartmentDAO apartmentDAO;
     private BuildingDAO buildingDAO;
     private FloorDAO floorDAO;
+    private ContractDAO contractDAO; 
 
     private JComboBox<Building> cbbBuilding;
     private JComboBox<Floor> cbbFloor;
@@ -37,6 +39,7 @@ public class ApartmentManagementPanel extends JPanel {
         this.apartmentDAO = new ApartmentDAO();
         this.buildingDAO = new BuildingDAO();
         this.floorDAO = new FloorDAO();
+        this.contractDAO = new ContractDAO(); 
 
         initUI();
         loadBuildingData();
@@ -178,7 +181,8 @@ public class ApartmentManagementPanel extends JPanel {
         add(headerPanel, BorderLayout.NORTH);
 
         // === CONTENT ===
-        cardsContainer = new JPanel(new GridLayout(0, 4, 20, 20));
+        // [SỬA ĐỔI TẠI ĐÂY] Đổi từ 4 thành 3 cột
+        cardsContainer = new JPanel(new GridLayout(0, 3, 20, 20)); 
         cardsContainer.setBackground(UIConstants.BACKGROUND_COLOR);
 
         JPanel contentWrapper = new JPanel(new BorderLayout());
@@ -245,38 +249,24 @@ public class ApartmentManagementPanel extends JPanel {
             emptyPanel.add(emptyLabel, BorderLayout.CENTER);
             cardsContainer.add(emptyPanel);
         } else {
-            // [LOGIC MOCK DATA MỚI] 
             for (Apartment apt : list) {
-                LocalDate mockEndDate = null;
+                LocalDate realEndDate = null;
                 
-                if ("RENTED".equalsIgnoreCase(apt.getStatus()) || "Đã thuê".equalsIgnoreCase(apt.getStatus())) {
-                    try {
-                        String numStr = apt.getRoomNumber().replaceAll("\\D+","");
-                        int roomNum = numStr.isEmpty() ? 0 : Integer.parseInt(numStr);
-                        
-                        // Lấy chữ số cuối cùng của số phòng (ví dụ 101 -> 1, 205 -> 5)
-                        int lastDigit = roomNum % 10;
-
-                        // [SỬA LOGIC]: 
-                        // - Các căn có đuôi 1, 2, 3 (vd: 101, 102, 103): QUÁ HẠN (Đỏ)
-                        // - Các căn có đuôi 4, 5: SẮP HẾT HẠN (Cam)
-                        // - Còn lại: Bình thường
-                        if (lastDigit >= 1 && lastDigit <= 3) {
-                            mockEndDate = LocalDate.now().minusDays(5); // Quá hạn 5 ngày
-                        } else if (lastDigit >= 4 && lastDigit <= 5) {
-                            mockEndDate = LocalDate.now().plusDays(15); // Còn 15 ngày
-                        } else {
-                            mockEndDate = LocalDate.now().plusDays(200); // Còn lâu
-                        }
-                        
-                    } catch (Exception e) { 
-                        mockEndDate = LocalDate.now().plusDays(60); 
+                String st = (apt.getStatus() == null) ? "" : apt.getStatus();
+                if ("RENTED".equalsIgnoreCase(st) || 
+                    "Đã thuê".equalsIgnoreCase(st) || 
+                    "OCCUPIED".equalsIgnoreCase(st)) {
+                    
+                    Contract c = contractDAO.getActiveContractByApartmentId(apt.getId());
+                    
+                    if (c != null && c.getEndDate() != null) {
+                        realEndDate = new java.sql.Date(c.getEndDate().getTime()).toLocalDate();
                     }
                 }
 
                 cardsContainer.add(new ApartmentCard(
                     apt, 
-                    mockEndDate,
+                    realEndDate,
                     this::showQuickView,
                     this::editApartment,
                     this::deleteApartment
@@ -312,7 +302,7 @@ public class ApartmentManagementPanel extends JPanel {
             boolean match = false;
             switch (statusFilter) {
                 case "Trống": match = "AVAILABLE".equalsIgnoreCase(aptStatus) || "Trống".equalsIgnoreCase(aptStatus); break;
-                case "Đã thuê": match = "RENTED".equalsIgnoreCase(aptStatus) || "Đã thuê".equalsIgnoreCase(aptStatus); break;
+                case "Đã thuê": match = "RENTED".equalsIgnoreCase(aptStatus) || "Đã thuê".equalsIgnoreCase(aptStatus) || "OCCUPIED".equalsIgnoreCase(aptStatus); break;
                 case "Bảo trì": match = "MAINTENANCE".equalsIgnoreCase(aptStatus) || "Bảo trì".equalsIgnoreCase(aptStatus); break;
                 default: match = true;
             }
@@ -356,10 +346,33 @@ public class ApartmentManagementPanel extends JPanel {
     }
 
     private void deleteApartment(Apartment apt) {
-        int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc muốn xóa căn hộ " + apt.getRoomNumber() + "?", "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
+        String status = (apt.getStatus() == null) ? "" : apt.getStatus();
+        
+        if (status.equalsIgnoreCase("RENTED") || 
+            status.equalsIgnoreCase("OCCUPIED") || 
+            status.equalsIgnoreCase("Đã thuê")) {
+            
+            JOptionPane.showMessageDialog(this, 
+                "KHÔNG THỂ XÓA CĂN HỘ NÀY!\n\n" +
+                "Lý do: Căn hộ " + apt.getRoomNumber() + " đang có người thuê (Hợp đồng Active).\n" +
+                "Để đảm bảo an toàn dữ liệu, vui lòng thanh lý hợp đồng trước khi xóa.", 
+                "Thao tác bị chặn", 
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        int confirm = JOptionPane.showConfirmDialog(this, 
+            "Bạn có chắc chắn muốn xóa căn hộ " + apt.getRoomNumber() + "?\n" +
+            "Dữ liệu sẽ được chuyển vào thùng rác (Xóa mềm).", 
+            "Xác nhận xóa", JOptionPane.YES_NO_OPTION);
+            
         if (confirm == JOptionPane.YES_OPTION) {
-            if (apartmentDAO.deleteApartment(apt.getId())) { JOptionPane.showMessageDialog(this, "Xóa thành công!"); loadApartments(); } 
-            else { JOptionPane.showMessageDialog(this, "Xóa thất bại!"); }
+            if (apartmentDAO.deleteApartment(apt.getId())) { 
+                JOptionPane.showMessageDialog(this, "Đã xóa thành công!"); 
+                loadApartments(); 
+            } else { 
+                JOptionPane.showMessageDialog(this, "Xóa thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE); 
+            }
         }
     }
 
