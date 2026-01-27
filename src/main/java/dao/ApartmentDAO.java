@@ -8,6 +8,7 @@ import java.util.List;
 
 /**
  * DAO class for Apartment operations
+ * Note: base_price removed - pricing handled in contracts
  */
 public class ApartmentDAO {
     
@@ -19,7 +20,6 @@ public class ApartmentDAO {
         apartment.setRoomNumber(rs.getString("room_number"));
         apartment.setArea(rs.getDouble("area"));
         apartment.setStatus(rs.getString("status"));
-        apartment.setBasePrice(rs.getBigDecimal("base_price"));
         apartment.setDescription(rs.getString("description"));
         apartment.setDeleted(rs.getBoolean("is_deleted"));
         
@@ -111,11 +111,11 @@ public class ApartmentDAO {
         return null;
     }
     
-    // Insert new apartment (CẬP NHẬT THÊM 3 TRƯỜNG MỚI)
+    // Insert new apartment (ĐÃ BỎ base_price)
     public boolean insertApartment(Apartment apartment) {
-        String sql = "INSERT INTO apartments (floor_id, room_number, area, status, base_price, description, " +
+        String sql = "INSERT INTO apartments (floor_id, room_number, area, status, description, " +
                      "apartment_type, bedroom_count, bathroom_count, is_deleted) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -124,13 +124,12 @@ public class ApartmentDAO {
             pstmt.setString(2, apartment.getRoomNumber());
             pstmt.setDouble(3, apartment.getArea());
             pstmt.setString(4, apartment.getStatus());
-            pstmt.setBigDecimal(5, apartment.getBasePrice());
-            pstmt.setString(6, apartment.getDescription());
+            pstmt.setString(5, apartment.getDescription());
             
             // --- Set 3 tham số mới ---
-            pstmt.setString(7, apartment.getApartmentType());
-            pstmt.setInt(8, apartment.getBedroomCount());
-            pstmt.setInt(9, apartment.getBathroomCount());
+            pstmt.setString(6, apartment.getApartmentType());
+            pstmt.setInt(7, apartment.getBedroomCount());
+            pstmt.setInt(8, apartment.getBathroomCount());
             
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -139,10 +138,10 @@ public class ApartmentDAO {
         return false;
     }
     
-    // Update apartment (CẬP NHẬT THÊM 3 TRƯỜNG MỚI)
+    // Update apartment (ĐÃ BỎ base_price)
     public boolean updateApartment(Apartment apartment) {
         String sql = "UPDATE apartments SET floor_id = ?, room_number = ?, area = ?, status = ?, " +
-                     "base_price = ?, description = ?, apartment_type = ?, bedroom_count = ?, bathroom_count = ? " +
+                     "description = ?, apartment_type = ?, bedroom_count = ?, bathroom_count = ? " +
                      "WHERE id = ?";
         
         try (Connection conn = Db_connection.getConnection();
@@ -152,15 +151,14 @@ public class ApartmentDAO {
             pstmt.setString(2, apartment.getRoomNumber());
             pstmt.setDouble(3, apartment.getArea());
             pstmt.setString(4, apartment.getStatus());
-            pstmt.setBigDecimal(5, apartment.getBasePrice());
-            pstmt.setString(6, apartment.getDescription());
+            pstmt.setString(5, apartment.getDescription());
             
             // --- Set 3 tham số mới ---
-            pstmt.setString(7, apartment.getApartmentType());
-            pstmt.setInt(8, apartment.getBedroomCount());
-            pstmt.setInt(9, apartment.getBathroomCount());
+            pstmt.setString(6, apartment.getApartmentType());
+            pstmt.setInt(7, apartment.getBedroomCount());
+            pstmt.setInt(8, apartment.getBathroomCount());
             
-            pstmt.setLong(10, apartment.getId()); // ID là tham số cuối cùng
+            pstmt.setLong(9, apartment.getId()); // ID là tham số cuối cùng
             
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -208,6 +206,7 @@ public class ApartmentDAO {
 
     public int countAvailableApartments() { return countApartmentsByStatus("AVAILABLE"); }
     public int countRentedApartments() { return countApartmentsByStatus("RENTED"); }
+    
     public boolean hasHistory(Long apartmentId) {
         // Kiểm tra xem căn hộ này đã từng có hợp đồng nào chưa (kể cả đã kết thúc)
         String sql = "SELECT COUNT(*) FROM contracts WHERE apartment_id = ?";
@@ -224,6 +223,4 @@ public class ApartmentDAO {
         }
         return false;
     }
-
-
 }

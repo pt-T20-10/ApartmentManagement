@@ -323,7 +323,7 @@ public class ApartmentQuickViewDialog extends JDialog {
         p.add(createInfoItem("Phòng tắm", apartment.getBathroomCount() + " PT"));
         String note = apartment.getDescription(); if (note == null || note.isEmpty()) note = "Không có";
         p.add(createInfoItem("Ghi chú", note));
-        p.add(createInfoItem("Giá niêm yết", df.format(apartment.getBasePrice()) + " đ"));
+   
         return p;
     }
 

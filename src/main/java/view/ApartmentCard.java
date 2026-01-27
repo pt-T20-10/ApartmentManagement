@@ -10,7 +10,6 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Path2D;
 import java.awt.geom.RoundRectangle2D;
-import java.text.DecimalFormat;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.function.Consumer;
@@ -23,7 +22,6 @@ public class ApartmentCard extends JPanel {
     private Consumer<Apartment> onSelect;
     private Consumer<Apartment> onEdit;
     private Consumer<Apartment> onDelete;
-    private static final DecimalFormat df = new DecimalFormat("#,###");
 
     public ApartmentCard(Apartment apartment, LocalDate contractEndDate,
                          Consumer<Apartment> onSelect, 
@@ -76,7 +74,7 @@ public class ApartmentCard extends JPanel {
         headerPanel.add(titleGroup, BorderLayout.WEST);
         headerPanel.add(createStatusBadge(apartment.getStatus()), BorderLayout.EAST);
 
-        // BODY
+        // BODY - Hiển thị diện tích, phòng ngủ, phòng tắm (ĐÃ BỎ GIÁ)
         JPanel bodyPanel = new JPanel();
         bodyPanel.setLayout(new BoxLayout(bodyPanel, BoxLayout.Y_AXIS));
         bodyPanel.setOpaque(false);
@@ -87,14 +85,11 @@ public class ApartmentCard extends JPanel {
         specRow.add(createIconLabel("AREA", apartment.getArea() + " m²"));
         specRow.add(Box.createHorizontalStrut(12));
         specRow.add(createIconLabel("BED", apartment.getBedroomCount() + " PN"));
+        specRow.add(Box.createHorizontalStrut(12));
+        specRow.add(createIconLabel("BATH", apartment.getBathroomCount() + " PT"));
         
-        String priceTxt = (apartment.getBasePrice() != null) ? df.format(apartment.getBasePrice()) + " đ" : "---";
-        JLabel lblPrice = new JLabel(priceTxt);
-        lblPrice.setFont(new Font("Segoe UI", Font.BOLD, 15));
-        lblPrice.setForeground(UIConstants.PRIMARY_COLOR);
-        lblPrice.setBorder(new EmptyBorder(5, 0, 0, 0));
-
-        bodyPanel.add(specRow); bodyPanel.add(lblPrice);
+        bodyPanel.add(specRow);
+        bodyPanel.add(Box.createVerticalStrut(5)); // Khoảng trống thay cho label giá cũ
 
         // FOOTER
         JPanel footerPanel = new JPanel(new BorderLayout());
@@ -122,7 +117,6 @@ public class ApartmentCard extends JPanel {
         add(footerPanel, BorderLayout.SOUTH);
     }
 
-    // --- [SỬA LỖI] KIỂM TRA THÊM TRẠNG THÁI "OCCUPIED" ---
     private JComponent createFooterInfo() {
         String s = apartment.getStatus() == null ? "" : apartment.getStatus().trim();
         
@@ -172,7 +166,7 @@ public class ApartmentCard extends JPanel {
         g2.setColor(getBackground() != null ? getBackground() : Color.WHITE);
         g2.fill(new RoundRectangle2D.Float(0, 0, getWidth()-1, getHeight()-1, 20, 20));
         
-        // --- [SỬA LỖI] VẼ VIỀN MÀU NẾU SẮP HẾT HẠN (CHECK OCCUPIED) ---
+        // Vẽ viền màu nếu sắp hết hạn
         String s = apartment.getStatus() == null ? "" : apartment.getStatus().trim();
         boolean isRented = s.equalsIgnoreCase("RENTED") || 
                            s.equalsIgnoreCase("OCCUPIED") || 
@@ -217,25 +211,125 @@ public class ApartmentCard extends JPanel {
         return new StatusBadge(text, bg, fg);
     }
     
-    private JLabel createIconLabel(String icon, String text) { JLabel l = new JLabel(" " + text); l.setIcon(new CardIcon(icon, 14, new Color(100, 100, 100))); l.setFont(new Font("Segoe UI", Font.PLAIN, 12)); l.setForeground(new Color(70, 70, 70)); return l; }
-    private JButton createIconButton(String iconType, Color color) { JButton btn = new JButton(new CardIcon(iconType, 18, color)); btn.setPreferredSize(new Dimension(30, 30)); btn.setBorderPainted(false); btn.setContentAreaFilled(false); btn.setFocusPainted(false); btn.setCursor(new Cursor(Cursor.HAND_CURSOR)); return btn; }
-    private static class StatusBadge extends JLabel { private Color bgColor, textColor; public StatusBadge(String text, Color bg, Color txt) { super(text); this.bgColor = bg; this.textColor = txt; setFont(new Font("Segoe UI", Font.BOLD, 10)); setForeground(textColor); setBorder(new EmptyBorder(3, 10, 3, 10)); } @Override protected void paintComponent(Graphics g) { Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(bgColor); g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12); g2.dispose(); super.paintComponent(g); } }
+    private JLabel createIconLabel(String icon, String text) { 
+        JLabel l = new JLabel(" " + text); 
+        l.setIcon(new CardIcon(icon, 14, new Color(100, 100, 100))); 
+        l.setFont(new Font("Segoe UI", Font.PLAIN, 12)); 
+        l.setForeground(new Color(70, 70, 70)); 
+        return l; 
+    }
     
-    private static class CardIcon implements Icon { 
-        private String type; private int size; private Color color; 
-        public CardIcon(String type, int size, Color color) { this.type = type; this.size = size; this.color = color; } 
-        @Override public void paintIcon(Component c, Graphics g, int x, int y) { 
+    private JButton createIconButton(String iconType, Color color) { 
+        JButton btn = new JButton(new CardIcon(iconType, 18, color)); 
+        btn.setPreferredSize(new Dimension(30, 30)); 
+        btn.setBorderPainted(false); 
+        btn.setContentAreaFilled(false); 
+        btn.setFocusPainted(false); 
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR)); 
+        return btn; 
+    }
+    
+    private static class StatusBadge extends JLabel { 
+        private Color bgColor, textColor; 
+        public StatusBadge(String text, Color bg, Color txt) { 
+            super(text); 
+            this.bgColor = bg; 
+            this.textColor = txt; 
+            setFont(new Font("Segoe UI", Font.BOLD, 10)); 
+            setForeground(textColor); 
+            setBorder(new EmptyBorder(3, 10, 3, 10)); 
+        } 
+        @Override 
+        protected void paintComponent(Graphics g) { 
             Graphics2D g2 = (Graphics2D) g.create(); 
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); 
-            g2.setColor(color); g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); g2.translate(x, y); 
-            if ("EDIT".equals(type)) { g2.rotate(Math.toRadians(45), size/2.0, size/2.0); g2.drawRoundRect(size/2-2, 0, 4, size-4, 1, 1); g2.drawLine(size/2-2, 3, size/2+2, 3); Path2D tip = new Path2D.Float(); tip.moveTo(size/2-2, size-4); tip.lineTo(size/2, size); tip.lineTo(size/2+2, size-4); g2.fill(tip); } 
-            else if ("DELETE".equals(type)) { int w = size-6; int h = size-4; int mx = 3; int my = 4; g2.drawRoundRect(mx, my, w, h, 3, 3); g2.drawLine(1, my, size-1, my); g2.drawArc(size/2-2, 0, 4, 4, 0, 180); g2.drawLine(size/2-2, my+3, size/2-2, my+h-3); g2.drawLine(size/2+2, my+3, size/2+2, my+h-3); } 
-            else if ("AREA".equals(type)) { g2.drawRect(2, 2, size-4, size-4); g2.drawLine(size/2, 2, size/2, size-2); g2.drawLine(2, size/2, size-2, size/2); } 
-            else if ("BED".equals(type)) { g2.drawRoundRect(1, 4, size-2, size-8, 2, 2); g2.drawLine(4, 4, 4, 2); g2.drawLine(size-4, 4, size-4, 2); } 
-            else if ("WARNING".equals(type)) { Path2D p = new Path2D.Float(); p.moveTo(size/2.0, 1); p.lineTo(1, size-1); p.lineTo(size-1, size-1); p.closePath(); g2.draw(p); g2.drawLine(size/2, 5, size/2, size-5); g2.drawLine(size/2, size-3, size/2, size-3); }
-            else if ("TIME".equals(type)) { g2.drawOval(1, 1, size-2, size-2); g2.drawLine(size/2, 4, size/2, size/2); g2.drawLine(size/2, size/2, size-4, size/2); }
+            g2.setColor(bgColor); 
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12); 
+            g2.dispose(); 
+            super.paintComponent(g); 
+        } 
+    }
+    
+    private static class CardIcon implements Icon { 
+        private String type; 
+        private int size; 
+        private Color color; 
+        
+        public CardIcon(String type, int size, Color color) { 
+            this.type = type; 
+            this.size = size; 
+            this.color = color; 
+        } 
+        
+        @Override 
+        public void paintIcon(Component c, Graphics g, int x, int y) { 
+            Graphics2D g2 = (Graphics2D) g.create(); 
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); 
+            g2.setColor(color); 
+            g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); 
+            g2.translate(x, y); 
+            
+            if ("EDIT".equals(type)) { 
+                g2.rotate(Math.toRadians(45), size/2.0, size/2.0); 
+                g2.drawRoundRect(size/2-2, 0, 4, size-4, 1, 1); 
+                g2.drawLine(size/2-2, 3, size/2+2, 3); 
+                Path2D tip = new Path2D.Float(); 
+                tip.moveTo(size/2-2, size-4); 
+                tip.lineTo(size/2, size); 
+                tip.lineTo(size/2+2, size-4); 
+                g2.fill(tip); 
+            } 
+            else if ("DELETE".equals(type)) { 
+                int w = size-6; 
+                int h = size-4; 
+                int mx = 3; 
+                int my = 4; 
+                g2.drawRoundRect(mx, my, w, h, 3, 3); 
+                g2.drawLine(1, my, size-1, my); 
+                g2.drawArc(size/2-2, 0, 4, 4, 0, 180); 
+                g2.drawLine(size/2-2, my+3, size/2-2, my+h-3); 
+                g2.drawLine(size/2+2, my+3, size/2+2, my+h-3); 
+            } 
+            else if ("AREA".equals(type)) { 
+                g2.drawRect(2, 2, size-4, size-4); 
+                g2.drawLine(size/2, 2, size/2, size-2); 
+                g2.drawLine(2, size/2, size-2, size/2); 
+            } 
+            else if ("BED".equals(type)) { 
+                g2.drawRoundRect(1, 4, size-2, size-8, 2, 2); 
+                g2.drawLine(4, 4, 4, 2); 
+                g2.drawLine(size-4, 4, size-4, 2); 
+            } 
+            else if ("BATH".equals(type)) {
+                // Icon phòng tắm: Bồn tắm đơn giản
+                g2.drawRoundRect(2, size/2, size-4, size/2-2, 3, 3);
+                g2.drawLine(1, size/2+2, 1, size-3);
+                g2.drawLine(size-1, size/2+2, size-1, size-3);
+                g2.drawOval(size/2-1, 3, 3, 3);
+            }
+            else if ("WARNING".equals(type)) { 
+                Path2D p = new Path2D.Float(); 
+                p.moveTo(size/2.0, 1); 
+                p.lineTo(1, size-1); 
+                p.lineTo(size-1, size-1); 
+                p.closePath(); 
+                g2.draw(p); 
+                g2.drawLine(size/2, 5, size/2, size-5); 
+                g2.drawLine(size/2, size-3, size/2, size-3); 
+            }
+            else if ("TIME".equals(type)) { 
+                g2.drawOval(1, 1, size-2, size-2); 
+                g2.drawLine(size/2, 4, size/2, size/2); 
+                g2.drawLine(size/2, size/2, size-4, size/2); 
+            }
+            
             g2.dispose(); 
         } 
-        @Override public int getIconWidth() { return size; } @Override public int getIconHeight() { return size; } 
+        
+        @Override 
+        public int getIconWidth() { return size; } 
+        
+        @Override 
+        public int getIconHeight() { return size; } 
     }
 }
