@@ -5,6 +5,8 @@ import java.sql.SQLException;
 import util.UIConstants;
 import util.PermissionManager;
 import connection.Db_connection;
+
+import util.PasswordUtil;
 import dao.UserDAO;
 import model.Building;
 import model.Floor;
@@ -65,7 +67,7 @@ public class MainDashboard extends JFrame {
         sidebarPanel.setLayout(new BoxLayout(sidebarPanel, BoxLayout.Y_AXIS));
         sidebarPanel.setBackground(UIConstants.SIDEBAR_COLOR);
         sidebarPanel.setPreferredSize(new Dimension(UIConstants.SIDEBAR_WIDTH, getHeight()));
-        sidebarPanel.setBorder(new EmptyBorder(20, 0, 20, 0));
+        sidebarPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
         
         // Logo/Title
         JPanel logoPanel = new JPanel();
@@ -216,52 +218,91 @@ public class MainDashboard extends JFrame {
     private void addUserDropdown() {
         User currentUser = SessionManager.getInstance().getCurrentUser();
         if (currentUser == null) return;
-        
+
+        // ✅ Container full width
         JPanel userContainer = new JPanel();
         userContainer.setLayout(new BoxLayout(userContainer, BoxLayout.Y_AXIS));
         userContainer.setBackground(UIConstants.SIDEBAR_COLOR);
-        userContainer.setBorder(new EmptyBorder(10, 15, 10, 15));
-        userContainer.setMaximumSize(new Dimension(UIConstants.SIDEBAR_WIDTH, 70));
-        
+        userContainer.setBorder(new EmptyBorder(10, 0, 20, 0));
+        userContainer.setMaximumSize(new Dimension(UIConstants.SIDEBAR_WIDTH, 80));
+        userContainer.setAlignmentX(Component.LEFT_ALIGNMENT); // ← Added
+
         JButton userButton = new JButton();
-        userButton.setLayout(new BorderLayout(10, 0));
+        userButton.setLayout(new BorderLayout(12, 0));
         userButton.setBackground(new Color(45, 55, 72));
-        userButton.setBorder(new EmptyBorder(10, 10, 10, 10));
+        userButton.setBorder(new EmptyBorder(12, 20, 12, 10));
         userButton.setFocusPainted(false);
         userButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        userButton.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
         
-        JLabel avatar = new JLabel("👤");
-        avatar.setFont(new Font("Segoe UI", Font.PLAIN, 28));
-        
+
+        // ✅ CUSTOM PAINTED USER ICON (không dùng emoji)
+        JPanel avatarPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                int centerX = getWidth() / 2;
+                int centerY = getHeight() / 2;
+
+                // Draw user icon
+                g2d.setColor(new Color(147, 197, 253)); // Light blue
+
+                // Head circle
+                g2d.fillOval(centerX - 8, centerY - 12, 16, 16);
+
+                // Body arc
+                g2d.fillArc(centerX - 12, centerY + 2, 24, 20, 0, -180);
+            }
+
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(36, 36);
+            }
+
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(36, 36);
+            }
+        };
+        avatarPanel.setOpaque(false);
+
         JPanel infoPanel = new JPanel();
         infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
         infoPanel.setOpaque(false);
-        
+
         JLabel nameLabel = new JLabel(currentUser.getFullName());
-        nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         nameLabel.setForeground(Color.WHITE);
-        
+        nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         JLabel roleLabel = new JLabel(currentUser.getRoleDisplayName());
-        roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        roleLabel.setForeground(UIConstants.TEXT_SECONDARY);
-        
+        roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        roleLabel.setForeground(new Color(156, 163, 175));
+        roleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         infoPanel.add(nameLabel);
+        infoPanel.add(Box.createVerticalStrut(2));
         infoPanel.add(roleLabel);
-        
-        userButton.add(avatar, BorderLayout.WEST);
+
+        userButton.add(avatarPanel, BorderLayout.WEST);
         userButton.add(infoPanel, BorderLayout.CENTER);
-        
+
         JLabel arrowLabel = new JLabel("▼");
         arrowLabel.setFont(new Font("Segoe UI", Font.PLAIN, 10));
-        arrowLabel.setForeground(UIConstants.TEXT_SECONDARY);
+        arrowLabel.setForeground(new Color(156, 163, 175));
         userButton.add(arrowLabel, BorderLayout.EAST);
-        
+
         userButton.addMouseListener(new MouseAdapter() {
-            public void mouseEntered(MouseEvent e) { userButton.setBackground(new Color(55, 65, 81)); }
-            public void mouseExited(MouseEvent e) { userButton.setBackground(new Color(45, 55, 72)); }
+            public void mouseEntered(MouseEvent e) { 
+                userButton.setBackground(new Color(55, 65, 81)); 
+            }
+            public void mouseExited(MouseEvent e) { 
+                userButton.setBackground(new Color(45, 55, 72)); 
+            }
         });
-        
+
         userButton.addActionListener(e -> showUserMenu(userButton));
         userContainer.add(userButton);
         sidebarPanel.add(userContainer);
@@ -296,37 +337,122 @@ public class MainDashboard extends JFrame {
     }
 
     private void showChangePasswordDialog() {
-        JPanel panel = new JPanel(new GridLayout(3, 2, 10, 10));
-        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
-        JPasswordField oldPasswordField = new JPasswordField();
-        JPasswordField newPasswordField = new JPasswordField();
-        JPasswordField confirmPasswordField = new JPasswordField();
+    // Create dialog panel
+    JPanel panel = new JPanel(new GridLayout(3, 2, 10, 10));
+    panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+    
+    JPasswordField oldPasswordField = new JPasswordField();
+    JPasswordField newPasswordField = new JPasswordField();
+    JPasswordField confirmPasswordField = new JPasswordField();
+    
+    panel.add(new JLabel("Mật khẩu cũ:"));
+    panel.add(oldPasswordField);
+    panel.add(new JLabel("Mật khẩu mới:"));
+    panel.add(newPasswordField);
+    panel.add(new JLabel("Xác nhận:"));
+    panel.add(confirmPasswordField);
+    
+    int result = JOptionPane.showConfirmDialog(
+        this, 
+        panel, 
+        "Đổi Mật Khẩu", 
+        JOptionPane.OK_CANCEL_OPTION, 
+        JOptionPane.PLAIN_MESSAGE
+    );
+    
+    if (result == JOptionPane.OK_OPTION) {
+        String oldPassword = new String(oldPasswordField.getPassword());
+        String newPassword = new String(newPasswordField.getPassword());
+        String confirmPassword = new String(confirmPasswordField.getPassword());
         
-        panel.add(new JLabel("Mật khẩu cũ:")); panel.add(oldPasswordField);
-        panel.add(new JLabel("Mật khẩu mới:")); panel.add(newPasswordField);
-        panel.add(new JLabel("Xác nhận:")); panel.add(confirmPasswordField);
+        User currentUser = SessionManager.getInstance().getCurrentUser();
+        UserDAO userDAO = new UserDAO();
         
-        int result = JOptionPane.showConfirmDialog(this, panel, "Đổi Mật Khẩu", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        // Validate old password using BCrypt
+        if (!userDAO.verifyCurrentPassword(currentUser.getId(), oldPassword)) {
+            JOptionPane.showMessageDialog(
+                this, 
+                "Mật khẩu cũ không đúng!", 
+                "Lỗi", 
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
         
-        if (result == JOptionPane.OK_OPTION) {
-            String oldPassword = new String(oldPasswordField.getPassword());
-            String newPassword = new String(newPasswordField.getPassword());
-            String confirmPassword = new String(confirmPasswordField.getPassword());
-            User currentUser = SessionManager.getInstance().getCurrentUser();
+        // Validate new password length
+        if (newPassword.length() < 6) {
+            JOptionPane.showMessageDialog(
+                this, 
+                "Mật khẩu mới phải có ít nhất 6 ký tự!", 
+                "Lỗi", 
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+        
+        // Check password strength
+        if (!PasswordUtil.isPasswordStrong(newPassword)) {
+            String strengthDesc = PasswordUtil.getPasswordStrengthDescription(newPassword);
+            int confirm = JOptionPane.showConfirmDialog(
+                this,
+                "Mật khẩu không đủ mạnh!\n" + 
+                "Đánh giá: " + strengthDesc + "\n\n" +
+                "Bạn có muốn tiếp tục với mật khẩu này không?",
+                "Cảnh Báo Bảo Mật",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE
+            );
             
-            if (!currentUser.getPassword().equals(oldPassword)) { JOptionPane.showMessageDialog(this, "Mật khẩu cũ không đúng!"); return; }
-            if (newPassword.length() < 6) { JOptionPane.showMessageDialog(this, "Mật khẩu mới phải có ít nhất 6 ký tự!"); return; }
-            if (!newPassword.equals(confirmPassword)) { JOptionPane.showMessageDialog(this, "Mật khẩu xác nhận không khớp!"); return; }
-            
-            UserDAO userDAO = new UserDAO();
-            if (userDAO.changePassword(currentUser.getId(), newPassword)) {
-                currentUser.setPassword(newPassword);
-                JOptionPane.showMessageDialog(this, "Đổi mật khẩu thành công!");
-            } else {
-                JOptionPane.showMessageDialog(this, "Đổi mật khẩu thất bại!");
+            if (confirm != JOptionPane.YES_OPTION) {
+                return;
             }
         }
+        
+        // Validate password confirmation
+        if (!newPassword.equals(confirmPassword)) {
+            JOptionPane.showMessageDialog(
+                this, 
+                "Mật khẩu xác nhận không khớp!", 
+                "Lỗi", 
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+        
+        // Check if new password is same as old
+        if (oldPassword.equals(newPassword)) {
+            JOptionPane.showMessageDialog(
+                this, 
+                "Mật khẩu mới phải khác mật khẩu cũ!", 
+                "Lỗi", 
+                JOptionPane.ERROR_MESSAGE
+            );
+            return;
+        }
+        
+        // Change password (will be hashed by UserDAO)
+        if (userDAO.changePassword(currentUser.getId(), newPassword)) {
+            JOptionPane.showMessageDialog(
+                this, 
+                "Đổi mật khẩu thành công!\n" +
+                "Vui lòng đăng nhập lại với mật khẩu mới.", 
+                "Thành Công", 
+                JOptionPane.INFORMATION_MESSAGE
+            );
+            
+            // Auto logout after password change for security
+            performLogout();
+        } else {
+            JOptionPane.showMessageDialog(
+                this, 
+                "Đổi mật khẩu thất bại!\n" +
+                "Vui lòng thử lại sau.", 
+                "Lỗi", 
+                JOptionPane.ERROR_MESSAGE
+            );
+        }
     }
+}
     
     private JButton createMenuButton(String text, String iconChar, boolean isActive) {
         JButton btn = new JButton();

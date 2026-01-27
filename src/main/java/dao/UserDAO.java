@@ -2,46 +2,64 @@ package dao;
 
 import model.User;
 import connection.Db_connection;
+import util.PasswordUtil;
 
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * DAO class for User operations
- * Handles authentication and user management
+ * DAO class for User operations with BCrypt password hashing
  */
 public class UserDAO {
     
     /**
-     * Authenticate user with username and password
-     * @param username Username
-     * @param password Password (plain text)
-     * @return User object if authentication successful, null otherwise
+     * Authenticate user with BCrypt
      */
     public User authenticate(String username, String password) {
-        String sql = "SELECT * FROM users WHERE username = ? AND password = ? AND is_active = TRUE";
+        String sql = "SELECT * FROM users WHERE username = ? AND is_active = TRUE";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             
             pstmt.setString(1, username);
-            pstmt.setString(2, password);
-            
             ResultSet rs = pstmt.executeQuery();
             
             if (rs.next()) {
-                User user = mapResultSetToUser(rs);
+                String storedPassword = rs.getString("password");
+                boolean isPasswordValid;
                 
-                // Update last login time
-                updateLastLogin(user.getId());
+                // Check if password is BCrypt hash or plain text
+                if (storedPassword.startsWith("$2a$") || storedPassword.startsWith("$2b$") || storedPassword.startsWith("$2y$")) {
+                    // BCrypt hash - verify using BCrypt
+                    isPasswordValid = PasswordUtil.verifyPassword(password, storedPassword);
+                    
+                    // Check if needs rehashing
+                    if (isPasswordValid && PasswordUtil.needsRehash(storedPassword)) {
+                        String newHash = PasswordUtil.hashPassword(password);
+                        updatePasswordHash(rs.getLong("id"), newHash);
+                    }
+                } else {
+                    // Plain text password - for backward compatibility
+                    isPasswordValid = password.equals(storedPassword);
+                    
+                    // Automatically migrate to BCrypt
+                    if (isPasswordValid) {
+                        String hashedPassword = PasswordUtil.hashPassword(password);
+                        updatePasswordHash(rs.getLong("id"), hashedPassword);
+                        System.out.println("✓ Migrated password to BCrypt for user: " + username);
+                    }
+                }
                 
-                return user;
+                if (isPasswordValid) {
+                    User user = mapResultSetToUser(rs);
+                    updateLastLogin(user.getId());
+                    return user;
+                }
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        
         return null;
     }
     
@@ -50,20 +68,14 @@ public class UserDAO {
      */
     public User getUserById(Long id) {
         String sql = "SELECT * FROM users WHERE id = ?";
-        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setLong(1, id);
             ResultSet rs = pstmt.executeQuery();
-            
-            if (rs.next()) {
-                return mapResultSetToUser(rs);
-            }
+            if (rs.next()) return mapResultSetToUser(rs);
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        
         return null;
     }
     
@@ -72,20 +84,14 @@ public class UserDAO {
      */
     public User getUserByUsername(String username) {
         String sql = "SELECT * FROM users WHERE username = ?";
-        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setString(1, username);
             ResultSet rs = pstmt.executeQuery();
-            
-            if (rs.next()) {
-                return mapResultSetToUser(rs);
-            }
+            if (rs.next()) return mapResultSetToUser(rs);
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        
         return null;
     }
     
@@ -94,10 +100,8 @@ public class UserDAO {
      */
     private void updateLastLogin(Long userId) {
         String sql = "UPDATE users SET last_login = NOW() WHERE id = ?";
-        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setLong(1, userId);
             pstmt.executeUpdate();
         } catch (SQLException e) {
@@ -106,69 +110,96 @@ public class UserDAO {
     }
     
     /**
-     * Insert new user
+     * Update password hash
+     */
+    private void updatePasswordHash(Long userId, String hashedPassword) {
+        String sql = "UPDATE users SET password = ? WHERE id = ?";
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, hashedPassword);
+            pstmt.setLong(2, userId);
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+    }
+    
+    /**
+     * Insert new user (password will be hashed)
      */
     public boolean insertUser(User user) {
         String sql = "INSERT INTO users (username, password, full_name, role, is_active) VALUES (?, ?, ?, ?, ?)";
-        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
+            String hashedPassword = PasswordUtil.hashPassword(user.getPassword());
             pstmt.setString(1, user.getUsername());
-            pstmt.setString(2, user.getPassword());
+            pstmt.setString(2, hashedPassword);
             pstmt.setString(3, user.getFullName());
             pstmt.setString(4, user.getRole());
             pstmt.setBoolean(5, user.isActive());
-            
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        
         return false;
     }
     
     /**
-     * Update user information
+     * Update user information (without changing password)
      */
     public boolean updateUser(User user) {
-        String sql = "UPDATE users SET username = ?, password = ?, full_name = ?, role = ?, is_active = ? WHERE id = ?";
-        
+        String sql = "UPDATE users SET username = ?, full_name = ?, role = ?, is_active = ? WHERE id = ?";
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setString(1, user.getUsername());
-            pstmt.setString(2, user.getPassword());
-            pstmt.setString(3, user.getFullName());
-            pstmt.setString(4, user.getRole());
-            pstmt.setBoolean(5, user.isActive());
-            pstmt.setLong(6, user.getId());
-            
+            pstmt.setString(2, user.getFullName());
+            pstmt.setString(3, user.getRole());
+            pstmt.setBoolean(4, user.isActive());
+            pstmt.setLong(5, user.getId());
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        
         return false;
     }
     
     /**
-     * Change user password
+     * Change user password (password will be hashed)
      */
     public boolean changePassword(Long userId, String newPassword) {
         String sql = "UPDATE users SET password = ? WHERE id = ?";
-        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
-            pstmt.setString(1, newPassword);
+            String hashedPassword = PasswordUtil.hashPassword(newPassword);
+            pstmt.setString(1, hashedPassword);
             pstmt.setLong(2, userId);
-            
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        
+        return false;
+    }
+    
+    /**
+     * Verify current password (for password change validation)
+     */
+    public boolean verifyCurrentPassword(Long userId, String currentPassword) {
+        String sql = "SELECT password FROM users WHERE id = ?";
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setLong(1, userId);
+            ResultSet rs = pstmt.executeQuery();
+            if (rs.next()) {
+                String storedPassword = rs.getString("password");
+                if (storedPassword.startsWith("$2a$") || storedPassword.startsWith("$2b$") || storedPassword.startsWith("$2y$")) {
+                    return PasswordUtil.verifyPassword(currentPassword, storedPassword);
+                } else {
+                    return currentPassword.equals(storedPassword);
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         return false;
     }
     
@@ -182,10 +213,15 @@ public class UserDAO {
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) users.add(mapResultSetToUser(rs));
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         return users;
     }
     
+    /**
+     * Get all active users
+     */
     public List<User> getAllActiveUsers() {
         List<User> users = new ArrayList<>();
         String sql = "SELECT * FROM users WHERE is_active = 1 ORDER BY full_name ASC";
@@ -193,42 +229,39 @@ public class UserDAO {
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
             while (rs.next()) users.add(mapResultSetToUser(rs));
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         return users;
     }
+    
     /**
-     * Delete user (soft delete - set inactive)
+     * Delete user (soft delete)
      */
     public boolean deleteUser(Long userId) {
         String sql = "UPDATE users SET is_active = FALSE WHERE id = ?";
-        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setLong(1, userId);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        
         return false;
     }
     
     /**
-     * Permanently delete user (hard delete)
+     * Permanently delete user
      */
     public boolean permanentlyDeleteUser(Long userId) {
         String sql = "DELETE FROM users WHERE id = ?";
-        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setLong(1, userId);
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        
         return false;
     }
     
@@ -239,15 +272,12 @@ public class UserDAO {
         String sql = excludeUserId != null ? 
             "SELECT COUNT(*) FROM users WHERE username = ? AND id != ?" :
             "SELECT COUNT(*) FROM users WHERE username = ?";
-        
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
             pstmt.setString(1, username);
             if (excludeUserId != null) {
                 pstmt.setLong(2, excludeUserId);
             }
-            
             ResultSet rs = pstmt.executeQuery();
             if (rs.next()) {
                 return rs.getInt(1) > 0;
@@ -255,7 +285,6 @@ public class UserDAO {
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        
         return false;
     }
     
@@ -274,5 +303,4 @@ public class UserDAO {
         user.setLastLogin(rs.getTimestamp("last_login"));
         return user;
     }
-
 }

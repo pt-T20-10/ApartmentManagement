@@ -25,6 +25,8 @@ public class ContractDetailDialog extends JDialog {
     private ResidentDAO residentDAO;
     private ContractServiceDAO contractServiceDAO;
     private ContractHistoryDAO contractHistoryDAO;
+    private FloorDAO floorDAO;
+    private BuildingDAO buildingDAO;
     
     private Contract contract;
     private Apartment apartment;
@@ -44,6 +46,8 @@ public class ContractDetailDialog extends JDialog {
         this.residentDAO = new ResidentDAO();
         this.contractServiceDAO = new ContractServiceDAO();
         this.contractHistoryDAO = new ContractHistoryDAO();
+        this.floorDAO = new FloorDAO();
+        this.buildingDAO = new BuildingDAO();
         
         // Load contract data
         this.contract = contractDAO.getContractById(contractId);
@@ -310,32 +314,48 @@ public class ContractDetailDialog extends JDialog {
     }
     
     private JPanel createApartmentInfoSection() {
-        JPanel section = createSection("🏠 Thông Tin Căn Hộ");
-        section.setLayout(new GridLayout(2, 4, 15, 12));
-        section.setBorder(BorderFactory.createCompoundBorder(
-            section.getBorder(),
-            new EmptyBorder(15, 20, 15, 20)
-        ));
-        
-        if (apartment != null) {
-            // Row 1
-            section.add(createInfoLabel("Căn hộ:"));
-            section.add(createInfoValue(apartment.getRoomNumber()));
-            section.add(createInfoLabel("Diện tích:"));
-            section.add(createInfoValue(apartment.getArea() + " m²"));
-            
-            // Row 2
-            section.add(createInfoLabel("Loại căn hộ:"));
-            section.add(createInfoValue(apartment.getApartmentType()));
-            section.add(createInfoLabel("Số phòng:"));
-            section.add(createInfoValue(apartment.getBedroomCount() + " PN, " + 
-                apartment.getBathroomCount() + " PT"));
-        } else {
-            section.add(createInfoValue("Không tìm thấy thông tin căn hộ"));
+    JPanel section = createSection("🏠 Thông Tin Căn Hộ");
+    section.setLayout(new GridLayout(3, 4, 15, 12));  // ← THAY ĐỔI: 3 rows thay vì 2
+    section.setBorder(BorderFactory.createCompoundBorder(
+        section.getBorder(),
+        new EmptyBorder(15, 20, 15, 20)
+    ));
+    
+    if (apartment != null) {
+        // ✅ Lấy thông tin Tầng và Tòa nhà
+        Floor floor = floorDAO.getFloorById(apartment.getFloorId());
+        Building building = null;
+        if (floor != null) {
+            building = buildingDAO.getBuildingById(floor.getBuildingId());
         }
         
-        return section;
+        // Row 1: Tòa nhà và Tầng
+        section.add(createInfoLabel("Tòa nhà:"));
+        section.add(createInfoValue(building != null ? building.getName() : "N/A"));
+        section.add(createInfoLabel("Tầng:"));
+        section.add(createInfoValue(floor != null ? 
+            (floor.getName() != null && !floor.getName().trim().isEmpty() ? 
+                floor.getName() : "Tầng " + floor.getFloorNumber()) 
+            : "N/A"));
+        
+        // Row 2: Căn hộ và Diện tích
+        section.add(createInfoLabel("Căn hộ:"));
+        section.add(createInfoValue(apartment.getRoomNumber()));
+        section.add(createInfoLabel("Diện tích:"));
+        section.add(createInfoValue(apartment.getArea() + " m²"));
+        
+        // Row 3: Loại căn hộ và Số phòng
+        section.add(createInfoLabel("Loại căn hộ:"));
+        section.add(createInfoValue(apartment.getApartmentType()));
+        section.add(createInfoLabel("Số phòng:"));
+        section.add(createInfoValue(apartment.getBedroomCount() + " PN, " + 
+            apartment.getBathroomCount() + " PT"));
+    } else {
+        section.add(createInfoValue("Không tìm thấy thông tin căn hộ"));
     }
+    
+    return section;
+}
     
     private JPanel createResidentInfoSection() {
         JPanel section = createSection("👤 Thông Tin Chủ Hộ");
