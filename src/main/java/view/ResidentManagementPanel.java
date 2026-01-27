@@ -55,9 +55,19 @@ public class ResidentManagementPanel extends JPanel
     private JComboBox<String> apartmentFilterCombo;
     private JComboBox<String> statusFilterCombo;
     
+    private JCheckBox chkShowLiving;
+    private JCheckBox chkShowMoved;
+    
     private JPanel noContextPanel;
     private JPanel contentPanel;
     
+    
+    // ✅ Status radio buttons (replace statusFilterCombo)
+    private JRadioButton rbShowLiving;
+    private JRadioButton rbShowMoved;
+    private JRadioButton rbShowAll;
+    private ButtonGroup statusButtonGroup;
+
     // Cache data
     private List<ContractHouseholdViewModel> allContracts;
     private List<Floor> floors;
@@ -330,17 +340,22 @@ public class ResidentManagementPanel extends JPanel
 }
     
     private JPanel createFilterBar() {
-        JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
-        filterPanel.setBackground(Color.WHITE);
-        filterPanel.setBorder(BorderFactory.createCompoundBorder(
+        JPanel mainFilterPanel = new JPanel();
+        mainFilterPanel.setLayout(new BoxLayout(mainFilterPanel, BoxLayout.Y_AXIS));
+        mainFilterPanel.setBackground(Color.WHITE);
+        mainFilterPanel.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1, true),
             new EmptyBorder(18, 25, 18, 25)
         ));
-        
+
+        // ROW 1: Dropdown filters (Building + Floor + Apartment)
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
+        row1.setBackground(Color.WHITE);
+
         JLabel filterLabel = new JLabel("🔍 Bộ lọc:");
         filterLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         filterLabel.setForeground(new Color(66, 66, 66));
-        
+
         // Building filter
         JLabel buildingLabel = new JLabel("Tòa nhà:");
         buildingLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
@@ -353,7 +368,7 @@ public class ResidentManagementPanel extends JPanel
                 onBuildingFilterChanged();
             }
         });
-        
+
         // Floor filter
         JLabel floorLabel = new JLabel("Tầng:");
         floorLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
@@ -364,7 +379,7 @@ public class ResidentManagementPanel extends JPanel
                 onFloorFilterChanged();
             }
         });
-        
+
         // Apartment filter
         JLabel apartmentLabel = new JLabel("Căn hộ:");
         apartmentLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
@@ -375,37 +390,77 @@ public class ResidentManagementPanel extends JPanel
                 applyFilters();
             }
         });
-        
-        // Status filter
-        JLabel statusLabel = new JLabel("Trạng thái:");
-        statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        statusFilterCombo = createFilterCombo();
-        statusFilterCombo.addItem("Tất cả");
-        statusFilterCombo.addItem("Đang ở");
-        statusFilterCombo.addItem("Đã chuyển đi");
-        statusFilterCombo.setPreferredSize(new Dimension(130, 38));
-        statusFilterCombo.addActionListener(e -> {
-            if (!isUpdatingCombos) {
-                applyFilters();
-            }
-        });
-        
-        filterPanel.add(filterLabel);
-        filterPanel.add(Box.createHorizontalStrut(10));
-        filterPanel.add(buildingLabel);
-        filterPanel.add(buildingFilterCombo);
-        filterPanel.add(Box.createHorizontalStrut(8));
-        filterPanel.add(floorLabel);
-        filterPanel.add(floorFilterCombo);
-        filterPanel.add(Box.createHorizontalStrut(8));
-        filterPanel.add(apartmentLabel);
-        filterPanel.add(apartmentFilterCombo);
-        filterPanel.add(Box.createHorizontalStrut(8));
-        filterPanel.add(statusLabel);
-        filterPanel.add(statusFilterCombo);
-        
-        return filterPanel;
+
+        row1.add(filterLabel);
+        row1.add(Box.createHorizontalStrut(10));
+        row1.add(buildingLabel);
+        row1.add(buildingFilterCombo);
+        row1.add(Box.createHorizontalStrut(8));
+        row1.add(floorLabel);
+        row1.add(floorFilterCombo);
+        row1.add(Box.createHorizontalStrut(8));
+        row1.add(apartmentLabel);
+        row1.add(apartmentFilterCombo);
+
+        // ✅ ROW 2: Status radio buttons
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        row2.setBackground(Color.WHITE);
+
+        JLabel statusLabel = new JLabel("📊 Hiển thị:");
+        statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        statusLabel.setForeground(new Color(66, 66, 66));
+
+        // Create radio buttons with ButtonGroup
+        statusButtonGroup = new ButtonGroup();
+
+        rbShowLiving = createStatusRadioButton("● Đang ở", new Color(46, 125, 50));
+        rbShowMoved = createStatusRadioButton("○ Đã chuyển đi", new Color(158, 158, 158));
+        rbShowAll = createStatusRadioButton("◉ Tất cả", new Color(33, 150, 243));
+
+        statusButtonGroup.add(rbShowLiving);
+        statusButtonGroup.add(rbShowMoved);
+        statusButtonGroup.add(rbShowAll);
+
+        // ✅ Set default selection
+        rbShowLiving.setSelected(true);
+
+        row2.add(statusLabel);
+        row2.add(Box.createHorizontalStrut(15));
+        row2.add(rbShowLiving);
+        row2.add(Box.createHorizontalStrut(15));
+        row2.add(rbShowMoved);
+        row2.add(Box.createHorizontalStrut(15));
+        row2.add(rbShowAll);
+
+        mainFilterPanel.add(row1);
+        mainFilterPanel.add(Box.createVerticalStrut(12));
+        mainFilterPanel.add(row2);
+
+        return mainFilterPanel;
     }
+    // ✅ THÊM METHOD MỚI: Create styled radio button
+    private JRadioButton createStatusRadioButton(String text, Color color) {
+        JRadioButton radioButton = new JRadioButton(text);
+        radioButton.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        radioButton.setForeground(color);
+        radioButton.setBackground(Color.WHITE);
+        radioButton.setFocusPainted(false);
+        radioButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        radioButton.addActionListener(e -> applyFilters());
+        return radioButton;
+    }
+
+    private JCheckBox createStatusCheckbox(String text, Color color, boolean selected) {
+        JCheckBox checkbox = new JCheckBox(text);
+        checkbox.setSelected(selected);
+        checkbox.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        checkbox.setForeground(color);
+        checkbox.setBackground(Color.WHITE);
+        checkbox.setFocusPainted(false);
+        checkbox.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        checkbox.addActionListener(e -> applyFilters());
+    return checkbox;
+}
     
     private JComboBox<String> createFilterCombo() {
         JComboBox<String> combo = new JComboBox<>();
@@ -631,22 +686,29 @@ public class ResidentManagementPanel extends JPanel
     }
     
     private void checkContextAndLoad() {
-        // Always show content panel with building filter
-        removeAll();
-        add(contentPanel, BorderLayout.CENTER);
-        
-        // Load all buildings for filter
-        loadBuildingsFilter();
-        
-        // If has context, select that building in filter
-        if (buildingContext.hasBuildingContext()) {
-            Building building = buildingContext.getCurrentBuilding();
-            selectBuildingInFilter(building.getId());
+    // Always show content panel with building filter
+    removeAll();
+    add(contentPanel, BorderLayout.CENTER);
+    
+    // Load all buildings for filter
+    loadBuildingsFilter();
+    
+    // If has context, select that building in filter
+    if (buildingContext.hasBuildingContext()) {
+        Building building = buildingContext.getCurrentBuilding();
+        selectBuildingInFilter(building.getId());
+    } else {
+        // ✅ FIX: Auto-select first building and load data
+        if (buildingFilterCombo.getItemCount() > 0) {
+            buildingFilterCombo.setSelectedIndex(0);
+            loadInitialData(); // ← THÊM DÒNG NÀY
         }
-        
-        revalidate();
-        repaint();
     }
+    
+    revalidate();
+    repaint();
+}
+
     
     private void loadInitialData() {
         BuildingDisplay selected = (BuildingDisplay) buildingFilterCombo.getSelectedItem();
@@ -737,29 +799,29 @@ public class ResidentManagementPanel extends JPanel
      * Handle building filter change
      */
     private void onBuildingFilterChanged() {
-        BuildingDisplay selected = (BuildingDisplay) buildingFilterCombo.getSelectedItem();
-        if (selected == null) {
-            return;
-        }
-        
-        // Update BuildingContext
-        buildingContext.setCurrentBuilding(selected.building);
-        
-        // Reset other filters
-        searchField.setText("");
-        
-        isUpdatingCombos = true;
-        try {
-            if (statusFilterCombo.getItemCount() > 0) {
-                statusFilterCombo.setSelectedIndex(0);
-            }
-        } finally {
-            isUpdatingCombos = false;
-        }
-        
-        // Reload data
-        loadInitialData();
+    BuildingDisplay selected = (BuildingDisplay) buildingFilterCombo.getSelectedItem();
+    if (selected == null) {
+        return;
     }
+    
+    // Update BuildingContext
+    buildingContext.setCurrentBuilding(selected.building);
+    
+    // Reset other filters
+    searchField.setText("Tìm theo tên, SĐT, căn hộ...");
+    searchField.setForeground(new Color(158, 158, 158));
+    
+    isUpdatingCombos = true;
+    try {
+        // ✅ Reset radio buttons
+        rbShowLiving.setSelected(true);
+    } finally {
+        isUpdatingCombos = false;
+    }
+    
+    // Reload data
+    loadInitialData();
+}
     
     private String getFloorDisplayName(Floor floor) {
         if (floor.getName() != null && !floor.getName().trim().isEmpty()) {
@@ -816,57 +878,64 @@ public class ResidentManagementPanel extends JPanel
     }
     
     private void applyFilters() {
-        if (allContracts == null) return;
-        
-        String searchText = searchField.getText().trim().toLowerCase();
-        // Ignore placeholder text
-        final String keyword = searchText.equals("tìm theo tên, sđt, căn hộ...") ? "" : searchText;
-        
-        final String selectedFloor = (String) floorFilterCombo.getSelectedItem();
-        final String selectedApartment = (String) apartmentFilterCombo.getSelectedItem();
-        final String selectedStatus = (String) statusFilterCombo.getSelectedItem();
-        
-        List<ContractHouseholdViewModel> filtered = allContracts.stream()
-            .filter(c -> {
-                // Keyword filter
-                if (!keyword.isEmpty()) {
-                    String residentName = c.getResidentFullName() != null ? c.getResidentFullName().toLowerCase() : "";
-                    String phone = c.getResidentPhone() != null ? c.getResidentPhone().toLowerCase() : "";
-                    String apartment = c.getApartmentNumber() != null ? c.getApartmentNumber().toLowerCase() : "";
-                    
-                    if (!residentName.contains(keyword) && !phone.contains(keyword) && !apartment.contains(keyword)) {
-                        return false;
-                    }
+    if (allContracts == null) return;
+    
+    String searchText = searchField.getText().trim().toLowerCase();
+    final String keyword = searchText.equals("tìm theo tên, sđt, căn hộ...") ? "" : searchText;
+    
+    final String selectedFloor = (String) floorFilterCombo.getSelectedItem();
+    final String selectedApartment = (String) apartmentFilterCombo.getSelectedItem();
+    
+    List<ContractHouseholdViewModel> filtered = allContracts.stream()
+        .filter(c -> {
+            // ✅ NEW: Radio button status filter
+            String residencyStatus = c.getResidencyStatus();
+            
+            // Nếu chọn "Tất cả" → không filter status
+            if (rbShowAll.isSelected()) {
+                // Show all - no status filter
+            } else if (rbShowLiving.isSelected()) {
+                if (!"Đang ở".equals(residencyStatus)) {
+                    return false;
                 }
-                
-                // Floor filter
-                if (!"Tất cả".equals(selectedFloor)) {
-                    String contractFloor = c.getFloorName() != null ? c.getFloorName() : "";
-                    if (!selectedFloor.equals(contractFloor)) {
-                        return false;
-                    }
+            } else if (rbShowMoved.isSelected()) {
+                if (!"Đã chuyển đi".equals(residencyStatus)) {
+                    return false;
                 }
+            }
+            
+            // Keyword filter
+            if (!keyword.isEmpty()) {
+                String residentName = c.getResidentFullName() != null ? c.getResidentFullName().toLowerCase() : "";
+                String phone = c.getResidentPhone() != null ? c.getResidentPhone().toLowerCase() : "";
+                String apartment = c.getApartmentNumber() != null ? c.getApartmentNumber().toLowerCase() : "";
                 
-                // Apartment filter
-                if (!"Tất cả".equals(selectedApartment)) {
-                    if (!selectedApartment.equals(c.getApartmentNumber())) {
-                        return false;
-                    }
+                if (!residentName.contains(keyword) && !phone.contains(keyword) && !apartment.contains(keyword)) {
+                    return false;
                 }
-                
-                // Status filter
-                if (!"Tất cả".equals(selectedStatus)) {
-                    if (!selectedStatus.equals(c.getResidencyStatus())) {
-                        return false;
-                    }
+            }
+            
+            // Floor filter
+            if (!"Tất cả".equals(selectedFloor)) {
+                String contractFloor = c.getFloorName() != null ? c.getFloorName() : "";
+                if (!selectedFloor.equals(contractFloor)) {
+                    return false;
                 }
-                
-                return true;
-            })
-            .collect(Collectors.toList());
-        
-        displayContracts(filtered);
-    }
+            }
+            
+            // Apartment filter
+            if (!"Tất cả".equals(selectedApartment)) {
+                if (!selectedApartment.equals(c.getApartmentNumber())) {
+                    return false;
+                }
+            }
+            
+            return true;
+        })
+        .collect(Collectors.toList());
+    
+    displayContracts(filtered);
+}
     
     private void displayContracts(List<ContractHouseholdViewModel> contracts) {
         tableModel.setRowCount(0);
@@ -897,75 +966,99 @@ public class ResidentManagementPanel extends JPanel
     }
     
     private void resetFilters() {
-        searchField.setText("Tìm theo tên, SĐT, căn hộ...");
-        searchField.setForeground(new Color(158, 158, 158));
+    searchField.setText("Tìm theo tên, SĐT, căn hộ...");
+    searchField.setForeground(new Color(158, 158, 158));
+    
+    isUpdatingCombos = true;
+    try {
+        floorFilterCombo.setSelectedIndex(0);
+        apartmentFilterCombo.setSelectedIndex(0);
         
-        isUpdatingCombos = true;
-        try {
-            floorFilterCombo.setSelectedIndex(0);
-            apartmentFilterCombo.setSelectedIndex(0);
-            statusFilterCombo.setSelectedIndex(0);
-        } finally {
-            isUpdatingCombos = false;
-        }
-        
-        loadInitialData();
+        // ✅ Reset radio buttons
+        rbShowLiving.setSelected(true);
+    } finally {
+        isUpdatingCombos = false;
     }
+    
+    loadInitialData();
+}
     
     /**
      * Show household detail dialog
      */
     private void showHouseholdDetail(int row) {
-        if (row < 0 || row >= allContracts.size()) {
-            return;
-        }
-        
-        // Get filtered list
-        List<ContractHouseholdViewModel> displayedContracts = allContracts;
-        
-        // Apply filters to get current displayed list
-        String keyword = searchField.getText().trim().toLowerCase();
-        String selectedFloor = (String) floorFilterCombo.getSelectedItem();
-        String selectedApartment = (String) apartmentFilterCombo.getSelectedItem();
-        String selectedStatus = (String) statusFilterCombo.getSelectedItem();
-        
-        if (!keyword.isEmpty() || !"Tất cả".equals(selectedFloor) || 
-            !"Tất cả".equals(selectedApartment) || !"Tất cả".equals(selectedStatus)) {
-            displayedContracts = allContracts.stream()
-                .filter(c -> {
-                    if (!keyword.isEmpty()) {
-                        String residentName = c.getResidentFullName() != null ? c.getResidentFullName().toLowerCase() : "";
-                        String phone = c.getResidentPhone() != null ? c.getResidentPhone().toLowerCase() : "";
-                        String apartment = c.getApartmentNumber() != null ? c.getApartmentNumber().toLowerCase() : "";
-                        if (!residentName.contains(keyword) && !phone.contains(keyword) && !apartment.contains(keyword)) {
-                            return false;
-                        }
-                    }
-                    if (!"Tất cả".equals(selectedFloor)) {
-                        String contractFloor = c.getFloorName() != null ? c.getFloorName() : "";
-                        if (!selectedFloor.equals(contractFloor)) return false;
-                    }
-                    if (!"Tất cả".equals(selectedApartment)) {
-                        if (!selectedApartment.equals(c.getApartmentNumber())) return false;
-                    }
-                    if (!"Tất cả".equals(selectedStatus)) {
-                        if (!selectedStatus.equals(c.getResidencyStatus())) return false;
-                    }
-                    return true;
-                })
-                .collect(Collectors.toList());
-        }
-        
-        if (row >= displayedContracts.size()) {
-            return;
-        }
-        
-        ContractHouseholdViewModel household = displayedContracts.get(row);
-        
-        JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        HouseholdDetailDialog dialog = new HouseholdDetailDialog(parentFrame, household);
-        dialog.setVisible(true);
+    // ✅ FIX: Get filtered contracts list
+    List<ContractHouseholdViewModel> filteredContracts = getFilteredContracts();
+    
+    if (row < 0 || filteredContracts == null || row >= filteredContracts.size()) {
+        return;
     }
+    
+    ContractHouseholdViewModel household = filteredContracts.get(row);
+    
+    JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
+    HouseholdDetailDialog dialog = new HouseholdDetailDialog(parentFrame, household);
+    dialog.setVisible(true);
+}
+
+// ✅ THÊM METHOD MỚI: Helper method to get filtered contracts
+private List<ContractHouseholdViewModel> getFilteredContracts() {
+    if (allContracts == null) return null;
+    
+    String searchText = searchField.getText().trim().toLowerCase();
+    final String keyword = searchText.equals("tìm theo tên, sđt, căn hộ...") ? "" : searchText;
+    
+    final String selectedFloor = (String) floorFilterCombo.getSelectedItem();
+    final String selectedApartment = (String) apartmentFilterCombo.getSelectedItem();
+    
+    return allContracts.stream()
+        .filter(c -> {
+            // ✅ Radio button status filter
+            String residencyStatus = c.getResidencyStatus();
+            
+            if (rbShowAll.isSelected()) {
+                // Show all
+            } else if (rbShowLiving.isSelected()) {
+                if (!"Đang ở".equals(residencyStatus)) {
+                    return false;
+                }
+            } else if (rbShowMoved.isSelected()) {
+                if (!"Đã chuyển đi".equals(residencyStatus)) {
+                    return false;
+                }
+            }
+            
+            // Keyword filter
+            if (!keyword.isEmpty()) {
+                String residentName = c.getResidentFullName() != null ? c.getResidentFullName().toLowerCase() : "";
+                String phone = c.getResidentPhone() != null ? c.getResidentPhone().toLowerCase() : "";
+                String apartment = c.getApartmentNumber() != null ? c.getApartmentNumber().toLowerCase() : "";
+                
+                if (!residentName.contains(keyword) && !phone.contains(keyword) && !apartment.contains(keyword)) {
+                    return false;
+                }
+            }
+            
+            // Floor filter
+            if (!"Tất cả".equals(selectedFloor)) {
+                String contractFloor = c.getFloorName() != null ? c.getFloorName() : "";
+                if (!selectedFloor.equals(contractFloor)) {
+                    return false;
+                }
+            }
+            
+            // Apartment filter
+            if (!"Tất cả".equals(selectedApartment)) {
+                if (!selectedApartment.equals(c.getApartmentNumber())) {
+                    return false;
+                }
+            }
+            
+            return true;
+        })
+        .collect(Collectors.toList());
+}
+
     
    
     private void showStatistics() {

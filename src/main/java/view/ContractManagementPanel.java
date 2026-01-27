@@ -24,8 +24,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Contract Management Panel
- * Manages rental and ownership contracts
+ * Contract Management Panel with Checkbox Group Filter
+ * Allows selective display of contract statuses
  */
 public class ContractManagementPanel extends JPanel {
     
@@ -42,8 +42,13 @@ public class ContractManagementPanel extends JPanel {
     
     // Filter components
     private JComboBox<BuildingDisplay> buildingFilterCombo;
-    private JComboBox<String> statusFilterCombo;
     private JComboBox<String> typeFilterCombo;
+    
+    // ✅ NEW: Status checkboxes
+    private JCheckBox chkShowActive;
+    private JCheckBox chkShowExpiring;
+    private JCheckBox chkShowExpired;
+    private JCheckBox chkShowTerminated;
     
     private JPanel contentPanel;
     
@@ -214,13 +219,19 @@ public class ContractManagementPanel extends JPanel {
         return headerPanel;
     }
     
+    // ✅ NEW: Enhanced filter bar with checkbox group
     private JPanel createFilterBar() {
-        JPanel filterPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
-        filterPanel.setBackground(Color.WHITE);
-        filterPanel.setBorder(BorderFactory.createCompoundBorder(
+        JPanel mainFilterPanel = new JPanel();
+        mainFilterPanel.setLayout(new BoxLayout(mainFilterPanel, BoxLayout.Y_AXIS));
+        mainFilterPanel.setBackground(Color.WHITE);
+        mainFilterPanel.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1, true),
             new EmptyBorder(18, 25, 18, 25)
         ));
+        
+        // ROW 1: Dropdown filters (Building + Type)
+        JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
+        row1.setBackground(Color.WHITE);
         
         JLabel filterLabel = new JLabel("🔍 Bộ lọc:");
         filterLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
@@ -253,34 +264,56 @@ public class ContractManagementPanel extends JPanel {
             }
         });
         
-        // Status filter
-        JLabel statusLabel = new JLabel("Trạng thái:");
-        statusLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        statusFilterCombo = createFilterCombo();
-        statusFilterCombo.addItem("Tất cả");
-        statusFilterCombo.addItem("Đang hiệu lực");
-        statusFilterCombo.addItem("Sắp hết hạn");
-        statusFilterCombo.addItem("Đã hết hạn");
-        statusFilterCombo.addItem("Đã hủy");
-        statusFilterCombo.setPreferredSize(new Dimension(150, 38));
-        statusFilterCombo.addActionListener(e -> {
-            if (!isUpdatingCombos) {
-                applyFilters();
-            }
-        });
+        row1.add(filterLabel);
+        row1.add(Box.createHorizontalStrut(10));
+        row1.add(buildingLabel);
+        row1.add(buildingFilterCombo);
+        row1.add(Box.createHorizontalStrut(8));
+        row1.add(typeLabel);
+        row1.add(typeFilterCombo);
         
-        filterPanel.add(filterLabel);
-        filterPanel.add(Box.createHorizontalStrut(10));
-        filterPanel.add(buildingLabel);
-        filterPanel.add(buildingFilterCombo);
-        filterPanel.add(Box.createHorizontalStrut(8));
-        filterPanel.add(typeLabel);
-        filterPanel.add(typeFilterCombo);
-        filterPanel.add(Box.createHorizontalStrut(8));
-        filterPanel.add(statusLabel);
-        filterPanel.add(statusFilterCombo);
+        // ROW 2: Status checkboxes
+        JPanel row2 = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        row2.setBackground(Color.WHITE);
         
-        return filterPanel;
+        JLabel statusLabel = new JLabel("📊 Hiển thị:");
+        statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        statusLabel.setForeground(new Color(66, 66, 66));
+        
+        // Create checkboxes with icons and colors
+        chkShowActive = createStatusCheckbox("● Đang hiệu lực", new Color(46, 125, 50), true);
+        chkShowExpiring = createStatusCheckbox("⚠ Sắp hết hạn", new Color(230, 126, 34), true);
+        chkShowExpired = createStatusCheckbox("✕ Đã hết hạn", new Color(211, 47, 47), false);
+        chkShowTerminated = createStatusCheckbox("○ Đã kết thúc", new Color(158, 158, 158), false);
+        
+        row2.add(statusLabel);
+        row2.add(Box.createHorizontalStrut(15));
+        row2.add(chkShowActive);
+        row2.add(Box.createHorizontalStrut(10));
+        row2.add(chkShowExpiring);
+        row2.add(Box.createHorizontalStrut(10));
+        row2.add(chkShowExpired);
+        row2.add(Box.createHorizontalStrut(10));
+        row2.add(chkShowTerminated);
+        
+        mainFilterPanel.add(row1);
+        mainFilterPanel.add(Box.createVerticalStrut(12));
+        mainFilterPanel.add(row2);
+        
+        return mainFilterPanel;
+    }
+    
+    // ✅ NEW: Create styled status checkbox
+    private JCheckBox createStatusCheckbox(String text, Color color, boolean selected) {
+        JCheckBox checkbox = new JCheckBox(text);
+        checkbox.setSelected(selected);
+        checkbox.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        checkbox.setForeground(color);
+        checkbox.setBackground(Color.WHITE);
+        checkbox.setFocusPainted(false);
+        checkbox.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        checkbox.addActionListener(e -> applyFilters());
+        return checkbox;
     }
     
     private JComboBox<String> createFilterCombo() {
@@ -541,9 +574,10 @@ public class ContractManagementPanel extends JPanel {
             isUpdatingCombos = false;
         }
         
-        displayContracts(allContracts);
+        applyFilters();
     }
     
+    // ✅ UPDATED: Apply filters including checkbox status filter
     private void applyFilters() {
         if (allContracts == null) return;
         
@@ -552,10 +586,30 @@ public class ContractManagementPanel extends JPanel {
         
         final BuildingDisplay selectedBuilding = (BuildingDisplay) buildingFilterCombo.getSelectedItem();
         final String selectedType = (String) typeFilterCombo.getSelectedItem();
-        final String selectedStatus = (String) statusFilterCombo.getSelectedItem();
         
         List<Contract> filtered = allContracts.stream()
             .filter(contract -> {
+                // ✅ NEW: Status checkbox filter
+                String statusDisplay = contract.getStatusDisplay();
+                boolean showThis = false;
+                
+                if (chkShowActive.isSelected() && "Đang hiệu lực".equals(statusDisplay)) {
+                    showThis = true;
+                }
+                if (chkShowExpiring.isSelected() && "Sắp hết hạn".equals(statusDisplay)) {
+                    showThis = true;
+                }
+                if (chkShowExpired.isSelected() && "Đã hết hạn".equals(statusDisplay)) {
+                    showThis = true;
+                }
+                if (chkShowTerminated.isSelected() && "Đã hủy".equals(statusDisplay)) {
+                    showThis = true;
+                }
+                
+                if (!showThis) {
+                    return false;
+                }
+                
                 // Keyword filter
                 if (!keyword.isEmpty()) {
                     String contractNumber = contract.getContractNumber() != null ? contract.getContractNumber().toLowerCase() : "";
@@ -590,14 +644,6 @@ public class ContractManagementPanel extends JPanel {
                 if (!"Tất cả".equals(selectedType)) {
                     String typeDisplay = contract.getContractTypeDisplay();
                     if (!selectedType.equals(typeDisplay)) {
-                        return false;
-                    }
-                }
-                
-                // Status filter
-                if (!"Tất cả".equals(selectedStatus)) {
-                    String statusDisplay = contract.getStatusDisplay();
-                    if (!selectedStatus.equals(statusDisplay)) {
                         return false;
                     }
                 }
@@ -650,7 +696,12 @@ public class ContractManagementPanel extends JPanel {
         try {
             buildingFilterCombo.setSelectedIndex(0);
             typeFilterCombo.setSelectedIndex(0);
-            statusFilterCombo.setSelectedIndex(0);
+            
+            // ✅ Reset checkboxes to default
+            chkShowActive.setSelected(true);
+            chkShowExpiring.setSelected(true);
+            chkShowExpired.setSelected(false);
+            chkShowTerminated.setSelected(false);
         } finally {
             isUpdatingCombos = false;
         }
@@ -661,11 +712,14 @@ public class ContractManagementPanel extends JPanel {
     // ===== ACTION HANDLERS =====
     
     private void showContractDetail(int row) {
-        if (row < 0 || allContracts == null || row >= allContracts.size()) {
+        // Get filtered contracts list
+        List<Contract> filteredContracts = getFilteredContracts();
+        
+        if (row < 0 || filteredContracts == null || row >= filteredContracts.size()) {
             return;
         }
         
-        Contract selectedContract = allContracts.get(row);
+        Contract selectedContract = filteredContracts.get(row);
         
         JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
         ContractDetailDialog dialog = new ContractDetailDialog(parentFrame, selectedContract.getId());
@@ -673,6 +727,76 @@ public class ContractManagementPanel extends JPanel {
         
         // Reload data after dialog closes
         reloadData();
+    }
+    
+    // ✅ Helper method to get filtered contracts matching current table
+    private List<Contract> getFilteredContracts() {
+        if (allContracts == null) return null;
+        
+        String searchText = searchField.getText().trim().toLowerCase();
+        final String keyword = searchText.equals("tìm số hđ, chủ hộ, căn hộ...") ? "" : searchText;
+        
+        final BuildingDisplay selectedBuilding = (BuildingDisplay) buildingFilterCombo.getSelectedItem();
+        final String selectedType = (String) typeFilterCombo.getSelectedItem();
+        
+        return allContracts.stream()
+            .filter(contract -> {
+                // Status checkbox filter
+                String statusDisplay = contract.getStatusDisplay();
+                boolean showThis = false;
+                
+                if (chkShowActive.isSelected() && "Đang hiệu lực".equals(statusDisplay)) {
+                    showThis = true;
+                }
+                if (chkShowExpiring.isSelected() && "Sắp hết hạn".equals(statusDisplay)) {
+                    showThis = true;
+                }
+                if (chkShowExpired.isSelected() && "Đã hết hạn".equals(statusDisplay)) {
+                    showThis = true;
+                }
+                if (chkShowTerminated.isSelected() && "Đã hủy".equals(statusDisplay)) {
+                    showThis = true;
+                }
+                
+                if (!showThis) {
+                    return false;
+                }
+                
+                // Keyword filter
+                if (!keyword.isEmpty()) {
+                    String contractNumber = contract.getContractNumber() != null ? contract.getContractNumber().toLowerCase() : "";
+                    Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
+                    String apartmentNumber = apt != null ? apt.getRoomNumber().toLowerCase() : "";
+                    Resident resident = residentDAO.getResidentById(contract.getResidentId());
+                    String residentName = resident != null ? resident.getFullName().toLowerCase() : "";
+                    
+                    if (!contractNumber.contains(keyword) && 
+                        !apartmentNumber.contains(keyword) && 
+                        !residentName.contains(keyword)) {
+                        return false;
+                    }
+                }
+                
+                // Building filter
+                if (selectedBuilding != null && selectedBuilding.building.getId() != null) {
+                    Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
+                    if (apt == null) return false;
+                    List<Apartment> buildingApts = apartmentDAO.getApartmentsByBuildingId(selectedBuilding.building.getId());
+                    boolean inBuilding = buildingApts.stream().anyMatch(a -> a.getId().equals(apt.getId()));
+                    if (!inBuilding) return false;
+                }
+                
+                // Type filter
+                if (!"Tất cả".equals(selectedType)) {
+                    String typeDisplay = contract.getContractTypeDisplay();
+                    if (!selectedType.equals(typeDisplay)) {
+                        return false;
+                    }
+                }
+                
+                return true;
+            })
+            .collect(Collectors.toList());
     }
     
     private void showCreateContractDialog() {
@@ -723,7 +847,7 @@ public class ContractManagementPanel extends JPanel {
             "<tr><td style='padding-left: 25px;'><span style='color: #2e7d32;'>● Đang hiệu lực:</span></td><td align='right'><b>%d</b></td></tr>" +
             "<tr><td style='padding-left: 25px;'><span style='color: #e67e22;'>⚠ Sắp hết hạn:</span></td><td align='right'><b>%d</b></td></tr>" +
             "<tr><td style='padding-left: 25px;'><span style='color: #d32f2f;'>✕ Đã hết hạn:</span></td><td align='right'><b>%d</b></td></tr>" +
-            "<tr><td style='padding-left: 25px;'><span style='color: #9e9e9e;'>○ Đã hủy:</span></td><td align='right'>%d</td></tr>" +
+            "<tr><td style='padding-left: 25px;'><span style='color: #9e9e9e;'>○ Đã kết thúc:</span></td><td align='right'>%d</td></tr>" +
             "</table></body></html>",
             totalContracts, rentalCount, ownershipCount, activeCount, expiringCount, expiredCount, terminatedCount
         );
