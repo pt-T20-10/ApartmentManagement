@@ -258,24 +258,30 @@ public class ContractHistoryPanel extends JPanel {
         return panel;
     }
     
-    private String getDescription(ContractHistory history) {
-        String desc = history.getReason();
-        
-        if (desc == null) {
-            desc = "";
+        private String getDescription(ContractHistory history) {
+            String desc = history.getReason();
+
+            if (desc == null) {
+                desc = "";
+            }
+
+            // ✅ Add contract type info for CREATED action
+            if ("CREATED".equals(history.getAction())) {
+                // Could fetch contract type from database if needed
+                // For now, just use existing reason
+            }
+
+            // Add date range for renewals (only for RENTAL)
+            if (history.getOldEndDate() != null && history.getNewEndDate() != null) {
+                String dateInfo = "<b>Thời gian gia hạn:</b><br>" +
+                                "• Từ ngày: " + dateFormat.format(history.getOldEndDate()) + "<br>" +
+                                "• Đến ngày: " + dateFormat.format(history.getNewEndDate());
+
+                desc = desc.isEmpty() ? dateInfo : desc + "<br><br>" + dateInfo;
+            }
+
+            return desc;
         }
-        
-        // Add date range for renewals
-        if (history.getOldEndDate() != null && history.getNewEndDate() != null) {
-            String dateInfo = "<b>Thời gian:</b><br>" +
-                            "• Từ ngày: " + dateFormat.format(history.getOldEndDate()) + "<br>" +
-                            "• Đến ngày: " + dateFormat.format(history.getNewEndDate());
-            
-            desc = desc.isEmpty() ? dateInfo : desc + "<br><br>" + dateInfo;
-        }
-        
-        return desc;
-    }
     
     private String getActionIcon(String action) {
         if (action == null) return "📝";

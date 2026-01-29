@@ -15,8 +15,15 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Dialog for viewing contract details
- * UPDATED: Added History tab + FIXED button text colors
+ * Contract Detail Dialog with DYNAMIC DISPLAY based on contract type
+ * 
+ * RENTAL (Thuê):
+ * - Shows: Tiền thuê/tháng, Ngày bắt đầu, Ngày kết thúc
+ * - Actions: Sửa, Gia hạn, Kết thúc
+ * 
+ * OWNERSHIP (Sở hữu):
+ * - Shows: Giá mua, CHỈ Ngày ký (no start/end)
+ * - Actions: Sửa, Kết thúc (NO Gia hạn)
  */
 public class ContractDetailDialog extends JDialog {
     
@@ -35,7 +42,6 @@ public class ContractDetailDialog extends JDialog {
     private SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
     private NumberFormat currencyFormat = NumberFormat.getCurrencyInstance(new Locale("vi", "VN"));
     
-    // History panel
     private ContractHistoryPanel historyPanel;
     
     public ContractDetailDialog(JFrame parent, Long contractId) {
@@ -49,7 +55,6 @@ public class ContractDetailDialog extends JDialog {
         this.floorDAO = new FloorDAO();
         this.buildingDAO = new BuildingDAO();
         
-        // Load contract data
         this.contract = contractDAO.getContractById(contractId);
         if (contract == null) {
             JOptionPane.showMessageDialog(parent, 
@@ -73,14 +78,11 @@ public class ContractDetailDialog extends JDialog {
         setLayout(new BorderLayout(0, 0));
         getContentPane().setBackground(UIConstants.BACKGROUND_COLOR);
         
-        // Header
         add(createHeader(), BorderLayout.NORTH);
         
-        // Tabbed Pane (Main content)
         JTabbedPane tabbedPane = createTabbedPane();
         add(tabbedPane, BorderLayout.CENTER);
         
-        // Buttons
         add(createButtonPanel(), BorderLayout.SOUTH);
     }
     
@@ -117,7 +119,6 @@ public class ContractDetailDialog extends JDialog {
         leftPanel.add(iconLabel);
         leftPanel.add(textPanel);
         
-        // Status Badge
         JPanel statusBadge = createStatusBadge();
         
         headerPanel.add(leftPanel, BorderLayout.WEST);
@@ -171,15 +172,12 @@ public class ContractDetailDialog extends JDialog {
         tabbedPane.setFont(new Font("Segoe UI", Font.BOLD, 14));
         tabbedPane.setBackground(UIConstants.BACKGROUND_COLOR);
         
-        // Tab 1: Thông tin
         JPanel infoPanel = createInfoPanel();
         tabbedPane.addTab("📋 Thông tin", infoPanel);
         
-        // Tab 2: Dịch vụ
         JPanel servicesPanel = createServicesPanel();
         tabbedPane.addTab("🔧 Dịch vụ", servicesPanel);
         
-        // Tab 3: Lịch sử (NEW!)
         historyPanel = new ContractHistoryPanel(contract.getId());
         tabbedPane.addTab("📜 Lịch sử", historyPanel);
         
@@ -197,19 +195,13 @@ public class ContractDetailDialog extends JDialog {
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         scrollPane.setBackground(UIConstants.BACKGROUND_COLOR);
         
-        // Contract Info Section
         panel.add(createContractInfoSection());
         panel.add(Box.createVerticalStrut(15));
-        
-        // Apartment Info Section
         panel.add(createApartmentInfoSection());
         panel.add(Box.createVerticalStrut(15));
-        
-        // Resident Info Section
         panel.add(createResidentInfoSection());
         panel.add(Box.createVerticalStrut(15));
         
-        // Notes Section (if exists)
         if (contract.getNotes() != null && !contract.getNotes().trim().isEmpty()) {
             panel.add(createNotesSection());
         }
@@ -225,7 +217,6 @@ public class ContractDetailDialog extends JDialog {
         panel.setBackground(UIConstants.BACKGROUND_COLOR);
         panel.setBorder(new EmptyBorder(20, 25, 20, 25));
         
-        // Load services
         List<ContractService> services = contractServiceDAO.getServicesByContract(contract.getId());
         
         if (services.isEmpty()) {
@@ -274,9 +265,10 @@ public class ContractDetailDialog extends JDialog {
         return panel;
     }
     
+    // ✅ UPDATED: Dynamic contract info based on type
     private JPanel createContractInfoSection() {
         JPanel section = createSection("📋 Thông Tin Hợp Đồng");
-        section.setLayout(new GridLayout(4, 4, 15, 12));
+        section.setLayout(new GridLayout(5, 4, 15, 12)); // ✅ 5 rows for price field
         section.setBorder(BorderFactory.createCompoundBorder(
             section.getBorder(),
             new EmptyBorder(15, 20, 15, 20)
@@ -288,21 +280,42 @@ public class ContractDetailDialog extends JDialog {
         section.add(createInfoLabel("Loại hợp đồng:"));
         section.add(createInfoValue(contract.getContractTypeDisplay()));
         
-        // Row 2
+        // Row 2: Signed date + Start date (conditional)
         section.add(createInfoLabel("Ngày ký:"));
         section.add(createInfoValue(contract.getSignedDate() != null ? 
             dateFormat.format(contract.getSignedDate()) : "Chưa ký"));
-        section.add(createInfoLabel("Ngày bắt đầu:"));
-        section.add(createInfoValue(dateFormat.format(contract.getStartDate())));
         
-        // Row 3
-        section.add(createInfoLabel("Ngày kết thúc:"));
-        section.add(createInfoValue(contract.getEndDate() != null ? 
-            dateFormat.format(contract.getEndDate()) : "Vô thời hạn"));
+        if (contract.isRental()) {
+            section.add(createInfoLabel("Ngày bắt đầu:"));
+            section.add(createInfoValue(contract.getStartDate() != null ? 
+                dateFormat.format(contract.getStartDate()) : "N/A"));
+        } else {
+            // OWNERSHIP: Empty cells
+            section.add(createInfoLabel(""));
+            section.add(createInfoValue(""));
+        }
+        
+        // Row 3: End date (conditional) + Deposit
+        if (contract.isRental()) {
+            section.add(createInfoLabel("Ngày kết thúc:"));
+            section.add(createInfoValue(contract.getEndDate() != null ? 
+                dateFormat.format(contract.getEndDate()) : "Vô thời hạn"));
+        } else {
+            section.add(createInfoLabel(""));
+            section.add(createInfoValue(""));
+        }
+        
         section.add(createInfoLabel("Tiền cọc:"));
         section.add(createInfoValue(currencyFormat.format(contract.getDepositAmount())));
         
-        // Row 4
+        // ✅ Row 4: DYNAMIC PRICE FIELD
+        section.add(createInfoLabel(contract.getPriceLabel() + ":"));
+        section.add(createInfoValue(contract.getMonthlyRent() != null ? 
+            currencyFormat.format(contract.getMonthlyRent()) : "N/A"));
+        section.add(createInfoLabel(""));
+        section.add(createInfoValue(""));
+        
+        // Row 5: Created/Updated
         section.add(createInfoLabel("Ngày tạo:"));
         section.add(createInfoValue(contract.getCreatedAt() != null ? 
             dateFormat.format(contract.getCreatedAt()) : "N/A"));
@@ -314,48 +327,47 @@ public class ContractDetailDialog extends JDialog {
     }
     
     private JPanel createApartmentInfoSection() {
-    JPanel section = createSection("🏠 Thông Tin Căn Hộ");
-    section.setLayout(new GridLayout(3, 4, 15, 12));  // ← THAY ĐỔI: 3 rows thay vì 2
-    section.setBorder(BorderFactory.createCompoundBorder(
-        section.getBorder(),
-        new EmptyBorder(15, 20, 15, 20)
-    ));
-    
-    if (apartment != null) {
-        // ✅ Lấy thông tin Tầng và Tòa nhà
-        Floor floor = floorDAO.getFloorById(apartment.getFloorId());
-        Building building = null;
-        if (floor != null) {
-            building = buildingDAO.getBuildingById(floor.getBuildingId());
+        JPanel section = createSection("🏠 Thông Tin Căn Hộ");
+        section.setLayout(new GridLayout(3, 4, 15, 12));
+        section.setBorder(BorderFactory.createCompoundBorder(
+            section.getBorder(),
+            new EmptyBorder(15, 20, 15, 20)
+        ));
+        
+        if (apartment != null) {
+            Floor floor = floorDAO.getFloorById(apartment.getFloorId());
+            Building building = null;
+            if (floor != null) {
+                building = buildingDAO.getBuildingById(floor.getBuildingId());
+            }
+            
+            // Row 1
+            section.add(createInfoLabel("Tòa nhà:"));
+            section.add(createInfoValue(building != null ? building.getName() : "N/A"));
+            section.add(createInfoLabel("Tầng:"));
+            section.add(createInfoValue(floor != null ? 
+                (floor.getName() != null && !floor.getName().trim().isEmpty() ? 
+                    floor.getName() : "Tầng " + floor.getFloorNumber()) 
+                : "N/A"));
+            
+            // Row 2
+            section.add(createInfoLabel("Căn hộ:"));
+            section.add(createInfoValue(apartment.getRoomNumber()));
+            section.add(createInfoLabel("Diện tích:"));
+            section.add(createInfoValue(apartment.getArea() + " m²"));
+            
+            // Row 3
+            section.add(createInfoLabel("Loại căn hộ:"));
+            section.add(createInfoValue(apartment.getApartmentType()));
+            section.add(createInfoLabel("Số phòng:"));
+            section.add(createInfoValue(apartment.getBedroomCount() + " PN, " + 
+                apartment.getBathroomCount() + " PT"));
+        } else {
+            section.add(createInfoValue("Không tìm thấy thông tin căn hộ"));
         }
         
-        // Row 1: Tòa nhà và Tầng
-        section.add(createInfoLabel("Tòa nhà:"));
-        section.add(createInfoValue(building != null ? building.getName() : "N/A"));
-        section.add(createInfoLabel("Tầng:"));
-        section.add(createInfoValue(floor != null ? 
-            (floor.getName() != null && !floor.getName().trim().isEmpty() ? 
-                floor.getName() : "Tầng " + floor.getFloorNumber()) 
-            : "N/A"));
-        
-        // Row 2: Căn hộ và Diện tích
-        section.add(createInfoLabel("Căn hộ:"));
-        section.add(createInfoValue(apartment.getRoomNumber()));
-        section.add(createInfoLabel("Diện tích:"));
-        section.add(createInfoValue(apartment.getArea() + " m²"));
-        
-        // Row 3: Loại căn hộ và Số phòng
-        section.add(createInfoLabel("Loại căn hộ:"));
-        section.add(createInfoValue(apartment.getApartmentType()));
-        section.add(createInfoLabel("Số phòng:"));
-        section.add(createInfoValue(apartment.getBedroomCount() + " PN, " + 
-            apartment.getBathroomCount() + " PT"));
-    } else {
-        section.add(createInfoValue("Không tìm thấy thông tin căn hộ"));
+        return section;
     }
-    
-    return section;
-}
     
     private JPanel createResidentInfoSection() {
         JPanel section = createSection("👤 Thông Tin Chủ Hộ");
@@ -405,6 +417,7 @@ public class ContractDetailDialog extends JDialog {
         return section;
     }
     
+    // ✅ UPDATED: Renew button only for RENTAL
     private JPanel createButtonPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 15, 15));
         panel.setBackground(Color.WHITE);
@@ -413,30 +426,35 @@ public class ContractDetailDialog extends JDialog {
         JButton btnEdit = createButton("✏️ Sửa", new Color(33, 150, 243));
         btnEdit.addActionListener(e -> editContract());
         
-        // ✅ NÚT GIA HẠN - FIX CỨNG MÀU CHỮ TRẮNG
+        // ✅ GIA HẠN - CHỈ CHO HỢP ĐỒNG THUÊ
         JButton btnRenew = createButton("🔄 Gia hạn", new Color(76, 175, 80));
-        btnRenew.setForeground(Color.WHITE);  // ← FIX CỨNG
+        btnRenew.setForeground(Color.WHITE);
         btnRenew.addActionListener(e -> renewContract());
-        btnRenew.setEnabled(contract.isActive());
+        btnRenew.setEnabled(contract.canBeRenewed()); // ✅ Uses new helper method
+        btnRenew.setVisible(contract.isRental()); // ✅ Hide for OWNERSHIP
         
-        // ✅ NÚT KẾT THÚC - FIX CỨNG MÀU CHỮ TRẮNG
         JButton btnTerminate = createButton("❌ Kết thúc", new Color(244, 67, 54));
-        btnTerminate.setForeground(Color.WHITE);  // ← FIX CỨNG
+        btnTerminate.setForeground(Color.WHITE);
         btnTerminate.addActionListener(e -> terminateContract());
-        btnTerminate.setEnabled(contract.isActive());
+        btnTerminate.setEnabled(contract.canBeTerminated());
         
         JButton btnClose = createButton("Đóng", new Color(158, 158, 158));
         btnClose.addActionListener(e -> dispose());
         
         panel.add(btnEdit);
-        panel.add(btnRenew);
+        
+        // ✅ Only add Renew button for RENTAL contracts
+        if (contract.isRental()) {
+            panel.add(btnRenew);
+        }
+        
         panel.add(btnTerminate);
         panel.add(btnClose);
         
         return panel;
     }
     
-    // ===== HELPER METHODS =====
+    // HELPER METHODS
     
     private JPanel createSection(String title) {
         JPanel panel = new JPanel();
@@ -466,14 +484,13 @@ public class ContractDetailDialog extends JDialog {
         return label;
     }
     
-    // ✅ FIXED: Button with white text
     private JButton createButton(String text, Color bgColor) {
         JButton btn = new JButton(text);
         btn.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btn.setBackground(bgColor);
         btn.setForeground(Color.WHITE);
-        btn.setOpaque(true);              // ← CRITICAL: Makes background visible
-        btn.setContentAreaFilled(true);   // ← CRITICAL: Fills the background
+        btn.setOpaque(true);
+        btn.setContentAreaFilled(true);
         btn.setFocusPainted(false);
         btn.setBorderPainted(false);
         btn.setPreferredSize(new Dimension(130, 40));
@@ -481,7 +498,7 @@ public class ContractDetailDialog extends JDialog {
         return btn;
     }
     
-    // ===== ACTION HANDLERS =====
+    // ACTION HANDLERS
     
     private void editContract() {
         JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
@@ -489,17 +506,14 @@ public class ContractDetailDialog extends JDialog {
         dialog.setVisible(true);
         
         if (dialog.isConfirmed()) {
-            // Reload contract data
             contract = contractDAO.getContractById(contract.getId());
             
-            // Refresh history panel
             if (historyPanel != null) {
                 historyPanel.refresh();
             }
             
             dispose();
             
-            // Show success message
             JOptionPane.showMessageDialog(parentFrame,
                 "Cập nhật hợp đồng thành công!",
                 "Thành công",
@@ -507,8 +521,17 @@ public class ContractDetailDialog extends JDialog {
         }
     }
     
+    // ✅ UPDATED: Renew only for RENTAL
     private void renewContract() {
-        // Show renew dialog
+        // Double check it's a rental contract
+        if (!contract.isRental()) {
+            JOptionPane.showMessageDialog(this,
+                "Chỉ hợp đồng thuê mới có thể gia hạn!",
+                "Lỗi",
+                JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+        
         String input = JOptionPane.showInputDialog(this,
             "Nhập số tháng gia hạn:",
             "Gia Hạn Hợp Đồng",
@@ -536,19 +559,16 @@ public class ContractDetailDialog extends JDialog {
                 cal.add(java.util.Calendar.MONTH, months);
                 java.util.Date newEndDate = cal.getTime();
                 
-                // Update contract
                 if (contractDAO.renewContract(contract.getId(), newEndDate)) {
                     JOptionPane.showMessageDialog(this,
                         "Gia hạn hợp đồng thành công!",
                         "Thành công",
                         JOptionPane.INFORMATION_MESSAGE);
                     
-                    // Refresh history
                     if (historyPanel != null) {
                         historyPanel.refresh();
                     }
                     
-                    // Reload
                     contract = contractDAO.getContractById(contract.getId());
                     dispose();
                 } else {
@@ -586,7 +606,6 @@ public class ContractDetailDialog extends JDialog {
                         "Thành công",
                         JOptionPane.INFORMATION_MESSAGE);
                     
-                    // Refresh history
                     if (historyPanel != null) {
                         historyPanel.refresh();
                     }
