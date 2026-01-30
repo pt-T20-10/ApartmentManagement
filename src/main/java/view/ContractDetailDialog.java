@@ -224,46 +224,163 @@ public class ContractDetailDialog extends JDialog {
             emptyPanel.setBackground(Color.WHITE);
             emptyPanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
             
-            JLabel noDataLabel = new JLabel("Chưa có dịch vụ nào");
-            noDataLabel.setFont(new Font("Segoe UI", Font.ITALIC, 16));
-            noDataLabel.setForeground(new Color(158, 158, 158));
+            // Shadow
+            g2d.setColor(new Color(0, 0, 0, 6));
+            g2d.fillRoundRect(2, 2, getWidth() - 4, getHeight() - 4, 10, 10);
             
-            emptyPanel.add(noDataLabel);
-            panel.add(emptyPanel, BorderLayout.CENTER);
-        } else {
-            String[] columns = {"Dịch vụ", "Đơn giá", "Đơn vị", "Ngày áp dụng", "Trạng thái"};
-            DefaultTableModel model = new DefaultTableModel(columns, 0) {
-                @Override
-                public boolean isCellEditable(int row, int column) {
-                    return false;
-                }
-            };
+            // Background
+            g2d.setColor(Color.WHITE);
+            g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
             
-            for (ContractService cs : services) {
-                Object[] row = {
-                    cs.getServiceName(),
-                    currencyFormat.format(cs.getUnitPrice()),
-                    cs.getUnitTypeDisplay(),
-                    dateFormat.format(cs.getAppliedDate()),
-                    cs.getActiveStatusDisplay()
-                };
-                model.addRow(row);
+            g2d.dispose();
+            super.paintComponent(g);
+        }
+    };
+    card.setOpaque(false);
+    card.setBorder(new EmptyBorder(14, 16, 14, 16));
+    
+    JLabel iconLabel = new JLabel(icon);
+    iconLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+    iconLabel.setForeground(color);
+    
+    JPanel textPanel = new JPanel();
+    textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+    textPanel.setOpaque(false);
+    
+    JLabel titleLabel = new JLabel(title);
+    titleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+    titleLabel.setForeground(new Color(107, 114, 128));
+    
+    JLabel valueLabel = new JLabel(value);
+    valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+    valueLabel.setForeground(new Color(33, 33, 33));
+    
+    textPanel.add(titleLabel);
+    textPanel.add(Box.createVerticalStrut(3));
+    textPanel.add(valueLabel);
+    
+    card.add(iconLabel, BorderLayout.WEST);
+    card.add(textPanel, BorderLayout.CENTER);
+    
+    return card;
+}
+
+    
+    private JPanel createServiceTable(List<ContractService> services) {
+    JPanel tablePanel = new JPanel(new BorderLayout());
+    tablePanel.setBackground(Color.WHITE);
+    tablePanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
+    
+    String[] columns = {"Dịch vụ", "Đơn giá", "Đơn vị", "Ngày áp dụng", "Trạng thái"};
+    DefaultTableModel model = new DefaultTableModel(columns, 0) {
+        @Override
+        public boolean isCellEditable(int row, int column) {
+            return false;
+        }
+    };
+    
+    for (ContractService cs : services) {
+        Object[] row = {
+            cs.getServiceName(),
+            currencyFormat.format(cs.getUnitPrice()),
+            cs.getUnitTypeDisplay(),
+            dateFormat.format(cs.getAppliedDate()),
+            cs.getActiveStatusDisplay()
+        };
+        model.addRow(row);
+    }
+    
+    JTable table = new JTable(model);
+    table.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+    table.setRowHeight(50);
+    table.setShowGrid(false);
+    table.setIntercellSpacing(new Dimension(0, 0));
+    table.setSelectionBackground(new Color(243, 244, 246));
+    table.setSelectionForeground(new Color(33, 33, 33));
+    
+    // Header
+    table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
+    table.getTableHeader().setBackground(new Color(249, 250, 251));
+    table.getTableHeader().setForeground(new Color(75, 85, 99));
+    table.getTableHeader().setPreferredSize(new Dimension(table.getTableHeader().getWidth(), 45));
+    table.getTableHeader().setBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, UIConstants.BORDER_COLOR));
+    
+    // Center align header
+    javax.swing.table.DefaultTableCellRenderer headerRenderer = 
+        (javax.swing.table.DefaultTableCellRenderer) table.getTableHeader().getDefaultRenderer();
+    headerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
+    
+    // Column renderers
+    javax.swing.table.DefaultTableCellRenderer centerRenderer = 
+        new javax.swing.table.DefaultTableCellRenderer();
+    centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
+    
+    // Service name - left align
+    table.getColumnModel().getColumn(0).setPreferredWidth(200);
+    
+    // Price - right align with highlight
+    table.getColumnModel().getColumn(1).setPreferredWidth(120);
+    table.getColumnModel().getColumn(1).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value,
+                boolean isSelected, boolean hasFocus, int row, int column) {
+            JLabel label = (JLabel) super.getTableCellRendererComponent(
+                table, value, isSelected, hasFocus, row, column);
+            label.setHorizontalAlignment(SwingConstants.RIGHT);
+            label.setFont(new Font("Segoe UI", Font.BOLD, 13));
+            label.setForeground(new Color(22, 163, 74)); // Green for price
+            return label;
+        }
+    });
+    
+    // Unit - center
+    table.getColumnModel().getColumn(2).setPreferredWidth(100);
+    table.getColumnModel().getColumn(2).setCellRenderer(centerRenderer);
+    
+    // Date - center
+    table.getColumnModel().getColumn(3).setPreferredWidth(120);
+    table.getColumnModel().getColumn(3).setCellRenderer(centerRenderer);
+    
+    // Status - badge renderer
+    table.getColumnModel().getColumn(4).setPreferredWidth(150);
+    table.getColumnModel().getColumn(4).setCellRenderer(new javax.swing.table.DefaultTableCellRenderer() {
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value,
+                boolean isSelected, boolean hasFocus, int row, int column) {
+            
+            JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+            panel.setOpaque(true);
+            panel.setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
+            
+            JLabel badge = new JLabel();
+            badge.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            badge.setBorder(new EmptyBorder(5, 12, 5, 12));
+            badge.setOpaque(true);
+            
+            String status = (String) value;
+            if ("Đang hoạt động".equals(status)) {
+                badge.setText("✓ Hoạt động");
+                badge.setBackground(new Color(220, 252, 231));
+                badge.setForeground(new Color(22, 163, 74));
+            } else {
+                badge.setText("○ Ngừng");
+                badge.setBackground(new Color(243, 244, 246));
+                badge.setForeground(new Color(107, 114, 128));
             }
             
-            JTable table = new JTable(model);
-            table.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-            table.setRowHeight(40);
-            table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 13));
-            table.getTableHeader().setBackground(new Color(250, 250, 250));
-            
-            JScrollPane scrollPane = new JScrollPane(table);
-            scrollPane.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
-            
-            panel.add(scrollPane, BorderLayout.CENTER);
+            panel.add(badge);
+            return panel;
         }
-        
-        return panel;
-    }
+    });
+    
+    JScrollPane scrollPane = new JScrollPane(table);
+    scrollPane.setBorder(null);
+    scrollPane.getViewport().setBackground(Color.WHITE);
+    
+    tablePanel.add(scrollPane, BorderLayout.CENTER);
+    
+    return tablePanel;
+}
     
     // ✅ UPDATED: Dynamic contract info based on type
     private JPanel createContractInfoSection() {

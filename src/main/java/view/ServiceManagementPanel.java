@@ -15,8 +15,9 @@ import java.awt.*;
 import java.util.List;
 
 /**
- * Service Management Panel - REDESIGNED
- * Modern interface with VND formatting, placeholder search
+ * Service Management Panel - IMPROVED UI
+ * Added statistics cards, better spacing, modern design
+ * All original functionality preserved
  */
 public class ServiceManagementPanel extends JPanel {
     
@@ -25,42 +26,75 @@ public class ServiceManagementPanel extends JPanel {
     private DefaultTableModel tableModel;
     private JTextField searchField;
     
+    // Statistics labels
+    private JLabel totalServicesLabel;
+    private JLabel mandatoryServicesLabel;
+    private JLabel optionalServicesLabel;
+    
     public ServiceManagementPanel() {
         this.serviceDAO = new ServiceDAO();
         
-        setLayout(new BorderLayout(20, 20));
+        setLayout(new BorderLayout(0, 20));
         setBackground(UIConstants.BACKGROUND_COLOR);
-        setBorder(new EmptyBorder(30, 30, 30, 30));
+        setBorder(new EmptyBorder(25, 25, 25, 25));
         
-        createHeader();
-        createTablePanel();
-        createActionPanel();
+        // Top container with header + statistics
+        JPanel topContainer = new JPanel();
+        topContainer.setLayout(new BoxLayout(topContainer, BoxLayout.Y_AXIS));
+        topContainer.setBackground(UIConstants.BACKGROUND_COLOR);
+        
+        topContainer.add(createHeader());
+        topContainer.add(Box.createVerticalStrut(20));
+        topContainer.add(createStatisticsPanel());
+        
+        add(topContainer, BorderLayout.NORTH);
+        add(createTablePanel(), BorderLayout.CENTER);
+        add(createActionPanel(), BorderLayout.SOUTH);
         
         loadServices();
+        updateStatistics();
     }
     
-    private void createHeader() {
+    private JPanel createHeader() {
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        headerPanel.setBorder(new EmptyBorder(0, 0, 20, 0));
+        headerPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
         
-        // Title with icon
-        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        // Title with custom icon
+        JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         titlePanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
-        JLabel iconLabel = new JLabel("⚡");
-        iconLabel.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 32));
-        iconLabel.setForeground(new Color(255, 193, 7));
+        // Custom lightning icon
+        JPanel iconPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                
+                // Lightning bolt
+                g2d.setColor(new Color(251, 191, 36));
+                int[] xPoints = {20, 18, 22, 14, 16, 12};
+                int[] yPoints = {8, 16, 16, 24, 18, 18};
+                g2d.fillPolygon(xPoints, yPoints, 6);
+            }
+            
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(32, 32);
+            }
+        };
+        iconPanel.setOpaque(false);
         
         JLabel titleLabel = new JLabel("Quản Lý Dịch Vụ");
-        titleLabel.setFont(UIConstants.FONT_TITLE);
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 26));
         titleLabel.setForeground(UIConstants.TEXT_PRIMARY);
         
-        titlePanel.add(iconLabel);
-        titlePanel.add(Box.createHorizontalStrut(10));
+        titlePanel.add(iconPanel);
+        titlePanel.add(Box.createHorizontalStrut(12));
         titlePanel.add(titleLabel);
         
-        // Search panel with placeholder
+        // Search panel
         JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         searchPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         
@@ -68,7 +102,7 @@ public class ServiceManagementPanel extends JPanel {
         searchField.setFont(UIConstants.FONT_REGULAR);
         searchField.setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-            new EmptyBorder(8, 12, 8, 12)
+            new EmptyBorder(10, 14, 10, 14)
         ));
         
         // Placeholder
@@ -103,6 +137,7 @@ public class ServiceManagementPanel extends JPanel {
             searchField.setText(PLACEHOLDER);
             searchField.setForeground(PLACEHOLDER_COLOR);
             loadServices();
+            updateStatistics();
         });
         
         searchPanel.add(searchField);
@@ -112,15 +147,98 @@ public class ServiceManagementPanel extends JPanel {
         headerPanel.add(titlePanel, BorderLayout.WEST);
         headerPanel.add(searchPanel, BorderLayout.EAST);
         
-        add(headerPanel, BorderLayout.NORTH);
+        return headerPanel;
     }
     
-    private void createTablePanel() {
+    private JPanel createStatisticsPanel() {
+        JPanel statsPanel = new JPanel(new GridLayout(1, 3, 15, 0));
+        statsPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        statsPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
+        
+        // Card 1: Total Services
+        totalServicesLabel = new JLabel("0");
+        JPanel card1 = createStatCard("Tổng Dịch Vụ", totalServicesLabel, new Color(99, 102, 241), "📋");
+        
+        // Card 2: Mandatory
+        mandatoryServicesLabel = new JLabel("0");
+        JPanel card2 = createStatCard("Dịch Vụ Bắt Buộc", mandatoryServicesLabel, new Color(34, 197, 94), "✓");
+        
+        // Card 3: Optional
+        optionalServicesLabel = new JLabel("0");
+        JPanel card3 = createStatCard("Dịch Vụ Tùy Chọn", optionalServicesLabel, new Color(156, 163, 175), "○");
+        
+        statsPanel.add(card1);
+        statsPanel.add(card2);
+        statsPanel.add(card3);
+        
+        return statsPanel;
+    }
+    
+    private JPanel createStatCard(String title, JLabel valueLabel, Color color, String icon) {
+        JPanel card = new JPanel(new BorderLayout(15, 0)) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                
+                // Shadow
+                g2d.setColor(new Color(0, 0, 0, 8));
+                g2d.fillRoundRect(2, 2, getWidth() - 4, getHeight() - 4, 12, 12);
+                
+                // Background
+                g2d.setColor(Color.WHITE);
+                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
+                
+                g2d.dispose();
+                super.paintComponent(g);
+            }
+        };
+        card.setOpaque(false);
+        card.setBorder(new EmptyBorder(18, 18, 18, 18));
+        
+        JLabel iconLabel = new JLabel(icon);
+        iconLabel.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        iconLabel.setForeground(color);
+        
+        JPanel textPanel = new JPanel();
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+        textPanel.setOpaque(false);
+        
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        titleLabel.setForeground(new Color(107, 114, 128));
+        
+        valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        valueLabel.setForeground(UIConstants.TEXT_PRIMARY);
+        
+        textPanel.add(titleLabel);
+        textPanel.add(Box.createVerticalStrut(4));
+        textPanel.add(valueLabel);
+        
+        card.add(iconLabel, BorderLayout.WEST);
+        card.add(textPanel, BorderLayout.CENTER);
+        
+        return card;
+    }
+    
+    private void updateStatistics() {
+        List<Service> services = serviceDAO.getAllServices();
+        
+        int total = services.size();
+        int mandatory = (int) services.stream().filter(Service::isMandatory).count();
+        int optional = total - mandatory;
+        
+        totalServicesLabel.setText(String.valueOf(total));
+        mandatoryServicesLabel.setText(String.valueOf(mandatory));
+        optionalServicesLabel.setText(String.valueOf(optional));
+    }
+    
+    private JPanel createTablePanel() {
         JPanel tablePanel = new JPanel(new BorderLayout());
         tablePanel.setBackground(Color.WHITE);
         tablePanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
         
-        // Table columns - NO Description
+        // Table columns - KEEP ORIGINAL
         String[] columns = {"ID", "Tên Dịch Vụ", "Đơn Vị", "Đơn Giá", "Bắt Buộc"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
@@ -131,14 +249,14 @@ public class ServiceManagementPanel extends JPanel {
         
         serviceTable = new JTable(tableModel);
         serviceTable.setFont(UIConstants.FONT_REGULAR);
-        serviceTable.setRowHeight(50);
+        serviceTable.setRowHeight(55); // Slightly taller
         serviceTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         serviceTable.setShowGrid(true);
         serviceTable.setGridColor(new Color(240, 240, 240));
         serviceTable.setSelectionBackground(new Color(232, 240, 254));
         serviceTable.setSelectionForeground(UIConstants.TEXT_PRIMARY);
         
-        // Double-click to edit
+        // Double-click to edit - KEEP ORIGINAL
         serviceTable.addMouseListener(new java.awt.event.MouseAdapter() {
             public void mouseClicked(java.awt.event.MouseEvent evt) {
                 if (evt.getClickCount() == 2) {
@@ -147,18 +265,18 @@ public class ServiceManagementPanel extends JPanel {
             }
         });
         
-        // Table header styling
+        // Table header styling - IMPROVED
         JTableHeader header = serviceTable.getTableHeader();
-        header.setFont(UIConstants.FONT_HEADING);
+        header.setFont(new Font("Segoe UI", Font.BOLD, 14));
         header.setBackground(new Color(249, 250, 251));
-        header.setForeground(UIConstants.TEXT_PRIMARY);
-        header.setPreferredSize(new Dimension(header.getPreferredSize().width, 45));
+        header.setForeground(new Color(75, 85, 99));
+        header.setPreferredSize(new Dimension(header.getPreferredSize().width, 48));
         header.setBorder(BorderFactory.createMatteBorder(0, 0, 2, 0, UIConstants.BORDER_COLOR));
         
         // Center align header
         ((DefaultTableCellRenderer) header.getDefaultRenderer()).setHorizontalAlignment(SwingConstants.CENTER);
         
-        // Column widths
+        // Column widths - KEEP ORIGINAL
         serviceTable.getColumnModel().getColumn(0).setPreferredWidth(60);
         serviceTable.getColumnModel().getColumn(0).setMaxWidth(80);
         serviceTable.getColumnModel().getColumn(1).setPreferredWidth(250);
@@ -174,26 +292,33 @@ public class ServiceManagementPanel extends JPanel {
             serviceTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
         }
         
-        // Override with special renderer for "Bắt Buộc" column (keep center alignment)
+        // Special renderer for "Bắt Buộc" column - IMPROVED BADGES
         serviceTable.getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
             @Override
             public Component getTableCellRendererComponent(JTable table, Object value,
                     boolean isSelected, boolean hasFocus, int row, int column) {
-                JLabel label = (JLabel) super.getTableCellRendererComponent(
-                    table, value, isSelected, hasFocus, row, column);
                 
-                label.setHorizontalAlignment(SwingConstants.CENTER); // CENTER!
-                label.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+                panel.setOpaque(true);
+                panel.setBackground(isSelected ? table.getSelectionBackground() : Color.WHITE);
+                
+                JLabel badge = new JLabel();
+                badge.setFont(new Font("Segoe UI", Font.BOLD, 12));
+                badge.setBorder(new EmptyBorder(4, 12, 4, 12));
+                badge.setOpaque(true);
                 
                 if ("Có".equals(value)) {
-                    label.setText("✓ Có");
-                    label.setForeground(new Color(22, 163, 74)); // Green
+                    badge.setText("✓ Bắt buộc");
+                    badge.setBackground(new Color(220, 252, 231));
+                    badge.setForeground(new Color(22, 163, 74));
                 } else {
-                    label.setText("○ Không");
-                    label.setForeground(new Color(156, 163, 175)); // Gray
+                    badge.setText("○ Tùy chọn");
+                    badge.setBackground(new Color(243, 244, 246));
+                    badge.setForeground(new Color(107, 114, 128));
                 }
                 
-                return label;
+                panel.add(badge);
+                return panel;
             }
         });
         
@@ -203,13 +328,14 @@ public class ServiceManagementPanel extends JPanel {
         
         tablePanel.add(scrollPane, BorderLayout.CENTER);
         
-        add(tablePanel, BorderLayout.CENTER);
+        return tablePanel;
     }
     
-    private void createActionPanel() {
+    private JPanel createActionPanel() {
         JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
         actionPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         actionPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
+        actionPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 65));
         
         ModernButton addButton = new ModernButton("➕ Thêm Dịch Vụ", UIConstants.SUCCESS_COLOR);
         addButton.setPreferredSize(new Dimension(160, 45));
@@ -227,8 +353,10 @@ public class ServiceManagementPanel extends JPanel {
         actionPanel.add(editButton);
         actionPanel.add(deleteButton);
         
-        add(actionPanel, BorderLayout.SOUTH);
+        return actionPanel;
     }
+    
+    // ===== ALL ORIGINAL METHODS BELOW - UNCHANGED =====
     
     private void loadServices() {
         tableModel.setRowCount(0);
@@ -239,7 +367,7 @@ public class ServiceManagementPanel extends JPanel {
                 service.getId(),
                 service.getName(),
                 service.getUnit(),
-                MoneyFormatter.formatMoney(service.getUnitPrice()) + " đ", // VND formatting
+                MoneyFormatter.formatMoney(service.getUnitPrice()) + " đ",
                 service.isMandatory() ? "Có" : "Không"
             };
             tableModel.addRow(row);
@@ -260,6 +388,7 @@ public class ServiceManagementPanel extends JPanel {
                     "Thành Công", 
                     JOptionPane.INFORMATION_MESSAGE);
                 loadServices();
+                updateStatistics(); // Update stats
             } else {
                 JOptionPane.showMessageDialog(this, 
                     "Thêm dịch vụ thất bại!", 
@@ -304,6 +433,7 @@ public class ServiceManagementPanel extends JPanel {
                     "Thành Công", 
                     JOptionPane.INFORMATION_MESSAGE);
                 loadServices();
+                updateStatistics(); // Update stats
             } else {
                 JOptionPane.showMessageDialog(this, 
                     "Cập nhật dịch vụ thất bại!", 
@@ -340,6 +470,7 @@ public class ServiceManagementPanel extends JPanel {
                     "Thành Công", 
                     JOptionPane.INFORMATION_MESSAGE);
                 loadServices();
+                updateStatistics(); // Update stats
             } else {
                 JOptionPane.showMessageDialog(this, 
                     "Xóa dịch vụ thất bại!", 
