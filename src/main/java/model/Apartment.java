@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 /**
  * Apartment Entity
  * Represents an apartment/unit in a floor
+ * Note: base_price has been removed - pricing is now handled in contracts
  */
 public class Apartment {
     private Long id;
@@ -12,7 +13,6 @@ public class Apartment {
     private String roomNumber;
     private Double area;
     private String status; // AVAILABLE, RENTED, MAINTENANCE
-    private BigDecimal basePrice;
     private String description;
     private boolean isDeleted;
 
@@ -34,14 +34,13 @@ public class Apartment {
     }
 
     public Apartment(Long id, Long floorId, String roomNumber, Double area, String status, 
-                     BigDecimal basePrice, String description, boolean isDeleted,
+                     String description, boolean isDeleted,
                      String apartmentType, Integer bedroomCount, Integer bathroomCount) {
         this.id = id;
         this.floorId = floorId;
         this.roomNumber = roomNumber;
         this.area = area;
         this.status = status;
-        this.basePrice = basePrice;
         this.description = description;
         this.isDeleted = isDeleted;
         this.apartmentType = apartmentType;
@@ -50,12 +49,11 @@ public class Apartment {
     }
 
     // Constructor rút gọn
-    public Apartment(Long floorId, String roomNumber, Double area, String status, BigDecimal basePrice) {
+    public Apartment(Long floorId, String roomNumber, Double area, String status) {
         this.floorId = floorId;
         this.roomNumber = roomNumber;
         this.area = area;
         this.status = status;
-        this.basePrice = basePrice;
         this.isDeleted = false;
         // Mặc định
         this.apartmentType = "Standard";
@@ -79,9 +77,6 @@ public class Apartment {
 
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
-
-    public BigDecimal getBasePrice() { return basePrice; }
-    public void setBasePrice(BigDecimal basePrice) { this.basePrice = basePrice; }
 
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }

@@ -11,7 +11,7 @@ public class Invoice {
     private int month;
     private int year;
     private BigDecimal totalAmount;
-    private String status; // UNPAID, PAID
+    private String status; // UNPAID, PAID,
     private Date createdAt;
     private Date paymentDate;
     private boolean isDeleted;

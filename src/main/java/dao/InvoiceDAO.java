@@ -12,16 +12,14 @@ import model.InvoiceDetail;
  * DAO class for Invoice operations
  */
 public class InvoiceDAO {
-    
+
     // Get all invoices
     public List<Invoice> getAllInvoices() {
         List<Invoice> invoices = new ArrayList<>();
-        String sql = "SELECT * FROM invoices WHERE is_deleted = 0 ORDER BY year DESC, month DESC";
-        
-        try (Connection conn = Db_connection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
+        String sql = "SELECT * FROM invoices WHERE is_deleted = 0 AND status <> 'CANCELED' ORDER BY year DESC, month DESC";
+
+        try (Connection conn = Db_connection.getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+
             while (rs.next()) {
                 Invoice invoice = new Invoice();
                 invoice.setId(rs.getLong("id"));
@@ -47,17 +45,16 @@ public class InvoiceDAO {
         }
         return invoices;
     }
-    
+
     // Get invoice by ID
     public Invoice getInvoiceById(Long id) {
         String sql = "SELECT * FROM invoices WHERE id = ? AND is_deleted = 0";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
             pstmt.setLong(1, id);
             ResultSet rs = pstmt.executeQuery();
-            
+
             if (rs.next()) {
                 Invoice invoice = new Invoice();
                 invoice.setId(rs.getLong("id"));
@@ -83,23 +80,21 @@ public class InvoiceDAO {
         }
         return null;
     }
-    
+
     // ===== ADDED FOR PANEL COMPATIBILITY =====
-    
     /**
      * Get invoices by month and year
      */
     public List<Invoice> getInvoicesByMonth(int month, int year) {
         List<Invoice> invoices = new ArrayList<>();
         String sql = "SELECT * FROM invoices WHERE month = ? AND year = ? AND is_deleted = 0 ORDER BY id DESC";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
             pstmt.setInt(1, month);
             pstmt.setInt(2, year);
             ResultSet rs = pstmt.executeQuery();
-            
+
             while (rs.next()) {
                 Invoice invoice = new Invoice();
                 invoice.setId(rs.getLong("id"));
@@ -125,16 +120,14 @@ public class InvoiceDAO {
         }
         return invoices;
     }
-    
+
     // Get unpaid invoices
     public List<Invoice> getUnpaidInvoices() {
         List<Invoice> invoices = new ArrayList<>();
         String sql = "SELECT * FROM invoices WHERE status = 'UNPAID' AND is_deleted = 0 ORDER BY year DESC, month DESC";
-        
-        try (Connection conn = Db_connection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
+
+        try (Connection conn = Db_connection.getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+
             while (rs.next()) {
                 Invoice invoice = new Invoice();
                 invoice.setId(rs.getLong("id"));
@@ -160,42 +153,45 @@ public class InvoiceDAO {
         }
         return invoices;
     }
-    
+
     // Insert new invoice
-    public boolean insertInvoice(Invoice invoice) {
-        String sql = "INSERT INTO invoices (contract_id, month, year, total_amount, status, created_at, payment_date, is_deleted) " +
-                     "VALUES (?, ?, ?, ?, ?, ?, ?, 0)";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
+    public Long insertInvoiceAndReturnId(Invoice invoice) {
+        String sql = "INSERT INTO invoices "
+                + "(contract_id, month, year, total_amount, status, created_at, is_deleted) "
+                + "VALUES (?, ?, ?, ?, ?, NOW(), 0)";
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt
+                = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+
             pstmt.setLong(1, invoice.getContractId());
             pstmt.setInt(2, invoice.getMonth());
             pstmt.setInt(3, invoice.getYear());
             pstmt.setBigDecimal(4, invoice.getTotalAmount());
             pstmt.setString(5, invoice.getStatus());
-            pstmt.setTimestamp(6, new Timestamp(System.currentTimeMillis()));
-            if (invoice.getPaymentDate() != null) {
-                pstmt.setTimestamp(7, new Timestamp(invoice.getPaymentDate().getTime()));
-            } else {
-                pstmt.setNull(7, Types.TIMESTAMP);
+
+            int affected = pstmt.executeUpdate();
+            if (affected == 0) {
+                return null;
             }
-            
-            return pstmt.executeUpdate() > 0;
+
+            ResultSet rs = pstmt.getGeneratedKeys();
+            if (rs.next()) {
+                return rs.getLong(1);
+            }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return false;
+        return null;
     }
-    
+
     // Update invoice
     public boolean updateInvoice(Invoice invoice) {
-        String sql = "UPDATE invoices SET contract_id = ?, month = ?, year = ?, total_amount = ?, " +
-                     "status = ?, payment_date = ? WHERE id = ?";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
+        String sql = "UPDATE invoices SET contract_id = ?, month = ?, year = ?, total_amount = ?, "
+                + "status = ?, payment_date = ? WHERE id = ?";
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
             pstmt.setLong(1, invoice.getContractId());
             pstmt.setInt(2, invoice.getMonth());
             pstmt.setInt(3, invoice.getYear());
@@ -207,37 +203,20 @@ public class InvoiceDAO {
                 pstmt.setNull(6, Types.TIMESTAMP);
             }
             pstmt.setLong(7, invoice.getId());
-            
+
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) {
             e.printStackTrace();
         }
         return false;
     }
-    
-    // Soft delete invoice
-    public boolean deleteInvoice(Long id) {
-        String sql = "UPDATE invoices SET is_deleted = 1 WHERE id = ?";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
-            pstmt.setLong(1, id);
-            return pstmt.executeUpdate() > 0;
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
-    
+
     // Count unpaid invoices
     public int countUnpaidInvoices() {
         String sql = "SELECT COUNT(*) FROM invoices WHERE status = 'UNPAID' AND is_deleted = 0";
-        
-        try (Connection conn = Db_connection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
+
+        try (Connection conn = Db_connection.getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+
             if (rs.next()) {
                 return rs.getInt(1);
             }
@@ -246,15 +225,13 @@ public class InvoiceDAO {
         }
         return 0;
     }
-    
+
     // Get total revenue (paid invoices)
     public BigDecimal getTotalRevenue() {
         String sql = "SELECT SUM(total_amount) FROM invoices WHERE status = 'PAID' AND is_deleted = 0";
-        
-        try (Connection conn = Db_connection.getConnection();
-             Statement stmt = conn.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            
+
+        try (Connection conn = Db_connection.getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+
             if (rs.next()) {
                 BigDecimal total = rs.getBigDecimal(1);
                 return total != null ? total : BigDecimal.ZERO;
@@ -264,18 +241,17 @@ public class InvoiceDAO {
         }
         return BigDecimal.ZERO;
     }
-    
+
     // Get monthly revenue
     public BigDecimal getMonthlyRevenue(int month, int year) {
         String sql = "SELECT SUM(total_amount) FROM invoices WHERE month = ? AND year = ? AND status = 'PAID' AND is_deleted = 0";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
             pstmt.setInt(1, month);
             pstmt.setInt(2, year);
             ResultSet rs = pstmt.executeQuery();
-            
+
             if (rs.next()) {
                 BigDecimal total = rs.getBigDecimal(1);
                 return total != null ? total : BigDecimal.ZERO;
@@ -285,20 +261,20 @@ public class InvoiceDAO {
         }
         return BigDecimal.ZERO;
     }
+
     public Invoice getLatestInvoiceByApartmentId(Long apartmentId) {
         // Query này Join với bảng contracts để tìm hóa đơn của căn hộ đó
         // Giả định bảng contracts có cột id và apartment_id
-        String sql = "SELECT i.* FROM invoices i " +
-                     "JOIN contracts c ON i.contract_id = c.id " +
-                     "WHERE c.apartment_id = ? AND i.is_deleted = 0 " +
-                     "ORDER BY i.year DESC, i.month DESC, i.id DESC LIMIT 1";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
+        String sql = "SELECT i.* FROM invoices i "
+                + "JOIN contracts c ON i.contract_id = c.id "
+                + "WHERE c.apartment_id = ? AND i.is_deleted = 0 "
+                + "ORDER BY i.year DESC, i.month DESC, i.id DESC LIMIT 1";
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
             pstmt.setLong(1, apartmentId);
             ResultSet rs = pstmt.executeQuery();
-            
+
             if (rs.next()) {
                 Invoice invoice = new Invoice();
                 invoice.setId(rs.getLong("id"));
@@ -307,13 +283,17 @@ public class InvoiceDAO {
                 invoice.setYear(rs.getInt("year"));
                 invoice.setTotalAmount(rs.getBigDecimal("total_amount"));
                 invoice.setStatus(rs.getString("status"));
-                
+
                 Timestamp createdAt = rs.getTimestamp("created_at");
-                if (createdAt != null) invoice.setCreatedAt(new java.util.Date(createdAt.getTime()));
-                
+                if (createdAt != null) {
+                    invoice.setCreatedAt(new java.util.Date(createdAt.getTime()));
+                }
+
                 Timestamp paymentDate = rs.getTimestamp("payment_date");
-                if (paymentDate != null) invoice.setPaymentDate(new java.util.Date(paymentDate.getTime()));
-                
+                if (paymentDate != null) {
+                    invoice.setPaymentDate(new java.util.Date(paymentDate.getTime()));
+                }
+
                 invoice.setDeleted(rs.getBoolean("is_deleted"));
                 return invoice;
             }
@@ -323,6 +303,35 @@ public class InvoiceDAO {
         return null;
     }
 
+    public boolean insertInvoiceDetails(Long invoiceId, List<InvoiceDetail> details) {
+        if (details == null || details.isEmpty()) {
+            return true;
+        }
+
+        String sql = "INSERT INTO invoice_details "
+                + "(invoice_id, service_name, unit_price, quantity, amount) "
+                + "VALUES (?, ?, ?, ?, ?)";
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            for (InvoiceDetail d : details) {
+                pstmt.setLong(1, invoiceId);
+                pstmt.setString(2, d.getServiceName());
+                pstmt.setBigDecimal(3, d.getUnitPrice());
+                pstmt.setDouble(4, d.getQuantity());
+                pstmt.setBigDecimal(5, d.getAmount());
+                pstmt.addBatch();
+            }
+
+            pstmt.executeBatch();
+            return true;
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
     /**
      * Lấy danh sách chi tiết dịch vụ của hóa đơn
      */
@@ -330,13 +339,12 @@ public class InvoiceDAO {
         List<InvoiceDetail> details = new ArrayList<>();
         // Giả định bảng chi tiết tên là invoice_details
         String sql = "SELECT * FROM invoice_details WHERE invoice_id = ?";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
             pstmt.setLong(1, invoiceId);
             ResultSet rs = pstmt.executeQuery();
-            
+
             while (rs.next()) {
                 InvoiceDetail detail = new InvoiceDetail();
                 detail.setId(rs.getLong("id"));
@@ -351,6 +359,58 @@ public class InvoiceDAO {
             e.printStackTrace();
         }
         return details;
+    }
+
+    public BigDecimal getRevenueByYear(int year) {
+        String sql = "SELECT SUM(total_amount) FROM invoices "
+                + "WHERE year = ? AND status = 'PAID' AND is_deleted = 0";
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, year);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return rs.getBigDecimal(1) != null ? rs.getBigDecimal(1) : BigDecimal.ZERO;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return BigDecimal.ZERO;
+    }
+
+    public int countUnpaidInvoicesByMonth(int month, int year) {
+        String sql = "SELECT COUNT(*) FROM invoices "
+                + "WHERE status = 'UNPAID' AND month = ? AND year = ? AND is_deleted = 0";
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, month);
+            ps.setInt(2, year);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return 0;
+    }
+
+    public int countUnpaidInvoicesByYear(int year) {
+        String sql = "SELECT COUNT(*) FROM invoices "
+                + "WHERE status = 'UNPAID' AND year = ? AND is_deleted = 0";
+
+        try (Connection conn = Db_connection.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
+
+            ps.setInt(1, year);
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return 0;
     }
 
 }

@@ -22,8 +22,10 @@ import java.util.Date;
 import java.util.List;
 
 /**
- * Contract Dialog - Popup for Add/Edit Contract
- * Features: Apartment/Resident selection, Date handling, Amount validation
+ * Contract Dialog - Legacy popup for Add/Edit Contract
+ * NOTE: This is a simpler version. For full features, use ContractFormDialog
+ * 
+ * UPDATED: Support for RENTAL and OWNERSHIP contract types
  */
 public class ContractDialog extends JDialog {
     
@@ -34,9 +36,11 @@ public class ContractDialog extends JDialog {
     
     private JComboBox<ApartmentDisplay> apartmentCombo;
     private JComboBox<ResidentDisplay> residentCombo;
+    private JComboBox<String> contractTypeCombo;
+    private JTextField signedDateField;
     private JTextField startDateField;
     private JTextField endDateField;
-    private JTextField monthlyRentField;
+    private JTextField priceField;
     private JTextField depositField;
     private JComboBox<String> statusCombo;
     
@@ -73,16 +77,10 @@ public class ContractDialog extends JDialog {
         }
     }
     
-    /**
-     * Constructor for Add mode
-     */
     public ContractDialog(JFrame parent) {
         this(parent, null);
     }
     
-    /**
-     * Constructor for Edit mode
-     */
     public ContractDialog(JFrame parent, Contract contract) {
         super(parent, contract == null ? "Thêm Hợp Đồng" : "Sửa Hợp Đồng", true);
         this.contract = contract;
@@ -103,7 +101,7 @@ public class ContractDialog extends JDialog {
     }
     
     private void initializeDialog() {
-        setSize(550, 700);
+        setSize(550, 750);
         setResizable(false);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
         getContentPane().setBackground(UIConstants.BACKGROUND_COLOR);
@@ -114,13 +112,8 @@ public class ContractDialog extends JDialog {
         mainPanel.setBackground(UIConstants.BACKGROUND_COLOR);
         mainPanel.setBorder(new EmptyBorder(25, 30, 25, 30));
         
-        // Header
         mainPanel.add(createHeader(), BorderLayout.NORTH);
-        
-        // Form
         mainPanel.add(createForm(), BorderLayout.CENTER);
-        
-        // Buttons
         mainPanel.add(createButtonPanel(), BorderLayout.SOUTH);
         
         setContentPane(mainPanel);
@@ -171,32 +164,47 @@ public class ContractDialog extends JDialog {
         formPanel.add(residentCombo);
         formPanel.add(Box.createVerticalStrut(15));
         
-        // Load data AFTER creating combos
         loadApartments();
         loadResidents();
         
-        // Start date
+        // ✅ NEW: Contract Type
+        formPanel.add(createFieldLabel("Loại Hợp Đồng *"));
+        contractTypeCombo = new JComboBox<>(new String[]{"Thuê", "Sở hữu"});
+        contractTypeCombo.setFont(UIConstants.FONT_REGULAR);
+        contractTypeCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        contractTypeCombo.setAlignmentX(Component.LEFT_ALIGNMENT);
+        formPanel.add(contractTypeCombo);
+        formPanel.add(Box.createVerticalStrut(15));
+        
+        // ✅ Signed date
+        formPanel.add(createFieldLabel("Ngày Ký (yyyy-MM-dd)"));
+        signedDateField = createTextField();
+        signedDateField.setToolTipText("Ví dụ: 2026-01-28");
+        formPanel.add(signedDateField);
+        formPanel.add(Box.createVerticalStrut(15));
+        
+        // Start date (for RENTAL)
         formPanel.add(createFieldLabel("Ngày Bắt Đầu (yyyy-MM-dd) *"));
         startDateField = createTextField();
-        startDateField.setToolTipText("Ví dụ: 2026-01-01");
+        startDateField.setToolTipText("Chỉ áp dụng cho hợp đồng Thuê");
         formPanel.add(startDateField);
-        JLabel startHint = createHintLabel("Ví dụ: 2026-01-01");
+        JLabel startHint = createHintLabel("Chỉ áp dụng cho hợp đồng Thuê");
         formPanel.add(startHint);
         formPanel.add(Box.createVerticalStrut(15));
         
-        // End date
+        // End date (for RENTAL)
         formPanel.add(createFieldLabel("Ngày Kết Thúc (yyyy-MM-dd) *"));
         endDateField = createTextField();
-        endDateField.setToolTipText("Ví dụ: 2027-01-01");
+        endDateField.setToolTipText("Chỉ áp dụng cho hợp đồng Thuê");
         formPanel.add(endDateField);
-        JLabel endHint = createHintLabel("Ví dụ: 2027-01-01");
+        JLabel endHint = createHintLabel("Chỉ áp dụng cho hợp đồng Thuê");
         formPanel.add(endHint);
         formPanel.add(Box.createVerticalStrut(15));
         
-        // Monthly rent
-        formPanel.add(createFieldLabel("Tiền Thuê/Tháng (VNĐ) *"));
-        monthlyRentField = createTextField();
-        formPanel.add(monthlyRentField);
+        // ✅ Price (dynamic label)
+        formPanel.add(createFieldLabel("Tiền Thuê/Tháng hoặc Giá Mua (VNĐ) *"));
+        priceField = createTextField();
+        formPanel.add(priceField);
         formPanel.add(Box.createVerticalStrut(15));
         
         // Deposit
@@ -207,7 +215,7 @@ public class ContractDialog extends JDialog {
         
         // Status
         formPanel.add(createFieldLabel("Trạng Thái *"));
-        statusCombo = new JComboBox<>(new String[]{"Active", "Expired", "Terminated"});
+        statusCombo = new JComboBox<>(new String[]{"ACTIVE", "EXPIRED", "TERMINATED"});
         statusCombo.setFont(UIConstants.FONT_REGULAR);
         statusCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
         statusCombo.setAlignmentX(Component.LEFT_ALIGNMENT);
@@ -217,46 +225,44 @@ public class ContractDialog extends JDialog {
     }
     
     private JPanel createButtonPanel() {
-    JPanel buttonPanel = new JPanel(new BorderLayout());
-    buttonPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-    
-    // Left: Manage Members button (only in Edit mode)
-    JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-    leftPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-    
-    if (contract != null && contract.getId() != null) {
-        ModernButton manageMembersButton = new ModernButton("👥 Quản lý Thành viên", new Color(103, 58, 183));
-        manageMembersButton.setPreferredSize(new Dimension(200, 40));
-        manageMembersButton.addActionListener(e -> manageHouseholdMembers());
-        leftPanel.add(manageMembersButton);
+        JPanel buttonPanel = new JPanel(new BorderLayout());
+        buttonPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        
+        JPanel leftPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        leftPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        
+        if (contract != null && contract.getId() != null) {
+            ModernButton manageMembersButton = new ModernButton("👥 Quản lý Thành viên", new Color(103, 58, 183));
+            manageMembersButton.setPreferredSize(new Dimension(200, 40));
+            manageMembersButton.addActionListener(e -> manageHouseholdMembers());
+            leftPanel.add(manageMembersButton);
+        }
+        
+        JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        rightPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        
+        ModernButton cancelButton = new ModernButton("Hủy", UIConstants.TEXT_SECONDARY);
+        cancelButton.setPreferredSize(new Dimension(100, 40));
+        cancelButton.addActionListener(e -> {
+            confirmed = false;
+            dispose();
+        });
+        
+        ModernButton saveButton = new ModernButton(
+            contract == null ? "Thêm" : "Lưu", 
+            UIConstants.SUCCESS_COLOR
+        );
+        saveButton.setPreferredSize(new Dimension(100, 40));
+        saveButton.addActionListener(e -> saveContract());
+        
+        rightPanel.add(cancelButton);
+        rightPanel.add(saveButton);
+        
+        buttonPanel.add(leftPanel, BorderLayout.WEST);
+        buttonPanel.add(rightPanel, BorderLayout.EAST);
+        
+        return buttonPanel;
     }
-    
-    // Right: Save/Cancel buttons
-    JPanel rightPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
-    rightPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-    
-    ModernButton cancelButton = new ModernButton("Hủy", UIConstants.TEXT_SECONDARY);
-    cancelButton.setPreferredSize(new Dimension(100, 40));
-    cancelButton.addActionListener(e -> {
-        confirmed = false;
-        dispose();
-    });
-    
-    ModernButton saveButton = new ModernButton(
-        contract == null ? "Thêm" : "Lưu", 
-        UIConstants.SUCCESS_COLOR
-    );
-    saveButton.setPreferredSize(new Dimension(100, 40));
-    saveButton.addActionListener(e -> saveContract());
-    
-    rightPanel.add(cancelButton);
-    rightPanel.add(saveButton);
-    
-    buttonPanel.add(leftPanel, BorderLayout.WEST);
-    buttonPanel.add(rightPanel, BorderLayout.EAST);
-    
-    return buttonPanel;
-}
     
     private JLabel createFieldLabel(String text) {
         JLabel label = new JLabel(text);
@@ -284,7 +290,6 @@ public class ContractDialog extends JDialog {
         field.setAlignmentX(Component.LEFT_ALIGNMENT);
         field.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
         
-        // Focus border effect
         field.addFocusListener(new java.awt.event.FocusAdapter() {
             public void focusGained(java.awt.event.FocusEvent evt) {
                 field.setBorder(BorderFactory.createCompoundBorder(
@@ -313,7 +318,7 @@ public class ContractDialog extends JDialog {
                 Building building = buildingDAO.getBuildingById(floor.getBuildingId());
                 String displayText = (building != null ? building.getName() : "N/A") + 
                                    " - Tầng " + floor.getFloorNumber() + 
-                                   " - " + apartment.getApartmentNumber();
+                                   " - " + apartment.getRoomNumber();
                 model.addElement(new ApartmentDisplay(apartment, displayText));
             }
         }
@@ -352,11 +357,18 @@ public class ContractDialog extends JDialog {
                 }
             }
             
+            // ✅ Contract type
+            contractTypeCombo.setSelectedItem(contract.getContractTypeDisplay());
+            
+            // ✅ Dates
+            signedDateField.setText(contract.getSignedDate() != null ? dateFormat.format(contract.getSignedDate()) : "");
             startDateField.setText(contract.getStartDate() != null ? dateFormat.format(contract.getStartDate()) : "");
             endDateField.setText(contract.getEndDate() != null ? dateFormat.format(contract.getEndDate()) : "");
-            monthlyRentField.setText(contract.getMonthlyRent() != null ? contract.getMonthlyRent().toString() : "");
+            
+            // ✅ Price
+            priceField.setText(contract.getMonthlyRent() != null ? contract.getMonthlyRent().toString() : "");
             depositField.setText(contract.getDeposit() != null ? contract.getDeposit().toString() : "");
-            statusCombo.setSelectedItem(contract.getStatus() != null ? contract.getStatus() : "Active");
+            statusCombo.setSelectedItem(contract.getStatus() != null ? contract.getStatus() : "ACTIVE");
         }
     }
     
@@ -369,105 +381,117 @@ public class ContractDialog extends JDialog {
             ApartmentDisplay selectedApt = (ApartmentDisplay) apartmentCombo.getSelectedItem();
             ResidentDisplay selectedRes = (ResidentDisplay) residentCombo.getSelectedItem();
             
-            Date startDate = dateFormat.parse(startDateField.getText().trim());
-            Date endDate = dateFormat.parse(endDateField.getText().trim());
-            BigDecimal monthlyRent = new BigDecimal(monthlyRentField.getText().trim());
+            String typeDisplay = (String) contractTypeCombo.getSelectedItem();
+            String contractType = "Thuê".equals(typeDisplay) ? "RENTAL" : "OWNERSHIP";
+            
+            // ✅ Parse dates based on contract type
+            Date signedDate = null;
+            if (!signedDateField.getText().trim().isEmpty()) {
+                signedDate = dateFormat.parse(signedDateField.getText().trim());
+            }
+            
+            Date startDate = null;
+            Date endDate = null;
+            
+            if ("RENTAL".equals(contractType)) {
+                if (!startDateField.getText().trim().isEmpty()) {
+                    startDate = dateFormat.parse(startDateField.getText().trim());
+                }
+                if (!endDateField.getText().trim().isEmpty()) {
+                    endDate = dateFormat.parse(endDateField.getText().trim());
+                }
+            }
+            
+            BigDecimal price = new BigDecimal(priceField.getText().trim());
             BigDecimal deposit = new BigDecimal(depositField.getText().trim());
             String status = (String) statusCombo.getSelectedItem();
             
             if (contract == null) {
-                // Create new contract
                 contract = new Contract();
-                contract.setApartmentId(selectedApt.apartment.getId());
-                contract.setResidentId(selectedRes.resident.getId());
-                contract.setStartDate(startDate);
-                contract.setEndDate(endDate);
-                contract.setMonthlyRent(monthlyRent);
-                contract.setDeposit(deposit);
-                contract.setStatus(status);
-            } else {
-                // Update existing contract
-                contract.setApartmentId(selectedApt.apartment.getId());
-                contract.setResidentId(selectedRes.resident.getId());
-                contract.setStartDate(startDate);
-                contract.setEndDate(endDate);
-                contract.setMonthlyRent(monthlyRent);
-                contract.setDeposit(deposit);
-                contract.setStatus(status);
             }
+            
+            contract.setApartmentId(selectedApt.apartment.getId());
+            contract.setResidentId(selectedRes.resident.getId());
+            contract.setContractType(contractType);
+            contract.setSignedDate(signedDate);
+            contract.setStartDate(startDate);
+            contract.setEndDate(endDate);
+            contract.setMonthlyRent(price);
+            contract.setDeposit(deposit);
+            contract.setStatus(status);
             
             confirmed = true;
             dispose();
         } catch (ParseException e) {
             showError("Định dạng ngày không đúng! Vui lòng nhập theo định dạng yyyy-MM-dd");
+        } catch (NumberFormatException e) {
+            showError("Giá tiền không hợp lệ!");
         }
     }
     
     private boolean validateForm() {
-        // Apartment
         if (apartmentCombo.getSelectedItem() == null) {
             showError("Vui lòng chọn căn hộ!");
             return false;
         }
         
-        // Resident
         if (residentCombo.getSelectedItem() == null) {
             showError("Vui lòng chọn cư dân!");
             return false;
         }
         
-        // Start date
-        if (startDateField.getText().trim().isEmpty()) {
-            showError("Vui lòng nhập ngày bắt đầu!");
-            startDateField.requestFocus();
-            return false;
-        }
+        String typeDisplay = (String) contractTypeCombo.getSelectedItem();
+        boolean isRental = "Thuê".equals(typeDisplay);
         
-        // End date
-        if (endDateField.getText().trim().isEmpty()) {
-            showError("Vui lòng nhập ngày kết thúc!");
-            endDateField.requestFocus();
-            return false;
-        }
-        
-        // Validate dates
-        try {
-            Date start = dateFormat.parse(startDateField.getText().trim());
-            Date end = dateFormat.parse(endDateField.getText().trim());
+        // ✅ Validate dates for RENTAL
+        if (isRental) {
+            if (startDateField.getText().trim().isEmpty()) {
+                showError("Hợp đồng thuê phải có ngày bắt đầu!");
+                startDateField.requestFocus();
+                return false;
+            }
             
-            if (end.before(start) || end.equals(start)) {
-                showError("Ngày kết thúc phải sau ngày bắt đầu!");
+            if (endDateField.getText().trim().isEmpty()) {
+                showError("Hợp đồng thuê phải có ngày kết thúc!");
                 endDateField.requestFocus();
                 return false;
             }
-        } catch (ParseException e) {
-            showError("Định dạng ngày không đúng! Vui lòng nhập theo định dạng yyyy-MM-dd (Ví dụ: 2026-01-01)");
-            return false;
+            
+            try {
+                Date start = dateFormat.parse(startDateField.getText().trim());
+                Date end = dateFormat.parse(endDateField.getText().trim());
+                
+                if (end.before(start) || end.equals(start)) {
+                    showError("Ngày kết thúc phải sau ngày bắt đầu!");
+                    return false;
+                }
+            } catch (ParseException e) {
+                showError("Định dạng ngày không đúng!");
+                return false;
+            }
         }
         
-        // Monthly rent
-        if (monthlyRentField.getText().trim().isEmpty()) {
-            showError("Vui lòng nhập tiền thuê!");
-            monthlyRentField.requestFocus();
+        // Price
+        if (priceField.getText().trim().isEmpty()) {
+            showError("Vui lòng nhập giá tiền!");
+            priceField.requestFocus();
             return false;
         }
         
         try {
-            BigDecimal rent = new BigDecimal(monthlyRentField.getText().trim());
-            if (rent.compareTo(BigDecimal.ZERO) <= 0) {
-                showError("Tiền thuê phải lớn hơn 0!");
-                monthlyRentField.requestFocus();
+            BigDecimal price = new BigDecimal(priceField.getText().trim());
+            if (price.compareTo(BigDecimal.ZERO) <= 0) {
+                showError("Giá tiền phải lớn hơn 0!");
                 return false;
             }
         } catch (NumberFormatException e) {
-            showError("Tiền thuê không hợp lệ!");
-            monthlyRentField.requestFocus();
+            showError("Giá tiền không hợp lệ!");
             return false;
         }
         
         // Deposit
         if (depositField.getText().trim().isEmpty()) {
-            showError("Vui lòng nhập tiền đặt cọc!");
+            showError("Vui lòng nhập tiền cọc!");
             depositField.requestFocus();
             return false;
         }
@@ -475,13 +499,11 @@ public class ContractDialog extends JDialog {
         try {
             BigDecimal deposit = new BigDecimal(depositField.getText().trim());
             if (deposit.compareTo(BigDecimal.ZERO) < 0) {
-                showError("Tiền đặt cọc không được âm!");
-                depositField.requestFocus();
+                showError("Tiền cọc không được âm!");
                 return false;
             }
         } catch (NumberFormatException e) {
-            showError("Tiền đặt cọc không hợp lệ!");
-            depositField.requestFocus();
+            showError("Tiền cọc không hợp lệ!");
             return false;
         }
         
@@ -497,30 +519,24 @@ public class ContractDialog extends JDialog {
         );
     }
     
-    /**
-     * Check if user confirmed the dialog
-     */
     public boolean isConfirmed() {
         return confirmed;
     }
     
-    /**
-     * Get the contract (new or updated)
-     */
     public Contract getContract() {
         return contract;
     }
     
     private void manageHouseholdMembers() {
-    if (contract == null || contract.getId() == null) {
-        JOptionPane.showMessageDialog(this,
-            "Vui lòng lưu hợp đồng trước khi quản lý thành viên!",
-            "Thông Báo",
-            JOptionPane.INFORMATION_MESSAGE);
-        return;
+        if (contract == null || contract.getId() == null) {
+            JOptionPane.showMessageDialog(this,
+                "Vui lòng lưu hợp đồng trước khi quản lý thành viên!",
+                "Thông Báo",
+                JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        
+        HouseholdMemberManagementDialog dialog = new HouseholdMemberManagementDialog(this, contract.getId());
+        dialog.setVisible(true);
     }
-    
-    HouseholdMemberManagementDialog dialog = new HouseholdMemberManagementDialog(this, contract.getId());
-    dialog.setVisible(true);
-}
 }
