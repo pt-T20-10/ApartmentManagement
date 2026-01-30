@@ -74,7 +74,7 @@ public class ApartmentCard extends JPanel {
         headerPanel.add(titleGroup, BorderLayout.WEST);
         headerPanel.add(createStatusBadge(apartment.getStatus()), BorderLayout.EAST);
 
-        // BODY - Hiển thị diện tích, phòng ngủ, phòng tắm (ĐÃ BỎ GIÁ)
+        // BODY
         JPanel bodyPanel = new JPanel();
         bodyPanel.setLayout(new BoxLayout(bodyPanel, BoxLayout.Y_AXIS));
         bodyPanel.setOpaque(false);
@@ -89,7 +89,7 @@ public class ApartmentCard extends JPanel {
         specRow.add(createIconLabel("BATH", apartment.getBathroomCount() + " PT"));
         
         bodyPanel.add(specRow);
-        bodyPanel.add(Box.createVerticalStrut(5)); // Khoảng trống thay cho label giá cũ
+        bodyPanel.add(Box.createVerticalStrut(5));
 
         // FOOTER
         JPanel footerPanel = new JPanel(new BorderLayout());
@@ -120,7 +120,16 @@ public class ApartmentCard extends JPanel {
     private JComponent createFooterInfo() {
         String s = apartment.getStatus() == null ? "" : apartment.getStatus().trim();
         
-        // Kiểm tra xem căn hộ có đang được thuê không (Bao gồm OCCUPIED)
+        // ✅ OWNED apartments - hiển thị thông báo đã bán
+        if (s.equalsIgnoreCase("OWNED")) {
+            JLabel lblOwned = new JLabel(" ĐÃ BÁN - Không cho thuê");
+            lblOwned.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            lblOwned.setForeground(new Color(194, 24, 91)); // Pink
+            lblOwned.setIcon(new CardIcon("CHECK", 14, new Color(194, 24, 91)));
+            return lblOwned;
+        }
+        
+        // RENTED apartments - kiểm tra hạn hợp đồng
         boolean isRented = s.equalsIgnoreCase("RENTED") || 
                            s.equalsIgnoreCase("OCCUPIED") || 
                            s.equalsIgnoreCase("Đã thuê") ||
@@ -133,21 +142,19 @@ public class ApartmentCard extends JPanel {
             lblAlert.setFont(new Font("Segoe UI", Font.BOLD, 12));
             
             if (days < 0) {
-                // ĐÃ HẾT HẠN
                 lblAlert.setText(" QUÁ HẠN " + Math.abs(days) + " NGÀY");
-                lblAlert.setForeground(new Color(211, 47, 47)); // Đỏ
+                lblAlert.setForeground(new Color(211, 47, 47));
                 lblAlert.setIcon(new CardIcon("WARNING", 14, new Color(211, 47, 47))); 
                 return lblAlert;
             } else if (days <= 30) {
-                // SẮP HẾT HẠN
                 lblAlert.setText(" Hết hạn: " + days + " ngày");
-                lblAlert.setForeground(new Color(230, 81, 0)); // Cam
+                lblAlert.setForeground(new Color(230, 81, 0));
                 lblAlert.setIcon(new CardIcon("TIME", 14, new Color(230, 81, 0))); 
                 return lblAlert;
             }
         }
         
-        // Mặc định hiện ghi chú
+        // Default: Ghi chú
         String desc = apartment.getDescription();
         if (desc == null || desc.isEmpty()) desc = "Không có ghi chú";
         if (desc.length() > 18) desc = desc.substring(0, 16) + "...";
@@ -166,27 +173,35 @@ public class ApartmentCard extends JPanel {
         g2.setColor(getBackground() != null ? getBackground() : Color.WHITE);
         g2.fill(new RoundRectangle2D.Float(0, 0, getWidth()-1, getHeight()-1, 20, 20));
         
-        // Vẽ viền màu nếu sắp hết hạn
         String s = apartment.getStatus() == null ? "" : apartment.getStatus().trim();
-        boolean isRented = s.equalsIgnoreCase("RENTED") || 
-                           s.equalsIgnoreCase("OCCUPIED") || 
-                           s.equalsIgnoreCase("Đã thuê");
         
-        if (contractEndDate != null && isRented) {
-            long days = ChronoUnit.DAYS.between(LocalDate.now(), contractEndDate);
-            if (days < 0) {
-                g2.setColor(new Color(239, 83, 80)); // Viền ĐỎ
-                g2.setStroke(new BasicStroke(2f));
-            } else if (days <= 30) {
-                g2.setColor(new Color(255, 167, 38)); // Viền CAM
-                g2.setStroke(new BasicStroke(2f));
+        // ✅ OWNED - Viền PINK
+        if (s.equalsIgnoreCase("OWNED")) {
+            g2.setColor(new Color(233, 30, 99)); // Pink border
+            g2.setStroke(new BasicStroke(2f));
+        }
+        // RENTED - Kiểm tra expiry
+        else {
+            boolean isRented = s.equalsIgnoreCase("RENTED") || 
+                               s.equalsIgnoreCase("OCCUPIED") || 
+                               s.equalsIgnoreCase("Đã thuê");
+            
+            if (contractEndDate != null && isRented) {
+                long days = ChronoUnit.DAYS.between(LocalDate.now(), contractEndDate);
+                if (days < 0) {
+                    g2.setColor(new Color(239, 83, 80)); // Đỏ
+                    g2.setStroke(new BasicStroke(2f));
+                } else if (days <= 30) {
+                    g2.setColor(new Color(255, 167, 38)); // Cam
+                    g2.setStroke(new BasicStroke(2f));
+                } else {
+                    g2.setColor(new Color(230, 230, 230));
+                    g2.setStroke(new BasicStroke(1f));
+                }
             } else {
                 g2.setColor(new Color(230, 230, 230));
                 g2.setStroke(new BasicStroke(1f));
             }
-        } else {
-            g2.setColor(new Color(230, 230, 230));
-            g2.setStroke(new BasicStroke(1f));
         }
         
         g2.draw(new RoundRectangle2D.Float(0, 0, getWidth()-1, getHeight()-1, 20, 20));
@@ -197,16 +212,30 @@ public class ApartmentCard extends JPanel {
         String s = (status == null) ? "AVAILABLE" : status.trim();
         Color bg, fg; String text;
         
-        // Check OCCUPIED
-        if (s.equalsIgnoreCase("RENTED") || s.equalsIgnoreCase("OCCUPIED") || 
+        // ✅ Priority 1: OWNED (Đã bán)
+        if (s.equalsIgnoreCase("OWNED")) { 
+            bg = new Color(255, 235, 238); // Light pink
+            fg = new Color(194, 24, 91);   // Dark pink
+            text = "ĐÃ BÁN"; 
+        }
+        // Priority 2: RENTED (Đã thuê)
+        else if (s.equalsIgnoreCase("RENTED") || s.equalsIgnoreCase("OCCUPIED") || 
             s.equalsIgnoreCase("Đã thuê") || s.equalsIgnoreCase("Đang thuê")) { 
-            bg = new Color(232, 245, 233); fg = new Color(46, 125, 50); text = "ĐÃ THUÊ"; 
+            bg = new Color(232, 245, 233); 
+            fg = new Color(46, 125, 50); 
+            text = "ĐÃ THUÊ"; 
         } 
+        // Priority 3: MAINTENANCE
         else if (s.equalsIgnoreCase("MAINTENANCE") || s.equalsIgnoreCase("Bảo trì")) { 
-            bg = new Color(255, 243, 224); fg = new Color(239, 108, 0); text = "BẢO TRÌ"; 
+            bg = new Color(255, 243, 224); 
+            fg = new Color(239, 108, 0); 
+            text = "BẢO TRÌ"; 
         } 
+        // Default: AVAILABLE
         else { 
-            bg = new Color(227, 242, 253); fg = new Color(25, 118, 210); text = "TRỐNG"; 
+            bg = new Color(227, 242, 253); 
+            fg = new Color(25, 118, 210); 
+            text = "TRỐNG"; 
         }
         return new StatusBadge(text, bg, fg);
     }
@@ -301,11 +330,19 @@ public class ApartmentCard extends JPanel {
                 g2.drawLine(size-4, 4, size-4, 2); 
             } 
             else if ("BATH".equals(type)) {
-                // Icon phòng tắm: Bồn tắm đơn giản
                 g2.drawRoundRect(2, size/2, size-4, size/2-2, 3, 3);
                 g2.drawLine(1, size/2+2, 1, size-3);
                 g2.drawLine(size-1, size/2+2, size-1, size-3);
                 g2.drawOval(size/2-1, 3, 3, 3);
+            }
+            else if ("CHECK".equals(type)) {
+                // ✅ Icon checkmark cho OWNED
+                Path2D check = new Path2D.Float();
+                check.moveTo(2, size/2);
+                check.lineTo(size/2-1, size-3);
+                check.lineTo(size-2, 2);
+                g2.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+                g2.draw(check);
             }
             else if ("WARNING".equals(type)) { 
                 Path2D p = new Path2D.Float(); 

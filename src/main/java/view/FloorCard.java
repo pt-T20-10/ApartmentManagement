@@ -35,8 +35,7 @@ public class FloorCard extends JPanel {
         setOpaque(false);
         setPreferredSize(new Dimension(300, 160));
         
-        // --- THIẾT LẬP SỰ KIỆN CLICK CHO TOÀN BỘ CARD ---
-        // Đổi con trỏ chuột: Chỉ khóa khi TÒA NHÀ bảo trì
+        // Thiết lập sự kiện click
         if (isBuildingMaintenance) {
             this.setCursor(new Cursor(Cursor.DEFAULT_CURSOR));
         } else {
@@ -46,15 +45,10 @@ public class FloorCard extends JPanel {
         this.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                // 1. Kiểm tra Tòa nhà bảo trì (Cấp cha) -> CHẶN
                 if (isBuildingMaintenance) {
                     return; 
                 }
-
-                // 2. Kiểm tra Tầng bảo trì -> VẪN CHO VÀO (Để xóa/sửa căn hộ)
-                // [ĐÃ SỬA]: Bỏ đoạn JOptionPane chặn và return
                 
-                // 3. Chuyển trang (Vào danh sách căn hộ)
                 if (onSelect != null) {
                     onSelect.accept(floor);
                 }
@@ -62,7 +56,6 @@ public class FloorCard extends JPanel {
 
             @Override
             public void mouseEntered(MouseEvent e) {
-                // Chỉ đổi màu nền hover nếu không bị khóa bởi tòa nhà
                 if (!isBuildingMaintenance) {
                     setBackground(new Color(252, 252, 252));
                     repaint();
@@ -86,7 +79,6 @@ public class FloorCard extends JPanel {
         }
     }
 
-    // Hàm kiểm tra trạng thái thông minh
     private boolean isMaintenance(String status) {
         if (status == null) return false;
         String s = status.toLowerCase();
@@ -97,14 +89,12 @@ public class FloorCard extends JPanel {
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(15, 20, 15, 20));
 
-        // === 1. HEADER (Tên + Trạng thái) ===
+        // === 1. HEADER ===
         JPanel topPanel = new JPanel(new BorderLayout());
         topPanel.setOpaque(false);
 
-        // Tên Tầng
         JLabel lblName = new JLabel(floor.getName());
         lblName.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        // Nếu bảo trì -> Tên màu xám
         if (isMaintenance(floor.getStatus())) {
             lblName.setForeground(Color.GRAY);
         } else {
@@ -112,7 +102,7 @@ public class FloorCard extends JPanel {
         }
         topPanel.add(lblName, BorderLayout.WEST);
 
-        // BADGE TRẠNG THÁI
+        // Badge
         String statusText = floor.getStatus();
         if (statusText == null || statusText.isEmpty()) statusText = "Hoạt động";
 
@@ -130,12 +120,13 @@ public class FloorCard extends JPanel {
         
         add(topPanel, BorderLayout.NORTH);
 
-        // === 2. INFO (Số liệu) ===
+        // === 2. INFO ===
         JPanel centerContent = new JPanel();
         centerContent.setLayout(new BoxLayout(centerContent, BoxLayout.Y_AXIS));
         centerContent.setOpaque(false);
         centerContent.setBorder(new EmptyBorder(10, 0, 0, 0)); 
 
+        // ✅ FIX: Hiển thị tổng số căn hộ
         JLabel lblTotal = new JLabel("Tổng số căn: " + stats.totalApartments);
         lblTotal.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         lblTotal.setForeground(Color.GRAY);
@@ -144,13 +135,20 @@ public class FloorCard extends JPanel {
         centerContent.add(lblTotal);
         centerContent.add(Box.createVerticalStrut(10)); 
 
-        OccupancyBar progressBar = new OccupancyBar(stats.rentedApartments, stats.totalApartments);
+        // ✅ FIX: Progress bar tính cả RENTED + OWNED
+        int occupiedApartments = stats.rentedApartments + stats.ownedApartments;
+        OccupancyBar progressBar = new OccupancyBar(
+            occupiedApartments, 
+            stats.totalApartments,
+            stats.rentedApartments,
+            stats.ownedApartments
+        );
         progressBar.setAlignmentX(Component.LEFT_ALIGNMENT);
         centerContent.add(progressBar);
         
         add(centerContent, BorderLayout.CENTER);
 
-        // === 3. ACTIONS (Nút bấm) ===
+        // === 3. ACTIONS ===
         JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 5, 0));
         actionPanel.setOpaque(false);
         actionPanel.setBorder(new EmptyBorder(5, 0, 0, 0));
@@ -165,7 +163,6 @@ public class FloorCard extends JPanel {
             btnEdit.addActionListener(e -> { if (onEdit != null) onEdit.accept(floor); });
             btnDelete.addActionListener(e -> { if (onDelete != null) onDelete.accept(floor); });
             
-            // Ngăn sự kiện click lan ra Card
             btnEdit.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
             btnDelete.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
         }
@@ -181,22 +178,17 @@ public class FloorCard extends JPanel {
         Graphics2D g2 = (Graphics2D) g.create();
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // Vẽ nền
         g2.setColor(getBackground() != null ? getBackground() : Color.WHITE);
         g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
         
-        // Vẽ viền
         g2.setColor(new Color(220, 220, 220));
         g2.drawRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
 
-        // Hiệu ứng mờ (Overlay)
         if (isBuildingMaintenance) {
-            // Nếu tòa nhà bảo trì -> Mờ đậm
             g2.setColor(new Color(245, 245, 245, 180));
             g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
         }
         else if (isMaintenance(floor.getStatus())) {
-            // Nếu tầng bảo trì -> Mờ nhẹ màu vàng cam (Cảnh báo)
             g2.setColor(new Color(255, 243, 224, 60)); 
             g2.fillRoundRect(0, 0, getWidth() - 1, getHeight() - 1, 15, 15);
         }
@@ -238,12 +230,17 @@ public class FloorCard extends JPanel {
         }
     }
 
+    /**
+     * ✅ UPDATED: OccupancyBar hiển thị cả RENTED + OWNED
+     */
     private static class OccupancyBar extends JPanel {
-        int rented, total;
+        int occupied, total, rented, owned;
 
-        public OccupancyBar(int rented, int total) {
-            this.rented = rented;
+        public OccupancyBar(int occupied, int total, int rented, int owned) {
+            this.occupied = occupied; // RENTED + OWNED
             this.total = total;
+            this.rented = rented;
+            this.owned = owned;
             setPreferredSize(new Dimension(200, 26)); 
             setOpaque(false);
         }
@@ -258,15 +255,19 @@ public class FloorCard extends JPanel {
             int h = getHeight();
             int arc = 10; 
             
-            double percent = (total == 0) ? 0 : (double) rented / total;
+            double percent = (total == 0) ? 0 : (double) occupied / total;
             int filledWidth = (int) (w * percent);
 
+            // Background (còn trống)
             g2.setColor(new Color(240, 240, 240));
             g2.fillRoundRect(0, 0, w, h, arc, arc);
 
+            // ✅ Filled area - tính cả RENTED + OWNED
             if (filledWidth > 0) {
-                g2.setColor(new Color(33, 150, 243)); 
-                if (rented == total && total > 0) {
+                // Gradient hoặc solid color
+                g2.setColor(new Color(33, 150, 243)); // Blue
+                
+                if (occupied == total && total > 0) {
                     g2.fillRoundRect(0, 0, w, h, arc, arc); 
                 } else {
                     g2.fillRoundRect(0, 0, filledWidth, h, arc, arc);
@@ -276,12 +277,28 @@ public class FloorCard extends JPanel {
                 }
             }
 
+            // ✅ Text hiển thị chi tiết
             g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
             FontMetrics fm = g2.getFontMetrics();
-            String statusText = rented + "/" + total + " Căn hộ đã thuê";
+            
+            // Hiển thị: "X/Y đã sử dụng" hoặc chi tiết hơn
+            String statusText;
+            if (owned > 0 && rented > 0) {
+                // Có cả thuê và mua
+                statusText = String.format("%d/%d (Thuê: %d | Bán: %d)", 
+                    occupied, total, rented, owned);
+            } else if (owned > 0) {
+                // Chỉ có bán
+                statusText = String.format("%d/%d đã bán", owned, total);
+            } else {
+                // Chỉ có thuê hoặc không có gì
+                statusText = String.format("%d/%d đã thuê", rented, total);
+            }
+            
             int textX = (w - fm.stringWidth(statusText)) / 2;
             int textY = (h + fm.getAscent()) / 2 - 2;
 
+            // Màu text: trắng nếu > 50% filled, xám nếu < 50%
             g2.setColor(percent > 0.5 ? Color.WHITE : new Color(100, 100, 100));
             g2.drawString(statusText, textX, textY);
 
@@ -293,16 +310,32 @@ public class FloorCard extends JPanel {
         private String type; private int size; private Color color;
         public CardIcon(String type, int size, Color color) { this.type = type; this.size = size; this.color = color; }
         @Override public void paintIcon(Component c, Graphics g, int x, int y) {
-            Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(color); g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); g2.translate(x, y);
+            Graphics2D g2 = (Graphics2D) g.create(); 
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(color); 
+            g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); 
+            g2.translate(x, y);
+            
             if ("EDIT".equals(type)) { 
-                g2.rotate(Math.toRadians(45), size/2.0, size/2.0); g2.drawRoundRect(size/2-2, 0, 4, size-4, 1, 1); g2.drawLine(size/2-2, 3, size/2+2, 3); 
-                java.awt.geom.Path2D tip = new java.awt.geom.Path2D.Float(); tip.moveTo(size/2-2, size-4); tip.lineTo(size/2, size); tip.lineTo(size/2+2, size-4); g2.fill(tip); 
+                g2.rotate(Math.toRadians(45), size/2.0, size/2.0); 
+                g2.drawRoundRect(size/2-2, 0, 4, size-4, 1, 1); 
+                g2.drawLine(size/2-2, 3, size/2+2, 3); 
+                Path2D tip = new Path2D.Float(); 
+                tip.moveTo(size/2-2, size-4); 
+                tip.lineTo(size/2, size); 
+                tip.lineTo(size/2+2, size-4); 
+                g2.fill(tip); 
             } else if ("DELETE".equals(type)) { 
-                int w = size-6; int h = size-4; int mx = 3; int my = 4; g2.drawRoundRect(mx, my, w, h, 3, 3); g2.drawLine(1, my, size-1, my); g2.drawArc(size/2-2, 0, 4, 4, 0, 180); g2.drawLine(size/2-2, my+3, size/2-2, my+h-3); g2.drawLine(size/2+2, my+3, size/2+2, my+h-3); 
+                int w = size-6; int h = size-4; int mx = 3; int my = 4; 
+                g2.drawRoundRect(mx, my, w, h, 3, 3); 
+                g2.drawLine(1, my, size-1, my); 
+                g2.drawArc(size/2-2, 0, 4, 4, 0, 180); 
+                g2.drawLine(size/2-2, my+3, size/2-2, my+h-3); 
+                g2.drawLine(size/2+2, my+3, size/2+2, my+h-3); 
             }
             g2.dispose();
         }
-        @Override public int getIconWidth() { return size; } @Override public int getIconHeight() { return size; }
+        @Override public int getIconWidth() { return size; } 
+        @Override public int getIconHeight() { return size; }
     }
 }

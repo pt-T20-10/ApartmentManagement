@@ -600,7 +600,7 @@ public class ContractDetailDialog extends JDialog {
                 JOptionPane.QUESTION_MESSAGE);
             
             if (reason != null && !reason.trim().isEmpty()) {
-                if (contractDAO.terminateContract(contract.getId(), reason)) {
+                if (contractDAO.terminateContract(contract.getId())) {
                     JOptionPane.showMessageDialog(this,
                         "Kết thúc hợp đồng thành công!",
                         "Thành công",

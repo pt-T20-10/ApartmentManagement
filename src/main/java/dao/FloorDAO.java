@@ -8,11 +8,11 @@ import java.util.List;
 
 /**
  * DAO class for Floor operations
- * Cung cấp đầy đủ các phương thức thao tác với tầng
+ * ✅ FIXED: Tính cả OWNED apartments trong FloorStats
  */
 public class FloorDAO {
     
-    // --- MAPPER: Chuyển đổi ResultSet thành Object Floor ---
+    // --- MAPPER ---
     private Floor mapResultSetToFloor(ResultSet rs) throws SQLException {
         Floor floor = new Floor();
         floor.setId(rs.getLong("id"));
@@ -24,21 +24,24 @@ public class FloorDAO {
         return floor;
     }
 
-    // --- 1. LẤY DANH SÁCH & THỐNG KÊ (Dùng cho màn hình Quản lý Tầng) ---
+    // --- 1. LẤY DANH SÁCH & THỐNG KÊ ---
+    /**
+     * ✅ FIXED: Query bổ sung đếm OWNED apartments
+     */
     public List<FloorWithStats> getFloorsWithStatsByBuildingId(Long buildingId) {
         List<FloorWithStats> results = new ArrayList<>();
 
-        // Query kết hợp đếm tổng căn hộ và căn hộ đang thuê
-        // [QUAN TRỌNG] Đã sửa để đếm cả 'RENTED', 'Đã thuê', 'OCCUPIED'
         String sql =
             "SELECT f.id, f.building_id, f.floor_number, f.name, f.status, f.is_deleted AS is_deleted, " +
             "       COALESCE(apt_stats.total_apts, 0)  AS total_apts, " +
-            "       COALESCE(apt_stats.rented_apts, 0) AS rented_apts " +
+            "       COALESCE(apt_stats.rented_apts, 0) AS rented_apts, " +
+            "       COALESCE(apt_stats.owned_apts, 0)  AS owned_apts " +  // ← NEW
             "FROM floors f " +
             "LEFT JOIN ( " +
             "    SELECT a.floor_id, " +
             "           COUNT(a.id) AS total_apts, " +
-            "           SUM(CASE WHEN a.status IN ('RENTED', 'Đã thuê', 'OCCUPIED') THEN 1 ELSE 0 END) AS rented_apts " +
+            "           SUM(CASE WHEN a.status IN ('RENTED', 'Đã thuê', 'OCCUPIED') THEN 1 ELSE 0 END) AS rented_apts, " +
+            "           SUM(CASE WHEN a.status = 'OWNED' THEN 1 ELSE 0 END) AS owned_apts " +  // ← NEW
             "    FROM apartments a " +
             "    WHERE a.is_deleted = 0 " +
             "    GROUP BY a.floor_id " +
@@ -57,6 +60,8 @@ public class FloorDAO {
                     FloorStats stats = new FloorStats();
                     stats.totalApartments  = rs.getInt("total_apts");
                     stats.rentedApartments = rs.getInt("rented_apts");
+                    stats.ownedApartments  = rs.getInt("owned_apts");  // ← NEW
+                    
                     results.add(new FloorWithStats(floor, stats));
                 }
             }
@@ -68,7 +73,6 @@ public class FloorDAO {
 
     // --- 2. CÁC HÀM GET CƠ BẢN ---
 
-    // Lấy tầng theo ID
     public Floor getFloorById(Long id) {
         String sql = "SELECT * FROM floors WHERE id = ? AND is_deleted = 0";
         try (Connection conn = Db_connection.getConnection();
@@ -83,7 +87,6 @@ public class FloorDAO {
         return null;
     }
     
-    // Lấy danh sách tầng đơn giản (Dùng cho ComboBox)
     public List<Floor> getFloorsByBuildingId(Long buildingId) {
         List<Floor> floors = new ArrayList<>();
         String sql = "SELECT * FROM floors WHERE building_id = ? AND is_deleted = 0 ORDER BY floor_number";
@@ -101,9 +104,8 @@ public class FloorDAO {
         return floors;
     }
 
-    // --- 3. CHECK VALIDATION (TRÙNG LẶP & RÀNG BUỘC) ---
+    // --- 3. CHECK VALIDATION ---
 
-    // Kiểm tra trùng Tên
     public boolean isFloorNameExists(Long buildingId, String name) {
         return isFloorNameExists(buildingId, name, null);
     }
@@ -123,7 +125,6 @@ public class FloorDAO {
         return false;
     }
 
-    // Kiểm tra trùng Số tầng
     public boolean isFloorNumberExists(Long buildingId, int floorNumber) {
         return isFloorNumberExists(buildingId, floorNumber, null);
     }
@@ -143,19 +144,16 @@ public class FloorDAO {
         return false;
     }
 
-    // --- 4. LOGIC NGHIỆP VỤ NÂNG CAO (MỚI) ---
+    // --- 4. LOGIC NGHIỆP VỤ ---
 
-    // [MỚI] Kiểm tra: Có thể xóa tầng không?
-    // Điều kiện: Tầng phải TRỐNG (không còn căn hộ chưa xóa)
     public boolean canDeleteFloor(Long floorId) {
-        // Check 1: Còn căn hộ nào chưa xóa mềm không?
         String sqlApt = "SELECT COUNT(*) FROM apartments WHERE floor_id = ? AND is_deleted = 0";
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sqlApt)) {
             pstmt.setLong(1, floorId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next() && rs.getInt(1) > 0) {
-                    return false; // CÒN CĂN HỘ -> KHÔNG ĐƯỢC XÓA
+                    return false;
                 }
             }
         } catch (SQLException e) { 
@@ -163,12 +161,9 @@ public class FloorDAO {
             return false; 
         }
 
-        // Check 2: Đảm bảo không còn hợp đồng active (Phòng hờ)
         return !hasActiveContracts(floorId);
     }
 
-    // [MỚI] Kiểm tra tầng có hợp đồng thuê đang hiệu lực không
-    // Dùng cho việc chặn trạng thái "Bảo trì"
     public boolean hasActiveContracts(Long floorId) {
         String sql = "SELECT COUNT(*) FROM contracts c " +
                      "JOIN apartments a ON c.apartment_id = a.id " +
@@ -191,9 +186,6 @@ public class FloorDAO {
         return false;
     }
 
-    // [MỚI] Cập nhật trạng thái lan truyền (Cascade)
-    // Tầng -> Bảo trì => Căn hộ -> Bảo trì
-    // Tầng -> Hoạt động => Căn hộ (đang bảo trì) -> Trống
     public boolean updateStatusCascade(Long floorId, String newStatus) {
         Connection conn = null;
         PreparedStatement pstFloor = null;
@@ -201,26 +193,21 @@ public class FloorDAO {
         
         try {
             conn = Db_connection.getConnection();
-            conn.setAutoCommit(false); // Transaction
+            conn.setAutoCommit(false);
 
-            // 1. Update Tầng
             String sqlFloor = "UPDATE floors SET status = ? WHERE id = ?";
             pstFloor = conn.prepareStatement(sqlFloor);
             pstFloor.setString(1, newStatus);
             pstFloor.setLong(2, floorId);
             pstFloor.executeUpdate();
 
-            // 2. Cascade xuống Căn hộ
             if ("MAINTENANCE".equalsIgnoreCase(newStatus)) {
-                // Chuyển tất cả căn hộ trong tầng sang MAINTENANCE (trừ căn đã xóa)
                 String sqlApt = "UPDATE apartments SET status = 'MAINTENANCE' WHERE floor_id = ? AND is_deleted = 0";
                 pstApts = conn.prepareStatement(sqlApt);
                 pstApts.setLong(1, floorId);
                 pstApts.executeUpdate();
 
             } else if ("ACTIVE".equalsIgnoreCase(newStatus)) {
-                // Mở khóa: Chuyển căn hộ đang MAINTENANCE sang AVAILABLE
-                // KHÔNG đụng vào căn đang RENTED
                 String sqlApt = "UPDATE apartments SET status = 'AVAILABLE' WHERE floor_id = ? AND status = 'MAINTENANCE' AND is_deleted = 0";
                 pstApts = conn.prepareStatement(sqlApt);
                 pstApts.setLong(1, floorId);
@@ -243,7 +230,7 @@ public class FloorDAO {
         }
     }
 
-    // --- 5. CRUD OPERATIONS (THÊM, SỬA, XÓA) ---
+    // --- 5. CRUD OPERATIONS ---
 
     public boolean insertFloor(Floor floor) {
         String sql = "INSERT INTO floors (building_id, floor_number, name, status, is_deleted) VALUES (?, ?, ?, ?, 0)";
@@ -283,11 +270,24 @@ public class FloorDAO {
 
     // --- 6. INNER CLASSES ---
 
+    /**
+     * ✅ FIXED: Tính toán đúng với cả OWNED apartments
+     */
     public static class FloorStats {
         public int totalApartments = 0;
         public int rentedApartments = 0;
-        public int getAvailableApartments() { return totalApartments - rentedApartments; }
-        public int getOccupancyRate() { return (totalApartments == 0) ? 0 : (rentedApartments * 100) / totalApartments; }
+        public int ownedApartments = 0;
+        
+        // ✅ FIXED: Căn còn trống = Total - (Rented + Owned)
+        public int getAvailableApartments() { 
+            return totalApartments - (rentedApartments + ownedApartments); 
+        }
+        
+        // ✅ FIXED: Tỷ lệ lấp đầy = (Rented + Owned) / Total
+        public int getOccupancyRate() { 
+            if (totalApartments == 0) return 0;
+            return ((rentedApartments + ownedApartments) * 100) / totalApartments; 
+        }
     }
 
     public static class FloorWithStats {
