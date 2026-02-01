@@ -11,9 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * DAO class for Contract operations UPDATED: Support for RENTAL and OWNERSHIP
- * contract types - RENTAL: Has start_date and end_date - OWNERSHIP: NO
- * start_date and end_date (only signed_date)
+ * ContractDAO - UPDATED Phase 3
+ * Added building filter for MANAGER/STAFF/ACCOUNTANT roles
  */
 public class ContractDAO {
 
@@ -32,7 +31,7 @@ public class ContractDAO {
         return null;
     }
 
-    // --- HELPER: Mapping ResultSet to Contract (UPDATED) ---
+    // --- HELPER: Mapping ResultSet to Contract ---
     private Contract mapResultSetToContract(ResultSet rs) throws SQLException {
         Contract contract = new Contract();
         contract.setId(rs.getLong("id"));
@@ -41,40 +40,32 @@ public class ContractDAO {
         contract.setResidentId(rs.getLong("resident_id"));
         contract.setContractType(rs.getString("contract_type"));
 
-        // Signed date
         java.sql.Date signedDate = rs.getDate("signed_date");
         if (signedDate != null) {
             contract.setSignedDate(new java.util.Date(signedDate.getTime()));
         }
 
-        // Start date (nullable for OWNERSHIP)
         java.sql.Date startDate = rs.getDate("start_date");
         if (startDate != null) {
             contract.setStartDate(new java.util.Date(startDate.getTime()));
         }
 
-        // End date (nullable for OWNERSHIP)
         java.sql.Date endDate = rs.getDate("end_date");
         if (endDate != null) {
             contract.setEndDate(new java.util.Date(endDate.getTime()));
         }
 
-        // Terminated date
         java.sql.Date terminatedDate = rs.getDate("terminated_date");
         if (terminatedDate != null) {
             contract.setTerminatedDate(new java.util.Date(terminatedDate.getTime()));
         }
 
-        // Financial
         contract.setDepositAmount(rs.getBigDecimal("deposit_amount"));
-        contract.setMonthlyRent(rs.getBigDecimal("monthly_rent")); // ✅ Dual purpose field
-
-        // Status and notes
+        contract.setMonthlyRent(rs.getBigDecimal("monthly_rent"));
         contract.setStatus(rs.getString("status"));
         contract.setNotes(rs.getString("notes"));
         contract.setDeleted(rs.getBoolean("is_deleted"));
 
-        // Timestamps
         Timestamp createdAt = rs.getTimestamp("created_at");
         if (createdAt != null) {
             contract.setCreatedAt(new java.util.Date(createdAt.getTime()));
@@ -88,13 +79,35 @@ public class ContractDAO {
         return contract;
     }
 
-    // --- GET ALL CONTRACTS ---
+    /**
+     * Get all contracts with building filter
+     * UPDATED: Phase 3
+     */
     public List<Contract> getAllContracts() {
+        User currentUser = SessionManager.getInstance().getCurrentUser();
         List<Contract> contracts = new ArrayList<>();
-        String sql = "SELECT * FROM contracts WHERE is_deleted = 0 ORDER BY created_at DESC";
+        
+        String sql = "SELECT c.* FROM contracts c " +
+                     "JOIN apartments a ON c.apartment_id = a.id " +
+                     "JOIN floors f ON a.floor_id = f.id " +
+                     "WHERE c.is_deleted = 0 ";
+        
+        // Building filter for non-ADMIN
+        if (currentUser != null && !currentUser.isAdmin()) {
+            sql += "AND f.building_id = ? ";
+        }
+        
+        sql += "ORDER BY c.created_at DESC";
 
-        try (Connection conn = Db_connection.getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement ps = conn.prepareStatement(sql)) {
 
+            if (currentUser != null && !currentUser.isAdmin()) {
+                ps.setLong(1, currentUser.getBuildingId());
+            }
+            
+            ResultSet rs = ps.executeQuery();
+            
             while (rs.next()) {
                 contracts.add(mapResultSetToContract(rs));
             }
@@ -108,7 +121,8 @@ public class ContractDAO {
     public Contract getContractById(Long id) {
         String sql = "SELECT * FROM contracts WHERE id = ? AND is_deleted = 0";
 
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setLong(1, id);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -126,7 +140,8 @@ public class ContractDAO {
     public Contract getContractByNumber(String contractNumber) {
         String sql = "SELECT * FROM contracts WHERE contract_number = ? AND is_deleted = 0";
 
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, contractNumber);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -143,13 +158,14 @@ public class ContractDAO {
     // --- GET CONTRACTS BY BUILDING ---
     public List<Contract> getContractsByBuilding(Long buildingId) {
         List<Contract> contracts = new ArrayList<>();
-        String sql = "SELECT c.* FROM contracts c "
-                + "INNER JOIN apartments a ON c.apartment_id = a.id "
-                + "INNER JOIN floors f ON a.floor_id = f.id "
-                + "WHERE f.building_id = ? AND c.is_deleted = 0 "
-                + "ORDER BY c.created_at DESC";
+        String sql = "SELECT c.* FROM contracts c " +
+                     "INNER JOIN apartments a ON c.apartment_id = a.id " +
+                     "INNER JOIN floors f ON a.floor_id = f.id " +
+                     "WHERE f.building_id = ? AND c.is_deleted = 0 " +
+                     "ORDER BY c.created_at DESC";
 
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setLong(1, buildingId);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -166,12 +182,13 @@ public class ContractDAO {
     // --- GET ACTIVE CONTRACTS BY APARTMENT ---
     public List<Contract> getActiveContractsByApartment(Long apartmentId) {
         List<Contract> contracts = new ArrayList<>();
-        String sql = "SELECT * FROM contracts "
-                + "WHERE apartment_id = ? "
-                + "AND status = 'ACTIVE' "
-                + "AND is_deleted = 0";
+        String sql = "SELECT * FROM contracts " +
+                     "WHERE apartment_id = ? " +
+                     "AND status = 'ACTIVE' " +
+                     "AND is_deleted = 0";
 
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setLong(1, apartmentId);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -187,16 +204,16 @@ public class ContractDAO {
 
     // --- GET SINGLE ACTIVE CONTRACT BY APARTMENT (WITH TENANT INFO) ---
     public Contract getActiveContractByApartmentId(Long apartmentId) {
-        String sql
-                = "SELECT c.*, r.full_name AS tenant_name, r.phone AS tenant_phone "
-                + "FROM contracts c "
-                + "JOIN residents r ON c.resident_id = r.id "
-                + "WHERE c.apartment_id = ? "
-                + "  AND c.status = 'ACTIVE' "
-                + "  AND c.is_deleted = 0 "
-                + "ORDER BY c.created_at DESC LIMIT 1";
+        String sql = "SELECT c.*, r.full_name AS tenant_name, r.phone AS tenant_phone " +
+                     "FROM contracts c " +
+                     "JOIN residents r ON c.resident_id = r.id " +
+                     "WHERE c.apartment_id = ? " +
+                     "AND c.status = 'ACTIVE' " +
+                     "AND c.is_deleted = 0 " +
+                     "ORDER BY c.created_at DESC LIMIT 1";
 
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setLong(1, apartmentId);
 
@@ -224,18 +241,17 @@ public class ContractDAO {
         return !activeContracts.isEmpty();
     }
 
-    // ✅ INSERT CONTRACT - UPDATED WITH NULL CHECKS FOR DATES
+    // --- INSERT CONTRACT ---
     public boolean insertContract(Contract contract) {
-        String sql = "INSERT INTO contracts (apartment_id, resident_id, contract_number, "
-                + "contract_type, start_date, end_date, signed_date, monthly_rent, "
-                + "deposit_amount, status, created_at, is_deleted) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', NOW(), 0)";
+        String sql = "INSERT INTO contracts (apartment_id, resident_id, contract_number, " +
+                     "contract_type, start_date, end_date, signed_date, monthly_rent, " +
+                     "deposit_amount, status, created_at, is_deleted) " +
+                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', NOW(), 0)";
 
         try (Connection conn = Db_connection.getConnection()) {
-            conn.setAutoCommit(false); // Start transaction
+            conn.setAutoCommit(false);
 
             try {
-                // 1. Insert contract
                 try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
                     pstmt.setLong(1, contract.getApartmentId());
                     pstmt.setLong(2, contract.getResidentId());
@@ -271,7 +287,6 @@ public class ContractDAO {
                     }
                 }
 
-                // 2. Update apartment status based on contract type
                 boolean statusUpdated = updateApartmentStatusOnContractCreate(
                         conn,
                         contract.getApartmentId(),
@@ -297,15 +312,16 @@ public class ContractDAO {
         }
     }
 
-    // ✅ UPDATE CONTRACT - UPDATED WITH NULL CHECKS FOR DATES
+    // --- UPDATE CONTRACT ---
     public boolean updateContract(Contract contract) {
-        String sql = "UPDATE contracts SET "
-                + "contract_number = ?, apartment_id = ?, resident_id = ?, contract_type = ?, "
-                + "signed_date = ?, start_date = ?, end_date = ?, terminated_date = ?, "
-                + "deposit_amount = ?, monthly_rent = ?, status = ?, notes = ? "
-                + "WHERE id = ?";
+        String sql = "UPDATE contracts SET " +
+                     "contract_number = ?, apartment_id = ?, resident_id = ?, contract_type = ?, " +
+                     "signed_date = ?, start_date = ?, end_date = ?, terminated_date = ?, " +
+                     "deposit_amount = ?, monthly_rent = ?, status = ?, notes = ? " +
+                     "WHERE id = ?";
 
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             int idx = 1;
             pstmt.setString(idx++, contract.getContractNumber());
@@ -313,28 +329,24 @@ public class ContractDAO {
             pstmt.setLong(idx++, contract.getResidentId());
             pstmt.setString(idx++, contract.getContractType());
 
-            // ✅ signed_date (nullable)
             if (contract.getSignedDate() != null) {
                 pstmt.setDate(idx++, new java.sql.Date(contract.getSignedDate().getTime()));
             } else {
                 pstmt.setNull(idx++, Types.DATE);
             }
 
-            // ✅ start_date (NULL for OWNERSHIP)
             if (contract.getStartDate() != null) {
                 pstmt.setDate(idx++, new java.sql.Date(contract.getStartDate().getTime()));
             } else {
                 pstmt.setNull(idx++, Types.DATE);
             }
 
-            // ✅ end_date (NULL for OWNERSHIP)
             if (contract.getEndDate() != null) {
                 pstmt.setDate(idx++, new java.sql.Date(contract.getEndDate().getTime()));
             } else {
                 pstmt.setNull(idx++, Types.DATE);
             }
 
-            // ✅ terminated_date (nullable)
             if (contract.getTerminatedDate() != null) {
                 pstmt.setDate(idx++, new java.sql.Date(contract.getTerminatedDate().getTime()));
             } else {
@@ -342,14 +354,13 @@ public class ContractDAO {
             }
 
             pstmt.setBigDecimal(idx++, contract.getDepositAmount());
-            pstmt.setBigDecimal(idx++, contract.getMonthlyRent()); // ✅ Dual purpose
+            pstmt.setBigDecimal(idx++, contract.getMonthlyRent());
             pstmt.setString(idx++, contract.getStatus());
             pstmt.setString(idx++, contract.getNotes());
             pstmt.setLong(idx++, contract.getId());
 
             boolean success = pstmt.executeUpdate() > 0;
 
-            // LOG TO HISTORY - UPDATED
             if (success) {
                 try {
                     ContractHistory history = new ContractHistory();
@@ -388,9 +399,8 @@ public class ContractDAO {
         }
     }
 
-    // ✅ RENEW CONTRACT - ONLY FOR RENTAL CONTRACTS
+    // --- RENEW CONTRACT ---
     public boolean renewContract(Long contractId, java.util.Date newEndDate) {
-        // Get contract and validate it's RENTAL
         Contract contract = getContractById(contractId);
         if (contract == null) {
             System.err.println("Contract not found: " + contractId);
@@ -406,14 +416,14 @@ public class ContractDAO {
 
         String sql = "UPDATE contracts SET end_date = ? WHERE id = ?";
 
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setDate(1, new java.sql.Date(newEndDate.getTime()));
             pstmt.setLong(2, contractId);
 
             boolean success = pstmt.executeUpdate() > 0;
 
-            // LOG TO HISTORY - RENEWED
             if (success) {
                 try {
                     ContractHistory history = new ContractHistory();
@@ -437,7 +447,7 @@ public class ContractDAO {
         return false;
     }
 
-    // --- TERMINATE CONTRACT (FOR BOTH RENTAL AND OWNERSHIP) ---
+    // --- TERMINATE CONTRACT ---
     public boolean terminateContract(Long contractId) {
         String sqlGetApartment = "SELECT apartment_id FROM contracts WHERE id = ?";
         String sqlUpdateContract = "UPDATE contracts SET status = 'TERMINATED' WHERE id = ?";
@@ -449,7 +459,6 @@ public class ContractDAO {
             try {
                 Long apartmentId = null;
 
-                // 1. Get apartment ID
                 try (PreparedStatement pstmt = conn.prepareStatement(sqlGetApartment)) {
                     pstmt.setLong(1, contractId);
                     ResultSet rs = pstmt.executeQuery();
@@ -463,13 +472,11 @@ public class ContractDAO {
                     return false;
                 }
 
-                // 2. Update contract status
                 try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdateContract)) {
                     pstmt.setLong(1, contractId);
                     pstmt.executeUpdate();
                 }
 
-                // 3. Update apartment status to AVAILABLE
                 try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdateApartment)) {
                     pstmt.setLong(1, apartmentId);
                     pstmt.executeUpdate();
@@ -499,7 +506,6 @@ public class ContractDAO {
             conn.setAutoCommit(false);
 
             try {
-                // 1. Get apartment ID
                 Long apartmentId = null;
                 try (PreparedStatement pstG = conn.prepareStatement(sqlGetAptId)) {
                     pstG.setLong(1, contractId);
@@ -510,13 +516,11 @@ public class ContractDAO {
                     }
                 }
 
-                // 2. Soft delete contract
                 try (PreparedStatement pstD = conn.prepareStatement(sqlDeleteContract)) {
                     pstD.setLong(1, contractId);
                     pstD.executeUpdate();
                 }
 
-                // 3. Reset apartment status
                 if (apartmentId != null) {
                     try (PreparedStatement pstR = conn.prepareStatement(sqlResetApartment)) {
                         pstR.setLong(1, apartmentId);
@@ -524,7 +528,6 @@ public class ContractDAO {
                     }
                 }
 
-                // 4. LOG TO HISTORY
                 ContractHistory history = new ContractHistory();
                 history.setContractId(contractId);
                 history.setAction("DELETED");
@@ -546,45 +549,84 @@ public class ContractDAO {
         }
     }
 
-    // --- COUNT CONTRACTS BY STATUS ---
+    /**
+     * Count contracts by status with building filter
+     * UPDATED: Phase 3
+     */
     public int countContractsByStatus(String status) {
-        String sql = "SELECT COUNT(*) FROM contracts WHERE status = ? AND is_deleted = 0";
-
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            pstmt.setString(1, status);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1);
-                }
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return 0;
+    User currentUser = SessionManager.getInstance().getCurrentUser();
+    
+    String sql = "SELECT COUNT(*) FROM contracts c " +
+                 "JOIN apartments a ON c.apartment_id = a.id " +
+                 "JOIN floors f ON a.floor_id = f.id " +
+                 "WHERE c.status = ? AND c.is_deleted = 0 ";
+    
+    // ✅ FIX: Kiểm tra buildingId != null
+    if (currentUser != null && !currentUser.isAdmin() && currentUser.getBuildingId() != null) {
+        sql += "AND f.building_id = ?";
     }
+    
+    try (Connection conn = Db_connection.getConnection(); 
+         PreparedStatement ps = conn.prepareStatement(sql)) {
+        
+        ps.setString(1, status);
+        
+        // ✅ FIX: Chỉ set parameter nếu buildingId tồn tại
+        if (currentUser != null && !currentUser.isAdmin() && currentUser.getBuildingId() != null) {
+            ps.setLong(2, currentUser.getBuildingId());
+        }
+        
+        ResultSet rs = ps.executeQuery();
+        if (rs.next()) {
+            return rs.getInt(1);
+        }
+    } catch (SQLException e) {
+        e.printStackTrace();
+    }
+    return 0;
+}
 
-    // --- COUNT ACTIVE CONTRACTS ---
+    /**
+     * Count active contracts with building filter
+     * UPDATED: Phase 3
+     */
     public int countActiveContracts() {
         return countContractsByStatus("ACTIVE");
     }
 
-    // --- GET EXPIRING CONTRACTS (ONLY FOR RENTAL) ---
+    /**
+     * Get expiring contracts with building filter
+     * UPDATED: Phase 3
+     */
     public List<Contract> getExpiringContracts(int daysThreshold) {
+        User currentUser = SessionManager.getInstance().getCurrentUser();
         List<Contract> contracts = new ArrayList<>();
-        String sql = "SELECT * FROM contracts "
-                + "WHERE contract_type = 'RENTAL' "
-                + // ✅ Only RENTAL contracts expire
-                "AND end_date IS NOT NULL "
-                + "AND DATEDIFF(end_date, CURDATE()) BETWEEN 0 AND ? "
-                + "AND status = 'ACTIVE' "
-                + "AND is_deleted = 0 "
-                + "ORDER BY end_date ASC";
+        
+        String sql = "SELECT c.* FROM contracts c " +
+                     "JOIN apartments a ON c.apartment_id = a.id " +
+                     "JOIN floors f ON a.floor_id = f.id " +
+                     "WHERE c.contract_type = 'RENTAL' " +
+                     "AND c.end_date IS NOT NULL " +
+                     "AND DATEDIFF(c.end_date, CURDATE()) BETWEEN 0 AND ? " +
+                     "AND c.status = 'ACTIVE' " +
+                     "AND c.is_deleted = 0 ";
+        
+        if (currentUser != null && !currentUser.isAdmin()) {
+            sql += "AND f.building_id = ? ";
+        }
+        
+        sql += "ORDER BY c.end_date ASC";
 
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement ps = conn.prepareStatement(sql)) {
 
-            pstmt.setInt(1, daysThreshold);
-            try (ResultSet rs = pstmt.executeQuery()) {
+            ps.setInt(1, daysThreshold);
+            
+            if (currentUser != null && !currentUser.isAdmin()) {
+                ps.setLong(2, currentUser.getBuildingId());
+            }
+            
+            try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     contracts.add(mapResultSetToContract(rs));
                 }
@@ -599,7 +641,8 @@ public class ContractDAO {
     public int countInvoicesByContract(Long contractId) {
         String sql = "SELECT COUNT(*) FROM invoices WHERE contract_id = ? AND is_deleted = 0";
 
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setLong(1, contractId);
             try (ResultSet rs = pstmt.executeQuery()) {
@@ -615,11 +658,13 @@ public class ContractDAO {
 
     // --- GENERATE CONTRACT NUMBER ---
     public String generateContractNumber() {
-        String sql = "SELECT IFNULL(MAX(CAST(SUBSTRING(contract_number, 12, 3) AS UNSIGNED)), 0) + 1 AS next_seq "
-                + "FROM contracts "
-                + "WHERE contract_number LIKE CONCAT('HD', DATE_FORMAT(CURDATE(), '%Y%m%d'), '%')";
+        String sql = "SELECT IFNULL(MAX(CAST(SUBSTRING(contract_number, 12, 3) AS UNSIGNED)), 0) + 1 AS next_seq " +
+                     "FROM contracts " +
+                     "WHERE contract_number LIKE CONCAT('HD', DATE_FORMAT(CURDATE(), '%Y%m%d'), '%')";
 
-        try (Connection conn = Db_connection.getConnection(); Statement stmt = conn.createStatement(); ResultSet rs = stmt.executeQuery(sql)) {
+        try (Connection conn = Db_connection.getConnection(); 
+             Statement stmt = conn.createStatement(); 
+             ResultSet rs = stmt.executeQuery(sql)) {
 
             if (rs.next()) {
                 int nextSeq = rs.getInt("next_seq");
@@ -630,7 +675,6 @@ public class ContractDAO {
             e.printStackTrace();
         }
 
-        // Fallback
         String dateStr = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
         return String.format("HD%s001", dateStr);
     }

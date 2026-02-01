@@ -4,6 +4,7 @@ import dao.BuildingDAO;
 import dao.FloorDAO;
 import model.Building;
 import model.Floor;
+import util.PermissionManager;
 import util.UIConstants;
 
 import javax.swing.*;
@@ -27,6 +28,7 @@ public class FloorManagementPanel extends JPanel {
     private JButton btnAdd;
     private Consumer<Floor> onFloorSelect;
     
+    private PermissionManager permissionManager;
     private SwingWorker<?, ?> currentWorker = null;
 
     public FloorManagementPanel() {
@@ -40,6 +42,7 @@ public class FloorManagementPanel extends JPanel {
     public FloorManagementPanel(Building building, Consumer<Floor> onFloorSelect) {
         this.floorDAO = new FloorDAO();
         this.buildingDAO = new BuildingDAO();
+        this.permissionManager = PermissionManager.getInstance();
         this.currentBuilding = building;
         this.onFloorSelect = onFloorSelect;
 
@@ -91,6 +94,7 @@ public class FloorManagementPanel extends JPanel {
         cbbBuilding.setPreferredSize(new Dimension(250, 40)); 
         cbbBuilding.setFont(new Font("Segoe UI", Font.BOLD, 14));
         cbbBuilding.setBackground(Color.WHITE);
+        
         cbbBuilding.setRenderer(new DefaultListCellRenderer() {
             @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
@@ -99,6 +103,12 @@ public class FloorManagementPanel extends JPanel {
                 return this;
             }
         });
+        
+        // Data Isolation
+        if (!permissionManager.isAdmin()) {
+            cbbBuilding.setEnabled(false);
+        }
+
         cbbBuilding.addActionListener(e -> {
             Building selected = (Building) cbbBuilding.getSelectedItem();
             if (selected != null && selected.getId() != null) { 
@@ -114,6 +124,9 @@ public class FloorManagementPanel extends JPanel {
         JPanel rightHeader = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         rightHeader.setBackground(UIConstants.BACKGROUND_COLOR);
 
+        // Check Permissions
+        boolean canAdd = permissionManager.canAdd(PermissionManager.MODULE_FLOORS);
+
         btnBatchAdd = new RoundedButton(" Thêm Hàng Loạt", 15);
         btnBatchAdd.setIcon(new HeaderIcon("LAYER_PLUS", 14, Color.WHITE));
         btnBatchAdd.setPreferredSize(new Dimension(160, 40));
@@ -121,6 +134,7 @@ public class FloorManagementPanel extends JPanel {
         btnBatchAdd.setForeground(Color.WHITE);
         btnBatchAdd.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btnBatchAdd.addActionListener(e -> showBatchAddDialog());
+        btnBatchAdd.setVisible(canAdd);
 
         btnAdd = new RoundedButton(" Thêm Tầng Mới", 15);
         btnAdd.setIcon(new HeaderIcon("PLUS", 14, Color.WHITE));
@@ -129,6 +143,7 @@ public class FloorManagementPanel extends JPanel {
         btnAdd.setForeground(Color.WHITE);
         btnAdd.setFont(new Font("Segoe UI", Font.BOLD, 13));
         btnAdd.addActionListener(e -> showAddDialog());
+        btnAdd.setVisible(canAdd);
 
         rightHeader.add(btnBatchAdd);
         rightHeader.add(btnAdd);
@@ -180,10 +195,17 @@ public class FloorManagementPanel extends JPanel {
     private void loadBuildingData() {
         List<Building> buildings = buildingDAO.getAllBuildings();
         cbbBuilding.removeAllItems();
+        
+        Long filterId = permissionManager.getBuildingFilter();
+
         if (buildings.isEmpty()) {
             cbbBuilding.addItem(new Building(null, "Chưa có tòa nhà nào", "", "", "", "Đang hoạt động", false));
         } else {
-            for (Building b : buildings) cbbBuilding.addItem(b);
+            for (Building b : buildings) {
+                if (filterId == null || b.getId().equals(filterId)) {
+                    cbbBuilding.addItem(b);
+                }
+            }
             if (currentBuilding != null) {
                 for(int i=0; i<cbbBuilding.getItemCount(); i++) {
                     Building b = cbbBuilding.getItemAt(i);
@@ -192,7 +214,9 @@ public class FloorManagementPanel extends JPanel {
                         break; 
                     }
                 }
-            } else cbbBuilding.setSelectedIndex(0);
+            } else if (cbbBuilding.getItemCount() > 0) {
+                cbbBuilding.setSelectedIndex(0);
+            }
         }
     }
 
@@ -211,16 +235,14 @@ public class FloorManagementPanel extends JPanel {
             return;
         }
 
-        // Kiểm tra Tòa nhà bảo trì -> Chặn thêm mới, nhưng vẫn cho xem (hoặc chặn tùy logic của bạn)
-        // Ở đây ta chặn nút thêm, nhưng vẫn load danh sách để xem
         boolean isBuildingMaintenance = "Đang bảo trì".equals(currentBuilding.getStatus()) || 
                                         "MAINTENANCE".equalsIgnoreCase(currentBuilding.getStatus());
         
-        if (isBuildingMaintenance) {
-            setButtonsEnabled(false); // Khóa chức năng thêm khi tòa nhà bảo trì
-        } else {
-            setButtonsEnabled(true);
-        }
+        boolean canAdd = permissionManager.canAdd(PermissionManager.MODULE_FLOORS);
+        setButtonsEnabled(!isBuildingMaintenance && canAdd);
+
+        boolean canEdit = permissionManager.canEdit(PermissionManager.MODULE_FLOORS);
+        boolean canDelete = permissionManager.canDelete(PermissionManager.MODULE_FLOORS);
 
         SwingWorker<List<dao.FloorDAO.FloorWithStats>, Void> worker = new SwingWorker<>() {
             @Override
@@ -247,8 +269,8 @@ public class FloorManagementPanel extends JPanel {
                                 item.stats, 
                                 isBuildingMaintenance, 
                                 onFloorSelect, 
-                                FloorManagementPanel.this::editFloor, 
-                                FloorManagementPanel.this::deleteFloor
+                                canEdit ? FloorManagementPanel.this::editFloor : null,
+                                canDelete ? FloorManagementPanel.this::deleteFloor : null
                             );
                             cardsContainer.add(card);
                         }
@@ -272,8 +294,15 @@ public class FloorManagementPanel extends JPanel {
     }
     
     private void setButtonsEnabled(boolean enabled) {
+        if (!permissionManager.canAdd(PermissionManager.MODULE_FLOORS)) {
+            btnAdd.setVisible(false);
+            btnBatchAdd.setVisible(false);
+            return;
+        }
+
         btnAdd.setEnabled(enabled);
         btnBatchAdd.setEnabled(enabled);
+        
         if (enabled) {
             btnAdd.setBackground(UIConstants.PRIMARY_COLOR);
             btnBatchAdd.setBackground(new Color(0, 150, 136));
@@ -334,38 +363,59 @@ public class FloorManagementPanel extends JPanel {
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
         Floor newFloor = new Floor(); 
         
-        // Gán Building ID vào object Floor
         newFloor.setBuildingId(currentBuilding.getId());
         
         FloorDialog dialog = new FloorDialog(parent, newFloor); 
         
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
-            if (floorDAO.insertFloor(dialog.getFloor())) { 
-                JOptionPane.showMessageDialog(this, "Thêm tầng thành công!"); loadFloors(); 
-            } else { JOptionPane.showMessageDialog(this, "Thêm thất bại!"); }
+            Floor f = dialog.getFloor();
+            
+            // --- SỬA LỖI: THÊM VALIDATION ---
+            if (floorDAO.isFloorNumberExists(f.getBuildingId(), f.getFloorNumber())) {
+                JOptionPane.showMessageDialog(this, 
+                    "Tầng số " + f.getFloorNumber() + " đã tồn tại trong tòa nhà này!", 
+                    "Lỗi trùng lặp", 
+                    JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            
+            if (floorDAO.insertFloor(f)) { 
+                JOptionPane.showMessageDialog(this, "Thêm tầng thành công!"); 
+                loadFloors(); 
+            } else { 
+                JOptionPane.showMessageDialog(this, "Thêm thất bại!"); 
+            }
         }
     }
 
     private void editFloor(Floor floor) {
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
-        
         FloorDialog dialog = new FloorDialog(parent, floor); 
-        
         dialog.setVisible(true);
         if (dialog.isConfirmed()) {
-            if (floorDAO.updateFloor(dialog.getFloor())) { 
-                JOptionPane.showMessageDialog(this, "Cập nhật thành công!"); loadFloors(); 
-            } else { JOptionPane.showMessageDialog(this, "Cập nhật thất bại!"); }
+            Floor updated = dialog.getFloor();
+            
+            // --- SỬA LỖI: THÊM VALIDATION KHI SỬA ---
+            // excludeId = floor.getId() để không báo trùng với chính nó
+            if (floorDAO.isFloorNumberExists(updated.getBuildingId(), updated.getFloorNumber(), floor.getId())) {
+                JOptionPane.showMessageDialog(this, 
+                    "Tầng số " + updated.getFloorNumber() + " đã tồn tại!", 
+                    "Lỗi trùng lặp", 
+                    JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            if (floorDAO.updateFloor(updated)) { 
+                JOptionPane.showMessageDialog(this, "Cập nhật thành công!"); 
+                loadFloors(); 
+            } else { 
+                JOptionPane.showMessageDialog(this, "Cập nhật thất bại!"); 
+            }
         }
     }
 
-    // --- [LOGIC XÓA AN TOÀN] ---
     private void deleteFloor(Floor floor) {
-        // 1. Kiểm tra điều kiện xóa chặt chẽ thông qua DAO
-        // canDeleteFloor sẽ kiểm tra: 
-        // - Còn căn hộ chưa xóa không? (COUNT > 0)
-        // - Còn hợp đồng active không?
         if (!floorDAO.canDeleteFloor(floor.getId())) {
             JOptionPane.showMessageDialog(this, 
                 "KHÔNG THỂ XÓA TẦNG NÀY!\n\n" +
@@ -378,7 +428,6 @@ public class FloorManagementPanel extends JPanel {
             return;
         }
 
-        // 2. Nếu an toàn -> Xác nhận Xóa Mềm
         int confirm = JOptionPane.showConfirmDialog(this, 
             "Bạn có chắc chắn muốn xóa \"" + floor.getName() + "\"?\n" +
             "Dữ liệu sẽ bị xóa mềm (ẩn đi).", 
@@ -388,7 +437,7 @@ public class FloorManagementPanel extends JPanel {
         if (confirm == JOptionPane.YES_OPTION) {
             if (floorDAO.deleteFloor(floor.getId())) {
                 JOptionPane.showMessageDialog(this, "Đã xóa tầng thành công!");
-                loadFloors(); // Tải lại danh sách
+                loadFloors(); 
             } else {
                 JOptionPane.showMessageDialog(this, "Xóa thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }

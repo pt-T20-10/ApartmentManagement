@@ -34,7 +34,7 @@ public class UserManagementPanel extends JPanel {
     private final Color INACTIVE_COLOR = new Color(254, 226, 226);    // Light red
     private final Color ADMIN_COLOR = new Color(224, 231, 255);       // Light blue
     private final Color STAFF_COLOR = new Color(254, 243, 199);       // Light yellow
-    private final Color ACCOUNTANT_COLOR = new Color(243, 232, 255);  // Light purple
+    // Đã xóa ACCOUNTANT_COLOR vì không còn dùng
     
     public UserManagementPanel() {
         this.userDAO = new UserDAO();
@@ -234,9 +234,10 @@ public class UserManagementPanel extends JPanel {
                     } else if (role.contains("Nhân viên")) {
                         roleLabel.setBackground(STAFF_COLOR);
                         roleLabel.setForeground(new Color(146, 64, 14));
-                    } else if (role.contains("Kế toán")) {
-                        roleLabel.setBackground(ACCOUNTANT_COLOR);
-                        roleLabel.setForeground(new Color(88, 28, 135));
+                    } else if (role.contains("Quản lý")) {
+                        // Thêm màu cho Manager nếu chưa có
+                        roleLabel.setBackground(new Color(224, 242, 254)); // Light Blue 100
+                        roleLabel.setForeground(new Color(3, 105, 161));   // Sky 700
                     }
                     
                     return roleLabel;
@@ -322,7 +323,7 @@ public class UserManagementPanel extends JPanel {
     }
     
     /**
-     * Load users from database
+     * Load users from database - ĐÃ SỬA LỖI COMPILATION
      */
     private void loadUsers() {
         tableModel.setRowCount(0);
@@ -331,7 +332,7 @@ public class UserManagementPanel extends JPanel {
         int activeCount = 0;
         int adminCount = 0;
         int staffCount = 0;
-        int accountantCount = 0;
+        int managerCount = 0;
         
         for (User user : users) {
             String lastLogin = (user.getLastLogin() != null) ? 
@@ -351,13 +352,13 @@ public class UserManagementPanel extends JPanel {
             if (user.isActive()) activeCount++;
             if (user.isAdmin()) adminCount++;
             else if (user.isStaff()) staffCount++;
-            else if (user.isAccountant()) accountantCount++;
+            else if (user.isManager()) managerCount++;
         }
         
-        // Update statistics
+        // Update statistics - Đã bỏ phần đếm Accountant
         statsLabel.setText(String.format(
-            "📊 Tổng: %d tài khoản  |  ✓ Hoạt động: %d  |  👑 Admin: %d  |  👤 Staff: %d  |  💰 Accountant: %d",
-            users.size(), activeCount, adminCount, staffCount, accountantCount
+            "📊 Tổng: %d tài khoản  |  ✓ Hoạt động: %d  |  👑 Admin: %d  |  🏢 Manager: %d  |  👤 Staff: %d",
+            users.size(), activeCount, adminCount, managerCount, staffCount
         ));
     }
     

@@ -13,6 +13,8 @@ import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.Locale;
+import util.MoneyFormatter;
+import java.util.Calendar;
 
 /**
  * Contract Detail Dialog with DYNAMIC DISPLAY based on contract type
@@ -213,57 +215,145 @@ public class ContractDetailDialog extends JDialog {
     }
     
     private JPanel createServicesPanel() {
-        JPanel panel = new JPanel(new BorderLayout(0, 15));
-        panel.setBackground(UIConstants.BACKGROUND_COLOR);
-        panel.setBorder(new EmptyBorder(20, 25, 20, 25));
+        JPanel mainPanel = new JPanel(new BorderLayout(0, 15));
+        mainPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        mainPanel.setBorder(new EmptyBorder(20, 25, 20, 25));
         
         List<ContractService> services = contractServiceDAO.getServicesByContract(contract.getId());
         
+        // Statistics Cards
+        JPanel statsPanel = createServiceStatsPanel(services);
+        mainPanel.add(statsPanel, BorderLayout.NORTH);
+        
         if (services.isEmpty()) {
-            JPanel emptyPanel = new JPanel(new GridBagLayout());
+            // Modern empty state
+            JPanel emptyPanel = new JPanel(new GridBagLayout()) {
+                @Override
+                protected void paintComponent(Graphics g) {
+                    super.paintComponent(g);
+                    Graphics2D g2d = (Graphics2D) g;
+                    g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    
+                    // Dashed border
+                    g2d.setColor(new Color(220, 220, 220));
+                    g2d.setStroke(new BasicStroke(2, BasicStroke.CAP_BUTT, BasicStroke.JOIN_BEVEL, 
+                        0, new float[]{9}, 0));
+                    g2d.drawRoundRect(10, 10, getWidth() - 20, getHeight() - 20, 12, 12);
+                }
+            };
             emptyPanel.setBackground(Color.WHITE);
-            emptyPanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
+            emptyPanel.setBorder(new EmptyBorder(60, 20, 60, 20));
             
-            // Shadow
-            g2d.setColor(new Color(0, 0, 0, 6));
-            g2d.fillRoundRect(2, 2, getWidth() - 4, getHeight() - 4, 10, 10);
+            JPanel emptyContent = new JPanel();
+            emptyContent.setLayout(new BoxLayout(emptyContent, BoxLayout.Y_AXIS));
+            emptyContent.setOpaque(false);
             
-            // Background
-            g2d.setColor(Color.WHITE);
-            g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+            JLabel emptyIcon = new JLabel("📦");
+            emptyIcon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 48));
+            emptyIcon.setAlignmentX(Component.CENTER_ALIGNMENT);
             
-            g2d.dispose();
-            super.paintComponent(g);
+            JLabel emptyTitle = new JLabel("Chưa có dịch vụ");
+            emptyTitle.setFont(new Font("Segoe UI", Font.BOLD, 18));
+            emptyTitle.setForeground(new Color(117, 117, 117));
+            emptyTitle.setAlignmentX(Component.CENTER_ALIGNMENT);
+            
+            JLabel emptyDesc = new JLabel("Hợp đồng này chưa đăng ký dịch vụ nào");
+            emptyDesc.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            emptyDesc.setForeground(new Color(158, 158, 158));
+            emptyDesc.setAlignmentX(Component.CENTER_ALIGNMENT);
+            
+            emptyContent.add(emptyIcon);
+            emptyContent.add(Box.createVerticalStrut(15));
+            emptyContent.add(emptyTitle);
+            emptyContent.add(Box.createVerticalStrut(8));
+            emptyContent.add(emptyDesc);
+            
+            emptyPanel.add(emptyContent);
+            mainPanel.add(emptyPanel, BorderLayout.CENTER);
+        } else {
+            // Service Table
+            JPanel tablePanel = createServiceTable(services);
+            mainPanel.add(tablePanel, BorderLayout.CENTER);
         }
-    };
-    card.setOpaque(false);
-    card.setBorder(new EmptyBorder(14, 16, 14, 16));
+        
+        return mainPanel;
+    }
     
-    JLabel iconLabel = new JLabel(icon);
-    iconLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
-    iconLabel.setForeground(color);
+    private JPanel createServiceStatsPanel(List<ContractService> services) {
+        JPanel statsPanel = new JPanel(new GridLayout(1, 3, 12, 0));
+        statsPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        statsPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 85));
+        
+        int total = services.size();
+        int active = (int) services.stream().filter(cs -> cs.isActive()).count();
+        int inactive = total - active;
+        
+        // Card 1: Total
+        JPanel card1 = createServiceStatCard("Tổng Dịch Vụ", String.valueOf(total), 
+            new Color(99, 102, 241), "🔧");
+        
+        // Card 2: Active
+        JPanel card2 = createServiceStatCard("Đang Hoạt Động", String.valueOf(active), 
+            new Color(34, 197, 94), "✓");
+        
+        // Card 3: Inactive
+        JPanel card3 = createServiceStatCard("Ngừng Hoạt Động", String.valueOf(inactive), 
+            new Color(156, 163, 175), "○");
+        
+        statsPanel.add(card1);
+        statsPanel.add(card2);
+        statsPanel.add(card3);
+        
+        return statsPanel;
+    }
     
-    JPanel textPanel = new JPanel();
-    textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
-    textPanel.setOpaque(false);
-    
-    JLabel titleLabel = new JLabel(title);
-    titleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-    titleLabel.setForeground(new Color(107, 114, 128));
-    
-    JLabel valueLabel = new JLabel(value);
-    valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
-    valueLabel.setForeground(new Color(33, 33, 33));
-    
-    textPanel.add(titleLabel);
-    textPanel.add(Box.createVerticalStrut(3));
-    textPanel.add(valueLabel);
-    
-    card.add(iconLabel, BorderLayout.WEST);
-    card.add(textPanel, BorderLayout.CENTER);
-    
-    return card;
-}
+    private JPanel createServiceStatCard(String title, String value, Color color, String icon) {
+        JPanel card = new JPanel(new BorderLayout(12, 0)) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2d = (Graphics2D) g.create();
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                
+                // Shadow
+                g2d.setColor(new Color(0, 0, 0, 6));
+                g2d.fillRoundRect(2, 2, getWidth() - 4, getHeight() - 4, 10, 10);
+                
+                // Background
+                g2d.setColor(Color.WHITE);
+                g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                
+                g2d.dispose();
+                super.paintComponent(g);
+            }
+        };
+        card.setOpaque(false);
+        card.setBorder(new EmptyBorder(14, 16, 14, 16));
+        
+        JLabel iconLabel = new JLabel(icon);
+        iconLabel.setFont(new Font("Segoe UI", Font.BOLD, 24));
+        iconLabel.setForeground(color);
+        
+        JPanel textPanel = new JPanel();
+        textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+        textPanel.setOpaque(false);
+        
+        JLabel titleLabel = new JLabel(title);
+        titleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+        titleLabel.setForeground(new Color(107, 114, 128));
+        
+        JLabel valueLabel = new JLabel(value);
+        valueLabel.setFont(new Font("Segoe UI", Font.BOLD, 20));
+        valueLabel.setForeground(new Color(33, 33, 33));
+        
+        textPanel.add(titleLabel);
+        textPanel.add(Box.createVerticalStrut(3));
+        textPanel.add(valueLabel);
+        
+        card.add(iconLabel, BorderLayout.WEST);
+        card.add(textPanel, BorderLayout.CENTER);
+        
+        return card;
+    }
 
     
     private JPanel createServiceTable(List<ContractService> services) {
@@ -638,102 +728,192 @@ public class ContractDetailDialog extends JDialog {
         }
     }
     
-    // ✅ UPDATED: Renew only for RENTAL
+  // ========================================================================
+    // 1. CẢI TIẾN: GIA HẠN HỢP ĐỒNG (Giao diện mới + MoneyFormatter)
+    // ========================================================================
     private void renewContract() {
-        // Double check it's a rental contract
         if (!contract.isRental()) {
-            JOptionPane.showMessageDialog(this,
-                "Chỉ hợp đồng thuê mới có thể gia hạn!",
-                "Lỗi",
-                JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "Chỉ hợp đồng thuê mới có thể gia hạn!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             return;
         }
+
+        // --- TẠO GIAO DIỆN FORM ---
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setPreferredSize(new Dimension(400, 180));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(8, 5, 8, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        // 1. Hiển thị ngày kết thúc hiện tại (Read-only)
+        gbc.gridx = 0; gbc.gridy = 0;
+        panel.add(new JLabel("Hết hạn hiện tại:"), gbc);
         
-        String input = JOptionPane.showInputDialog(this,
-            "Nhập số tháng gia hạn:",
-            "Gia Hạn Hợp Đồng",
-            JOptionPane.QUESTION_MESSAGE);
+        gbc.gridx = 1;
+        JLabel lblCurrentEnd = new JLabel(contract.getEndDate() != null ? dateFormat.format(contract.getEndDate()) : "Vô thời hạn");
+        lblCurrentEnd.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblCurrentEnd.setForeground(new Color(100, 116, 139)); // Xám xanh
+        panel.add(lblCurrentEnd, gbc);
+
+        // 2. Chọn ngày kết thúc MỚI (JSpinner chọn ngày)
+        gbc.gridx = 0; gbc.gridy = 1;
+        panel.add(new JLabel("Ngày kết thúc mới:"), gbc);
         
-        if (input != null && !input.trim().isEmpty()) {
+        gbc.gridx = 1;
+        JSpinner spnNewDate = new JSpinner(new SpinnerDateModel());
+        spnNewDate.setEditor(new JSpinner.DateEditor(spnNewDate, "dd/MM/yyyy"));
+        spnNewDate.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        
+        // Logic: Mặc định cộng thêm 12 tháng từ ngày hết hạn cũ
+        Calendar cal = Calendar.getInstance();
+        if (contract.getEndDate() != null) cal.setTime(contract.getEndDate());
+        cal.add(Calendar.YEAR, 1); 
+        spnNewDate.setValue(cal.getTime());
+        panel.add(spnNewDate, gbc);
+
+        // 3. Giá thuê MỚI (Dùng MoneyFormatter để nhập tiền)
+        gbc.gridx = 0; gbc.gridy = 2;
+        panel.add(new JLabel("Giá thuê mới (VNĐ):"), gbc);
+        
+        gbc.gridx = 1;
+        // ✅ Tạo ô nhập tiền xịn xò
+        JTextField txtNewPrice = MoneyFormatter.createMoneyField();
+        // Set giá trị cũ vào ô nhập để user dễ sửa
+        MoneyFormatter.setValue(txtNewPrice, contract.getMonthlyRent().longValue()); 
+        panel.add(txtNewPrice, gbc);
+
+        // --- HIỂN THỊ DIALOG ---
+        int result = JOptionPane.showConfirmDialog(this, panel, 
+            "Gia Hạn Hợp Đồng", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
             try {
-                int months = Integer.parseInt(input.trim());
+                java.util.Date newEndDate = (java.util.Date) spnNewDate.getValue();
                 
-                if (months <= 0) {
-                    JOptionPane.showMessageDialog(this,
-                        "Số tháng phải lớn hơn 0!",
-                        "Lỗi",
-                        JOptionPane.ERROR_MESSAGE);
+                // Validate ngày
+                if (contract.getStartDate() != null && newEndDate.before(contract.getStartDate())) {
+                    JOptionPane.showMessageDialog(this, "Ngày kết thúc mới không được nhỏ hơn ngày bắt đầu!", "Lỗi", JOptionPane.ERROR_MESSAGE);
                     return;
                 }
-                
-                // Calculate new end date
-                java.util.Calendar cal = java.util.Calendar.getInstance();
-                if (contract.getEndDate() != null) {
-                    cal.setTime(contract.getEndDate());
-                } else {
-                    cal.setTime(new java.util.Date());
+
+                // ✅ Lấy giá trị tiền từ MoneyFormatter
+                Long newPriceVal = MoneyFormatter.getValue(txtNewPrice);
+                if (newPriceVal == null || newPriceVal <= 0) {
+                    JOptionPane.showMessageDialog(this, "Giá thuê không hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                    return;
                 }
-                cal.add(java.util.Calendar.MONTH, months);
-                java.util.Date newEndDate = cal.getTime();
-                
+                java.math.BigDecimal newPriceBD = java.math.BigDecimal.valueOf(newPriceVal);
+
+                // 1. Gọi DAO gia hạn ngày
                 if (contractDAO.renewContract(contract.getId(), newEndDate)) {
-                    JOptionPane.showMessageDialog(this,
-                        "Gia hạn hợp đồng thành công!",
-                        "Thành công",
-                        JOptionPane.INFORMATION_MESSAGE);
                     
-                    if (historyPanel != null) {
-                        historyPanel.refresh();
+                    // 2. Nếu giá thay đổi, update thêm giá
+                    if (newPriceBD.compareTo(contract.getMonthlyRent()) != 0) {
+                        contract.setMonthlyRent(newPriceBD);
+                        contractDAO.updateContract(contract);
                     }
+
+                    JOptionPane.showMessageDialog(this, "Gia hạn thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+                    if (historyPanel != null) historyPanel.refresh();
                     
-                    contract = contractDAO.getContractById(contract.getId());
-                    dispose();
+                    // Reload data
+                    this.contract = contractDAO.getContractById(contract.getId());
+                    dispose(); 
                 } else {
-                    JOptionPane.showMessageDialog(this,
-                        "Gia hạn hợp đồng thất bại!",
-                        "Lỗi",
-                        JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this, "Gia hạn thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
                 }
-                
-            } catch (NumberFormatException e) {
-                JOptionPane.showMessageDialog(this,
-                    "Số tháng không hợp lệ!",
-                    "Lỗi",
-                    JOptionPane.ERROR_MESSAGE);
+            } catch (Exception e) {
+                e.printStackTrace();
+                JOptionPane.showMessageDialog(this, "Dữ liệu nhập không hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
-    
+
+    // ========================================================================
+    // 2. CẢI TIẾN: THANH LÝ HỢP ĐỒNG (Giao diện chi tiết tiền cọc)
+    // ========================================================================
     private void terminateContract() {
-        int confirm = JOptionPane.showConfirmDialog(this,
-            "Bạn có chắc muốn kết thúc hợp đồng này?",
-            "Xác Nhận",
-            JOptionPane.YES_NO_OPTION);
+        // --- TẠO GIAO DIỆN FORM ---
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setPreferredSize(new Dimension(450, 250));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(8, 5, 8, 5);
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        // 1. Ngày trả phòng thực tế
+        gbc.gridx = 0; gbc.gridy = 0;
+        panel.add(new JLabel("Ngày trả phòng:"), gbc);
         
-        if (confirm == JOptionPane.YES_OPTION) {
-            String reason = JOptionPane.showInputDialog(this,
-                "Nhập lý do kết thúc:",
-                "Lý Do Kết Thúc",
-                JOptionPane.QUESTION_MESSAGE);
+        gbc.gridx = 1;
+        JSpinner spnTermDate = new JSpinner(new SpinnerDateModel());
+        spnTermDate.setEditor(new JSpinner.DateEditor(spnTermDate, "dd/MM/yyyy"));
+        spnTermDate.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        panel.add(spnTermDate, gbc);
+
+        // 2. Tiền cọc gốc (Read-only, Format đẹp)
+        gbc.gridx = 0; gbc.gridy = 1;
+        panel.add(new JLabel("Tiền cọc gốc:"), gbc);
+        
+        gbc.gridx = 1;
+        JLabel lblDeposit = new JLabel(MoneyFormatter.formatMoney(contract.getDepositAmount()) + " VNĐ");
+        lblDeposit.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblDeposit.setForeground(new Color(33, 150, 243)); // Màu xanh dương nổi bật
+        panel.add(lblDeposit, gbc);
+
+        // 3. Số tiền hoàn trả khách (Nhập liệu)
+        gbc.gridx = 0; gbc.gridy = 2;
+        panel.add(new JLabel("Hoàn trả khách (VNĐ):"), gbc);
+        
+        gbc.gridx = 1;
+        // ✅ Ô nhập tiền format tự động
+        JTextField txtRefund = MoneyFormatter.createMoneyField();
+        MoneyFormatter.setValue(txtRefund, contract.getDepositAmount().longValue()); // Mặc định trả hết cọc
+        panel.add(txtRefund, gbc);
+
+        // 4. Lý do / Ghi chú
+        gbc.gridx = 0; gbc.gridy = 3;
+        gbc.anchor = GridBagConstraints.NORTHWEST; // Căn lên trên
+        panel.add(new JLabel("Lý do / Ghi chú:"), gbc);
+        
+        gbc.gridx = 1;
+        JTextArea txtReason = new JTextArea(3, 20);
+        txtReason.setText("Thanh lý hợp đồng");
+        txtReason.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        txtReason.setBorder(BorderFactory.createLineBorder(new Color(200, 200, 200)));
+        panel.add(txtReason, gbc);
+
+        // --- HIỂN THỊ DIALOG ---
+        int result = JOptionPane.showConfirmDialog(this, panel, 
+            "Thanh Lý Hợp Đồng", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+
+        if (result == JOptionPane.OK_OPTION) {
+            String reason = txtReason.getText();
+            java.util.Date termDate = (java.util.Date) spnTermDate.getValue();
+            Long refundAmount = MoneyFormatter.getValue(txtRefund);
             
-            if (reason != null && !reason.trim().isEmpty()) {
-                if (contractDAO.terminateContract(contract.getId())) {
-                    JOptionPane.showMessageDialog(this,
-                        "Kết thúc hợp đồng thành công!",
-                        "Thành công",
-                        JOptionPane.INFORMATION_MESSAGE);
-                    
-                    if (historyPanel != null) {
-                        historyPanel.refresh();
-                    }
-                    
-                    dispose();
-                } else {
-                    JOptionPane.showMessageDialog(this,
-                        "Kết thúc hợp đồng thất bại!",
-                        "Lỗi",
-                        JOptionPane.ERROR_MESSAGE);
-                }
+            // 1. Gọi DAO đổi trạng thái
+            if (contractDAO.terminateContract(contract.getId())) {
+                
+                // 2. Cập nhật thêm thông tin chi tiết vào DB (Ngày trả, Ghi chú hoàn cọc)
+                contract.setTerminatedDate(termDate);
+                contract.setStatus("TERMINATED");
+                
+                String noteAppend = String.format("\n[Thanh lý ngày: %s | Hoàn cọc: %s VNĐ | Lý do: %s]",
+                    dateFormat.format(termDate),
+                    MoneyFormatter.formatMoney(refundAmount != null ? refundAmount : 0),
+                    reason
+                );
+                
+                // Nối vào ghi chú cũ thay vì ghi đè
+                String currentNote = contract.getNotes() == null ? "" : contract.getNotes();
+                contract.setNotes(currentNote + noteAppend);
+                
+                contractDAO.updateContract(contract); // Lưu lại ghi chú và ngày thanh lý
+
+                JOptionPane.showMessageDialog(this, "Thanh lý hợp đồng thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+                if (historyPanel != null) historyPanel.refresh();
+                dispose();
+            } else {
+                JOptionPane.showMessageDialog(this, "Thanh lý thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
