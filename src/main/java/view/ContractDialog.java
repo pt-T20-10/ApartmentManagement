@@ -5,14 +5,12 @@ import model.Apartment;
 import model.Resident;
 import model.Floor;
 import model.Building;
-import model.User;
 import dao.ApartmentDAO;
 import dao.ResidentDAO;
 import dao.FloorDAO;
 import dao.BuildingDAO;
 import util.UIConstants;
 import util.ModernButton;
-import util.SessionManager;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -25,7 +23,9 @@ import java.util.List;
 
 /**
  * Contract Dialog - Legacy popup for Add/Edit Contract
- * FIXED: Building filter applied - users only see apartments in their building
+ * NOTE: This is a simpler version. For full features, use ContractFormDialog
+ * 
+ * UPDATED: Support for RENTAL and OWNERSHIP contract types
  */
 public class ContractDialog extends JDialog {
     
@@ -167,7 +167,7 @@ public class ContractDialog extends JDialog {
         loadApartments();
         loadResidents();
         
-        // Contract Type
+        // ✅ NEW: Contract Type
         formPanel.add(createFieldLabel("Loại Hợp Đồng *"));
         contractTypeCombo = new JComboBox<>(new String[]{"Thuê", "Sở hữu"});
         contractTypeCombo.setFont(UIConstants.FONT_REGULAR);
@@ -176,7 +176,7 @@ public class ContractDialog extends JDialog {
         formPanel.add(contractTypeCombo);
         formPanel.add(Box.createVerticalStrut(15));
         
-        // Signed date
+        // ✅ Signed date
         formPanel.add(createFieldLabel("Ngày Ký (yyyy-MM-dd)"));
         signedDateField = createTextField();
         signedDateField.setToolTipText("Ví dụ: 2026-01-28");
@@ -201,7 +201,7 @@ public class ContractDialog extends JDialog {
         formPanel.add(endHint);
         formPanel.add(Box.createVerticalStrut(15));
         
-        // Price (dynamic label)
+        // ✅ Price (dynamic label)
         formPanel.add(createFieldLabel("Tiền Thuê/Tháng hoặc Giá Mua (VNĐ) *"));
         priceField = createTextField();
         formPanel.add(priceField);
@@ -308,28 +308,14 @@ public class ContractDialog extends JDialog {
         return field;
     }
     
-    // ✅ FIXED: Apply building filter
     private void loadApartments() {
         DefaultComboBoxModel<ApartmentDisplay> model = new DefaultComboBoxModel<>();
-        
-        // ✅ Get current user for building filter
-        User currentUser = SessionManager.getInstance().getCurrentUser();
-        
-        // ✅ Load apartments with building filter
         List<Apartment> apartments = apartmentDAO.getAllApartments();
         
         for (Apartment apartment : apartments) {
             Floor floor = floorDAO.getFloorById(apartment.getFloorId());
             if (floor != null) {
                 Building building = buildingDAO.getBuildingById(floor.getBuildingId());
-                
-                // ✅ FILTER: Only show apartments in user's building (non-ADMIN)
-                if (currentUser != null && !currentUser.isAdmin()) {
-                    if (building == null || !currentUser.canAccessBuilding(building.getId())) {
-                        continue; // Skip apartments not in user's building
-                    }
-                }
-                
                 String displayText = (building != null ? building.getName() : "N/A") + 
                                    " - Tầng " + floor.getFloorNumber() + 
                                    " - " + apartment.getRoomNumber();
@@ -371,15 +357,15 @@ public class ContractDialog extends JDialog {
                 }
             }
             
-            // Contract type
+            // ✅ Contract type
             contractTypeCombo.setSelectedItem(contract.getContractTypeDisplay());
             
-            // Dates
+            // ✅ Dates
             signedDateField.setText(contract.getSignedDate() != null ? dateFormat.format(contract.getSignedDate()) : "");
             startDateField.setText(contract.getStartDate() != null ? dateFormat.format(contract.getStartDate()) : "");
             endDateField.setText(contract.getEndDate() != null ? dateFormat.format(contract.getEndDate()) : "");
             
-            // Price
+            // ✅ Price
             priceField.setText(contract.getMonthlyRent() != null ? contract.getMonthlyRent().toString() : "");
             depositField.setText(contract.getDeposit() != null ? contract.getDeposit().toString() : "");
             statusCombo.setSelectedItem(contract.getStatus() != null ? contract.getStatus() : "ACTIVE");
@@ -398,7 +384,7 @@ public class ContractDialog extends JDialog {
             String typeDisplay = (String) contractTypeCombo.getSelectedItem();
             String contractType = "Thuê".equals(typeDisplay) ? "RENTAL" : "OWNERSHIP";
             
-            // Parse dates based on contract type
+            // ✅ Parse dates based on contract type
             Date signedDate = null;
             if (!signedDateField.getText().trim().isEmpty()) {
                 signedDate = dateFormat.parse(signedDateField.getText().trim());
@@ -457,7 +443,7 @@ public class ContractDialog extends JDialog {
         String typeDisplay = (String) contractTypeCombo.getSelectedItem();
         boolean isRental = "Thuê".equals(typeDisplay);
         
-        // Validate dates for RENTAL
+        // ✅ Validate dates for RENTAL
         if (isRental) {
             if (startDateField.getText().trim().isEmpty()) {
                 showError("Hợp đồng thuê phải có ngày bắt đầu!");
