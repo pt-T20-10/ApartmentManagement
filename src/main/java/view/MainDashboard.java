@@ -1,25 +1,26 @@
 package view;
 
+import java.sql.Connection;
+import java.sql.SQLException;
 import util.UIConstants;
 import util.PermissionManager;
 import connection.Db_connection;
+
+import util.PasswordUtil;
 import dao.UserDAO;
 import model.Building;
 import model.Floor;
 import model.User;
 import util.SessionManager;
-import util.PasswordUtil;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.geom.Ellipse2D;
-import java.sql.Connection;
-import java.sql.SQLException;
 
 /**
- * Main Dashboard - Sky Blue Theme (Xanh Dương Tươi Sáng)
+ * Main Dashboard với RBAC + User Management + User Dropdown Hỗ trợ điều hướng
+ * công khai cho các Panel con: Tòa Nhà -> Tầng -> Căn Hộ
  */
 public class MainDashboard extends JFrame implements DashboardNavigator {
 
@@ -28,47 +29,33 @@ public class MainDashboard extends JFrame implements DashboardNavigator {
     private PermissionManager permissionManager;
 
     // Menu buttons
-    private SidebarButton btnDashboard;
-    private SidebarButton btnBuildings;
-    private SidebarButton btnResidents;
-    private SidebarButton btnContracts;
-    private SidebarButton btnServices;
-    private SidebarButton btnInvoices;
-    private SidebarButton btnReports;
-    private SidebarButton btnUsers;
-    private SidebarButton btnMyStaff;
+    private JButton btnDashboard;
+    private JButton btnBuildings;
+    private JButton btnResidents;
+    private JButton btnContracts;
+    private JButton btnServices;
+    private JButton btnInvoices;
+    private JButton btnReports;
+    private JButton btnUsers;
 
-    private SidebarButton currentActiveButton = null;
-
-    // --- SKY BLUE COLOR PALETTE ---
-    // Gradient: Xanh da trời đậm dần xuống dưới
-    private final Color SIDEBAR_TOP = new Color(56, 189, 248);    // Sky 400 (Sáng)
-    private final Color SIDEBAR_BOTTOM = new Color(2, 132, 199);  // Sky 600 (Đậm hơn chút)
-    
-    // Màu chữ & Icon (Trắng toàn bộ để nổi trên nền xanh)
-    private final Color TEXT_IDLE = new Color(224, 242, 254);     // Sky 100 (Trắng hơi xanh)
-    private final Color TEXT_HOVER = Color.WHITE;                 // Trắng tinh
-    private final Color TEXT_ACTIVE = Color.WHITE;                // Trắng tinh
-    
-    // Màu nền nút
-    private final Color BTN_HOVER_BG = new Color(255, 255, 255, 40); // Trắng mờ 40%
-    private final Color BTN_ACTIVE_BG = new Color(255, 255, 255, 60); // Trắng mờ 60%
-    private final Color ACCENT_BAR = Color.WHITE;                    // Thanh đánh dấu màu trắng
+    private JButton currentActiveButton = null;
 
     public MainDashboard() {
         this.permissionManager = PermissionManager.getInstance();
 
         initializeFrame();
         createSidebar();
+        applyRoleBasedAccess();
+        addUserDropdown();
         createContentArea();
-        
-        // Mặc định vào Dashboard
+        testDatabaseConnection();
+
         showDashboardPanel();
     }
 
     private void initializeFrame() {
         setTitle("Hệ Thống Quản Lý Chung Cư");
-        setSize(1400, 850);
+        setSize(1400, 800);
         setLocationRelativeTo(null);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());
@@ -76,175 +63,78 @@ public class MainDashboard extends JFrame implements DashboardNavigator {
     }
 
     private void createSidebar() {
-        // 1. Sidebar Container (Gradient Xanh Dương)
-        sidebarPanel = new JPanel(new BorderLayout()) {
-            @Override
-            protected void paintComponent(Graphics g) {
-                super.paintComponent(g);
-                Graphics2D g2d = (Graphics2D) g;
-                g2d.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
-                GradientPaint gp = new GradientPaint(
-                    0, 0, SIDEBAR_TOP,
-                    0, getHeight(), SIDEBAR_BOTTOM
-                );
-                g2d.setPaint(gp);
-                g2d.fillRect(0, 0, getWidth(), getHeight());
-            }
-        };
-        sidebarPanel.setPreferredSize(new Dimension(280, getHeight()));
+        sidebarPanel = new JPanel();
+        sidebarPanel.setLayout(new BoxLayout(sidebarPanel, BoxLayout.Y_AXIS));
+        sidebarPanel.setBackground(UIConstants.SIDEBAR_COLOR);
+        sidebarPanel.setPreferredSize(new Dimension(UIConstants.SIDEBAR_WIDTH, getHeight()));
+        sidebarPanel.setBorder(new EmptyBorder(20, 0, 0, 0));
 
-        // --- TOP: LOGO ---
-        JPanel topPanel = new JPanel();
-        topPanel.setLayout(new BoxLayout(topPanel, BoxLayout.Y_AXIS));
-        topPanel.setOpaque(false);
-        topPanel.setBorder(new EmptyBorder(30, 20, 30, 20));
+        // Logo/Title
+        JPanel logoPanel = new JPanel();
+        logoPanel.setLayout(new BoxLayout(logoPanel, BoxLayout.Y_AXIS));
+        logoPanel.setBackground(UIConstants.SIDEBAR_COLOR);
+        logoPanel.setMaximumSize(new Dimension(UIConstants.SIDEBAR_WIDTH, 100));
+        logoPanel.setBorder(new EmptyBorder(0, 20, 30, 20));
 
-        // Logo Icon (Màu trắng)
-        JLabel iconLabel = new JLabel(new HeaderIcon(48, Color.WHITE)); 
-        iconLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        
-        // Logo Text (Màu trắng)
-        JLabel titleLabel = new JLabel("QUẢN LÝ CHUNG CƯ");
-        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        titleLabel.setForeground(Color.WHITE);
-        titleLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
-        titleLabel.setBorder(new EmptyBorder(10, 0, 0, 0));
+        JLabel logoLabel = new JLabel("\u25A0 QUẢN LÝ");
+        logoLabel.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        logoLabel.setForeground(Color.WHITE);
+        logoLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        topPanel.add(iconLabel);
-        topPanel.add(titleLabel);
-        
-        sidebarPanel.add(topPanel, BorderLayout.NORTH);
+        JLabel subtitleLabel = new JLabel("CHUNG CƯ");
+        subtitleLabel.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        subtitleLabel.setForeground(UIConstants.PRIMARY_LIGHT);
+        subtitleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
-        // --- CENTER: MENU ITEMS ---
-        JPanel menuPanel = new JPanel(new GridBagLayout());
-        menuPanel.setOpaque(false);
-        
-        GridBagConstraints gbc = new GridBagConstraints();
-        gbc.gridx = 0;
-        gbc.gridy = 0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(4, 15, 4, 15);
-        gbc.weightx = 1.0;
+        logoPanel.add(logoLabel);
+        logoPanel.add(Box.createVerticalStrut(5));
+        logoPanel.add(subtitleLabel);
 
-        // Init Buttons
-        btnDashboard = createMenuButton("Dashboard", "\u2637"); 
-        btnBuildings = createMenuButton("Tòa Nhà", "\u25A3");   
-        btnResidents = createMenuButton("Cư Dân", "\u265B");    
-        btnContracts = createMenuButton("Hợp Đồng", "\u2709");  
-        btnServices  = createMenuButton("Dịch Vụ", "\u26A1");   
-        btnInvoices  = createMenuButton("Hóa Đơn", "\u263C");   
-        btnReports   = createMenuButton("Báo Cáo", "\u2630");   
-        
-        btnUsers     = createMenuButton("Tài Khoản", "\u265F"); 
-        btnMyStaff   = createMenuButton("Nhân Viên", "👥");
+        sidebarPanel.add(logoPanel);
 
-        // Add buttons
-        addMenuButton(menuPanel, btnDashboard, gbc);
-        addMenuButton(menuPanel, btnBuildings, gbc);
-        addMenuButton(menuPanel, btnResidents, gbc);
-        addMenuButton(menuPanel, btnContracts, gbc);
-        addMenuButton(menuPanel, btnServices, gbc);
-        addMenuButton(menuPanel, btnInvoices, gbc);
-        addMenuButton(menuPanel, btnReports, gbc);
+        // Menu items
+        btnDashboard = createMenuButton("Dashboard", "\u2637", true);
+        btnBuildings = createMenuButton("Tòa Nhà", "\u25A3", false);
+        btnResidents = createMenuButton("Cư Dân", "\u265B", false);
+        btnContracts = createMenuButton("Hợp Đồng", "\u2709", false);
+        btnServices = createMenuButton("Dịch Vụ", "\u26A1", false);
+        btnInvoices = createMenuButton("Hóa Đơn", "\u263C", false);
+        btnReports = createMenuButton("Báo Cáo", "\u2630", false);
 
-        // Separator
-        if (permissionManager.isAdmin() || permissionManager.isManager()) {
-            JSeparator sep = new JSeparator();
-            sep.setForeground(new Color(255, 255, 255, 80)); // Trắng mờ
-            sep.setBackground(new Color(255, 255, 255, 80));
-            gbc.insets = new Insets(15, 30, 15, 30);
-            menuPanel.add(sep, gbc);
-            gbc.insets = new Insets(4, 15, 4, 15);
-            gbc.gridy++;
+        currentActiveButton = btnDashboard;
+
+        sidebarPanel.add(btnDashboard);
+        sidebarPanel.add(Box.createVerticalStrut(3));
+        sidebarPanel.add(btnBuildings);
+        sidebarPanel.add(Box.createVerticalStrut(3));
+        sidebarPanel.add(btnResidents);
+        sidebarPanel.add(Box.createVerticalStrut(3));
+        sidebarPanel.add(btnContracts);
+        sidebarPanel.add(Box.createVerticalStrut(3));
+        sidebarPanel.add(btnServices);
+        sidebarPanel.add(Box.createVerticalStrut(3));
+        sidebarPanel.add(btnInvoices);
+        sidebarPanel.add(Box.createVerticalStrut(3));
+        sidebarPanel.add(btnReports);
+
+        if (permissionManager.isAdmin()) {
+            sidebarPanel.add(Box.createVerticalStrut(10));
+            btnUsers = createMenuButton("Tài Khoản", "\u265F", false);
+            sidebarPanel.add(btnUsers);
         }
 
-        if (permissionManager.isAdmin()) addMenuButton(menuPanel, btnUsers, gbc);
-        if (permissionManager.isManager()) addMenuButton(menuPanel, btnMyStaff, gbc);
+        sidebarPanel.add(Box.createVerticalGlue());
 
-        gbc.weighty = 1.0;
-        menuPanel.add(new JPanel() {{ setOpaque(false); }}, gbc);
-
-        JScrollPane scrollPane = new JScrollPane(menuPanel);
-        scrollPane.setBorder(null);
-        scrollPane.getViewport().setOpaque(false);
-        scrollPane.setOpaque(false);
-        scrollPane.getVerticalScrollBar().setPreferredSize(new Dimension(0, 0));
-        
-        sidebarPanel.add(scrollPane, BorderLayout.CENTER);
-
-        // --- BOTTOM: USER PROFILE ---
-        sidebarPanel.add(createUserProfile(), BorderLayout.SOUTH);
+        JLabel versionLabel = new JLabel("Version 1.0.0 RBAC");
+        versionLabel.setFont(UIConstants.FONT_SMALL);
+        versionLabel.setForeground(UIConstants.TEXT_SECONDARY);
+        versionLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        versionLabel.setBorder(new EmptyBorder(10, 0, 0, 0));
+        sidebarPanel.add(versionLabel);
 
         add(sidebarPanel, BorderLayout.WEST);
 
-        setupButtonActions();
-        applyRoleBasedAccess();
-    }
-    
-    private void addMenuButton(JPanel panel, SidebarButton btn, GridBagConstraints gbc) {
-        panel.add(btn, gbc);
-        gbc.gridy++;
-    }
-
-    // =============================================================
-    // USER PROFILE (BLUE THEME)
-    // =============================================================
-    private JPanel createUserProfile() {
-        User currentUser = SessionManager.getInstance().getCurrentUser();
-        String name = (currentUser != null) ? currentUser.getFullName() : "User";
-        String role = (currentUser != null) ? currentUser.getRoleDisplayName() : "Role";
-
-        JPanel userPanel = new JPanel(new GridBagLayout());
-        userPanel.setBackground(new Color(255, 255, 255, 30)); // Nền trắng mờ
-        userPanel.setBorder(new EmptyBorder(15, 20, 15, 10));
-        userPanel.setPreferredSize(new Dimension(280, 85));
-
-        GridBagConstraints gbc = new GridBagConstraints();
-
-        // 1. Avatar
-        gbc.gridx = 0; gbc.gridy = 0; gbc.gridheight = 2;
-        gbc.anchor = GridBagConstraints.WEST;
-        gbc.insets = new Insets(0, 0, 0, 12);
-        userPanel.add(new JLabel(new UserIcon(42)), gbc);
-
-        // 2. Name
-        gbc.gridx = 1; gbc.gridy = 0; gbc.gridheight = 1;
-        gbc.weightx = 1.0;
-        gbc.fill = GridBagConstraints.HORIZONTAL;
-        gbc.insets = new Insets(2, 0, 0, 0);
-        JLabel lblName = new JLabel(name);
-        lblName.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        lblName.setForeground(Color.WHITE);
-        userPanel.add(lblName, gbc);
-
-        // 3. Role
-        gbc.gridy = 1;
-        gbc.insets = new Insets(0, 0, 0, 0);
-        JLabel lblRole = new JLabel(role);
-        lblRole.setFont(new Font("Segoe UI", Font.PLAIN, 11));
-        lblRole.setForeground(new Color(224, 242, 254)); // Sky 100
-        userPanel.add(lblRole, gbc);
-
-        // 4. Settings Button - ✅ FIXED ICON
-        gbc.gridx = 2; gbc.gridy = 0; gbc.gridheight = 2;
-        gbc.weightx = 0;
-        gbc.fill = GridBagConstraints.NONE;
-        gbc.anchor = GridBagConstraints.EAST;
-        gbc.insets = new Insets(0, 5, 0, 0);
-
-        JButton btnSettings = new JButton(new SettingsIcon(24, Color.WHITE)); 
-        btnSettings.setBorderPainted(false);
-        btnSettings.setContentAreaFilled(false);
-        btnSettings.setFocusPainted(false);
-        btnSettings.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btnSettings.addActionListener(e -> showUserMenu(btnSettings));
-        
-        userPanel.add(btnSettings, gbc);
-
-        return userPanel;
-    }
-
-    private void setupButtonActions() {
+        // Action listeners
         btnDashboard.addActionListener(e -> showDashboardPanel());
         btnBuildings.addActionListener(e -> showBuildingsPanel());
         btnResidents.addActionListener(e -> showResidentsPanel());
@@ -252,165 +142,64 @@ public class MainDashboard extends JFrame implements DashboardNavigator {
         btnServices.addActionListener(e -> showServicesPanel());
         btnInvoices.addActionListener(e -> showInvoicesPanel());
         btnReports.addActionListener(e -> showReportsPanel());
-        if (btnUsers != null) btnUsers.addActionListener(e -> showUsersPanel());
-        if (btnMyStaff != null) btnMyStaff.addActionListener(e -> showMyStaffPanel());
-    }
 
-    private SidebarButton createMenuButton(String text, String icon) {
-        return new SidebarButton(text, icon);
-    }
-
-    // =============================================================
-    // CUSTOM BUTTON (BLUE THEME)
-    // =============================================================
-    private class SidebarButton extends JButton {
-        private boolean isSelected = false;
-        private boolean isHovered = false;
-        private String iconSymbol;
-
-        public SidebarButton(String text, String iconSymbol) {
-            super(text);
-            this.iconSymbol = iconSymbol;
-            setFont(new Font("Segoe UI", Font.BOLD, 14));
-            setFocusPainted(false);
-            setBorderPainted(false);
-            setContentAreaFilled(false);
-            setCursor(new Cursor(Cursor.HAND_CURSOR));
-            setPreferredSize(new Dimension(240, 48)); 
-            
-            addMouseListener(new MouseAdapter() {
-                @Override public void mouseEntered(MouseEvent e) { isHovered = true; repaint(); }
-                @Override public void mouseExited(MouseEvent e) { isHovered = false; repaint(); }
-            });
-        }
-
-        public void setSelected(boolean selected) {
-            this.isSelected = selected;
-            repaint();
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
-
-            int w = getWidth();
-            int h = getHeight();
-
-            if (isSelected) {
-                // Active BG (Trắng đục nổi bật trên nền xanh)
-                g2.setColor(BTN_ACTIVE_BG);
-                g2.fillRoundRect(0, 0, w, h, 12, 12);
-                
-                // Active Marker (Thanh trắng bên trái)
-                g2.setColor(ACCENT_BAR);
-                g2.fillRoundRect(0, 10, 4, h-20, 2, 2);
-                
-            } else if (isHovered) {
-                // Hover BG (Trắng mờ)
-                g2.setColor(BTN_HOVER_BG);
-                g2.fillRoundRect(0, 0, w, h, 12, 12);
-            }
-
-            // Text & Icon Color
-            Color fg = (isSelected || isHovered) ? TEXT_ACTIVE : TEXT_IDLE;
-            g2.setColor(fg);
-
-            // Calculation for Centering
-            Font iconFont = new Font("Segoe UI Symbol", Font.PLAIN, 18);
-            Font textFont = getFont();
-            
-            FontMetrics fmText = g2.getFontMetrics(textFont);
-            FontMetrics fmIcon = g2.getFontMetrics(iconFont);
-            
-            String text = getText();
-            int iconW = fmIcon.stringWidth(iconSymbol);
-            int textW = fmText.stringWidth(text);
-            int gap = 12; 
-            
-            int totalContentWidth = iconW + gap + textW;
-            int startX = (w - totalContentWidth) / 2; 
-            
-            // Draw Icon
-            g2.setFont(iconFont);
-            g2.drawString(iconSymbol, startX, (h + fmIcon.getAscent() - 4) / 2);
-            
-            // Draw Text
-            g2.setFont(textFont);
-            g2.drawString(text, startX + iconW + gap, (h + fmText.getAscent() - 4) / 2);
-
-            g2.dispose();
-        }
-    }
-
-    private void setActiveMenuButton(SidebarButton activeButton) {
-        SidebarButton[] allButtons = {btnDashboard, btnBuildings, btnResidents, btnContracts, btnServices, btnInvoices, btnReports, btnUsers, btnMyStaff};
-        for (SidebarButton btn : allButtons) {
-            if (btn != null) btn.setSelected(false);
-        }
-        if (activeButton != null) {
-            activeButton.setSelected(true);
-            currentActiveButton = activeButton;
+        if (btnUsers != null) {
+            btnUsers.addActionListener(e -> showUsersPanel());
         }
     }
 
     // =============================================================
-    // CONTENT & NAVIGATION
+    // CÁC HÀM ĐIỀU HƯỚNG CÔNG KHAI (Đã đổi sang PUBLIC để sửa lỗi)
     // =============================================================
-    private void createContentArea() {
-        contentPanel = new JPanel();
-        contentPanel.setLayout(new BorderLayout());
-        contentPanel.setBackground(UIConstants.BACKGROUND_COLOR);
-        add(contentPanel, BorderLayout.CENTER);
+    /**
+     * Hiển thị danh sách Tòa nhà Dùng cho Sidebar và nút Quay lại từ trang Tầng
+     */
+    public void showBuildingsPanel() {
+        if (!permissionManager.canAccess(PermissionManager.MODULE_BUILDINGS)) {
+            permissionManager.showAccessDeniedMessage(this, "truy cập Tòa Nhà");
+            return;
+        }
+        BuildingManagementPanel panel = new BuildingManagementPanel(this::showFloorsOfBuilding);
+        showPanel(panel, "Quản Lý Tòa Nhà", btnBuildings);
     }
 
-    private void showPanel(JPanel panel, String title, SidebarButton menuButton) {
+    /**
+     * Hiển thị danh sách Tầng của một tòa nhà cụ thể Dùng khi click Card Tòa
+     * nhà hoặc nút Quay lại từ trang Căn hộ
+     */
+    public void showFloorsOfBuilding(Building building) {
+        if (!permissionManager.canAccess(PermissionManager.MODULE_FLOORS)) {
+            permissionManager.showAccessDeniedMessage(this, "truy cập Tầng");
+            return;
+        }
+        FloorManagementPanel floorPanel = new FloorManagementPanel(this::showApartmentsOfFloor);
+        floorPanel.setBuilding(building);
+        showPanel(floorPanel, "Quản Lý Tầng - " + building.getName(), btnBuildings);
+    }
+
+    /**
+     * Hiển thị danh sách Căn hộ của một tầng
+     */
+    public void showApartmentsOfFloor(Floor floor) {
+        if (!permissionManager.canAccess(PermissionManager.MODULE_APARTMENTS)) {
+            permissionManager.showAccessDeniedMessage(this, "truy cập Căn Hộ");
+            return;
+        }
+        ApartmentManagementPanel aptPanel = new ApartmentManagementPanel();
+        aptPanel.setFloor(floor);
+        showPanel(aptPanel, "Quản Lý Căn Hộ - " + floor.getName(), btnBuildings);
+    }
+
+    // =============================================================
+    // CÁC HÀM HỖ TRỢ UI KHÁC
+    // =============================================================
+    private void showPanel(JPanel panel, String title, JButton menuButton) {
         setActiveMenuButton(menuButton);
         contentPanel.removeAll();
         contentPanel.add(panel, BorderLayout.CENTER);
         contentPanel.revalidate();
         contentPanel.repaint();
     }
-
-    // --- Navigation Methods ---
-    private void showDashboardPanel() { showPanel(new DashboardPanel(this), "Dashboard", btnDashboard); }
-    public void showBuildingsPanel() {
-        if (permissionManager.canAccess(PermissionManager.MODULE_BUILDINGS)) {
-            showPanel(new BuildingManagementPanel(this::showFloorsOfBuilding), "Quản Lý Tòa Nhà", btnBuildings);
-        } else permissionManager.showAccessDeniedMessage(this, "truy cập Tòa Nhà");
-    }
-    public void showFloorsOfBuilding(Building building) {
-        if (permissionManager.canAccess(PermissionManager.MODULE_FLOORS)) {
-            FloorManagementPanel floorPanel = new FloorManagementPanel(this::showApartmentsOfFloor);
-            floorPanel.setBuilding(building);
-            showPanel(floorPanel, "Quản Lý Tầng", btnBuildings);
-        } else permissionManager.showAccessDeniedMessage(this, "truy cập Tầng");
-    }
-    public void showApartmentsOfFloor(Floor floor) {
-        if (permissionManager.canAccess(PermissionManager.MODULE_APARTMENTS)) {
-            ApartmentManagementPanel aptPanel = new ApartmentManagementPanel();
-            aptPanel.setFloor(floor);
-            showPanel(aptPanel, "Quản Lý Căn Hộ", btnBuildings);
-        } else permissionManager.showAccessDeniedMessage(this, "truy cập Căn Hộ");
-    }
-    private void showResidentsPanel() {
-        if (permissionManager.canAccess(PermissionManager.MODULE_RESIDENTS)) showPanel(new ResidentManagementPanel(), "Quản Lý Cư Dân", btnResidents);
-    }
-    private void showContractsPanel() {
-        if (permissionManager.canAccess(PermissionManager.MODULE_CONTRACTS)) showPanel(new ContractManagementPanel(), "Quản Lý Hợp Đồng", btnContracts);
-    }
-    private void showServicesPanel() {
-        if (permissionManager.canAccess(PermissionManager.MODULE_SERVICES)) showPanel(new ServiceManagementPanel(), "Quản Lý Dịch Vụ", btnServices);
-    }
-    private void showInvoicesPanel() {
-        if (permissionManager.canAccess(PermissionManager.MODULE_INVOICES)) showPanel(new InvoiceManagementPanel(), "Quản Lý Hóa Đơn", btnInvoices);
-    }
-    private void showReportsPanel() {
-        if (permissionManager.canAccess(PermissionManager.MODULE_REPORTS)) showPanel(new ReportPanel(), "Báo Cáo", btnReports);
-    }
-    private void showUsersPanel() { showPanel(new UserManagementPanel(), "Quản Lý Tài Khoản", btnUsers); }
-    private void showMyStaffPanel() { showPanel(new MyStaffPanel(), "Nhân Viên Thuộc Tòa", btnMyStaff); }
 
     private void applyRoleBasedAccess() {
         btnBuildings.setVisible(permissionManager.canAccess(PermissionManager.MODULE_BUILDINGS));
@@ -419,112 +208,439 @@ public class MainDashboard extends JFrame implements DashboardNavigator {
         btnServices.setVisible(permissionManager.canAccess(PermissionManager.MODULE_SERVICES));
         btnInvoices.setVisible(permissionManager.canAccess(PermissionManager.MODULE_INVOICES));
         btnReports.setVisible(permissionManager.canAccess(PermissionManager.MODULE_REPORTS));
+        sidebarPanel.revalidate();
+        sidebarPanel.repaint();
     }
 
-    // --- User Menu ---
-    private void showUserMenu(Component invoker) {
+    private void addUserDropdown() {
+        User currentUser = SessionManager.getInstance().getCurrentUser();
+        if (currentUser == null) {
+            return;
+        }
+
+        // ✅ Container full width
+        JPanel userContainer = new JPanel();
+        userContainer.setLayout(new BoxLayout(userContainer, BoxLayout.Y_AXIS));
+        userContainer.setBackground(UIConstants.SIDEBAR_COLOR);
+        userContainer.setBorder(new EmptyBorder(10, 0, 20, 0));
+        userContainer.setMaximumSize(new Dimension(UIConstants.SIDEBAR_WIDTH, 80));
+        userContainer.setAlignmentX(Component.LEFT_ALIGNMENT); // ← Added
+
+        JButton userButton = new JButton();
+        userButton.setLayout(new BorderLayout(12, 0));
+        userButton.setBackground(new Color(45, 55, 72));
+        userButton.setBorder(new EmptyBorder(12, 20, 12, 10));
+        userButton.setFocusPainted(false);
+        userButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+
+        // ✅ CUSTOM PAINTED USER ICON (không dùng emoji)
+        JPanel avatarPanel = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                super.paintComponent(g);
+                Graphics2D g2d = (Graphics2D) g;
+                g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                int centerX = getWidth() / 2;
+                int centerY = getHeight() / 2;
+
+                // Draw user icon
+                g2d.setColor(new Color(147, 197, 253)); // Light blue
+
+                // Head circle
+                g2d.fillOval(centerX - 8, centerY - 12, 16, 16);
+
+                // Body arc
+                g2d.fillArc(centerX - 12, centerY + 2, 24, 20, 0, -180);
+            }
+
+            @Override
+            public Dimension getPreferredSize() {
+                return new Dimension(36, 36);
+            }
+
+            @Override
+            public Dimension getMaximumSize() {
+                return new Dimension(36, 36);
+            }
+        };
+        avatarPanel.setOpaque(false);
+
+        JPanel infoPanel = new JPanel();
+        infoPanel.setLayout(new BoxLayout(infoPanel, BoxLayout.Y_AXIS));
+        infoPanel.setOpaque(false);
+
+        JLabel nameLabel = new JLabel(currentUser.getFullName());
+        nameLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        nameLabel.setForeground(Color.WHITE);
+        nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel roleLabel = new JLabel(currentUser.getRoleDisplayName());
+        roleLabel.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        roleLabel.setForeground(new Color(156, 163, 175));
+        roleLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        infoPanel.add(nameLabel);
+        infoPanel.add(Box.createVerticalStrut(2));
+        infoPanel.add(roleLabel);
+
+        userButton.add(avatarPanel, BorderLayout.WEST);
+        userButton.add(infoPanel, BorderLayout.CENTER);
+
+        JLabel arrowLabel = new JLabel("▼");
+        arrowLabel.setFont(new Font("Segoe UI", Font.PLAIN, 10));
+        arrowLabel.setForeground(new Color(156, 163, 175));
+        userButton.add(arrowLabel, BorderLayout.EAST);
+
+        userButton.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) {
+                userButton.setBackground(new Color(55, 65, 81));
+            }
+
+            public void mouseExited(MouseEvent e) {
+                userButton.setBackground(new Color(45, 55, 72));
+            }
+        });
+
+        userButton.addActionListener(e -> showUserMenu(userButton));
+        userContainer.add(userButton);
+        sidebarPanel.add(userContainer);
+    }
+
+    private void showUserMenu(JButton userButton) {
         JPopupMenu popup = new JPopupMenu();
         popup.setBackground(Color.WHITE);
-        popup.setBorder(BorderFactory.createLineBorder(new Color(226, 232, 240)));
+        popup.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1));
 
-        JMenuItem changePass = new JMenuItem("Đổi mật khẩu");
-        changePass.setBackground(Color.WHITE);
-        changePass.addActionListener(e -> showChangePasswordDialog());
-        
-        JMenuItem logout = new JMenuItem("Đăng xuất");
-        logout.setBackground(Color.WHITE);
-        logout.setForeground(new Color(225, 29, 72)); // Red
-        logout.addActionListener(e -> performLogout());
-
-        popup.add(changePass);
+        User currentUser = SessionManager.getInstance().getCurrentUser();
+        JMenuItem headerItem = new JMenuItem(currentUser.getFullName());
+        headerItem.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        headerItem.setEnabled(false);
+        headerItem.setBackground(new Color(249, 250, 251));
+        popup.add(headerItem);
         popup.addSeparator();
-        popup.add(logout);
-        
-        popup.show(invoker, -100, -70);
+
+        JMenuItem changePasswordItem = new JMenuItem("\ud83d\udd11 Đổi mật khẩu");
+        changePasswordItem.setFont(UIConstants.FONT_REGULAR);
+        changePasswordItem.addActionListener(e -> showChangePasswordDialog());
+        popup.add(changePasswordItem);
+        popup.addSeparator();
+
+        JMenuItem logoutItem = new JMenuItem("\ud83d\udeaa Đăng xuất");
+        logoutItem.setFont(UIConstants.FONT_REGULAR);
+        logoutItem.setForeground(UIConstants.DANGER_COLOR);
+        logoutItem.addActionListener(e -> performLogout());
+        popup.add(logoutItem);
+
+        popup.show(userButton, 0, userButton.getHeight());
+    }
+
+    private void showChangePasswordDialog() {
+        // Create dialog panel
+        JPanel panel = new JPanel(new GridLayout(3, 2, 10, 10));
+        panel.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        JPasswordField oldPasswordField = new JPasswordField();
+        JPasswordField newPasswordField = new JPasswordField();
+        JPasswordField confirmPasswordField = new JPasswordField();
+
+        panel.add(new JLabel("Mật khẩu cũ:"));
+        panel.add(oldPasswordField);
+        panel.add(new JLabel("Mật khẩu mới:"));
+        panel.add(newPasswordField);
+        panel.add(new JLabel("Xác nhận:"));
+        panel.add(confirmPasswordField);
+
+        int result = JOptionPane.showConfirmDialog(
+                this,
+                panel,
+                "Đổi Mật Khẩu",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.PLAIN_MESSAGE
+        );
+
+        if (result == JOptionPane.OK_OPTION) {
+            String oldPassword = new String(oldPasswordField.getPassword());
+            String newPassword = new String(newPasswordField.getPassword());
+            String confirmPassword = new String(confirmPasswordField.getPassword());
+
+            User currentUser = SessionManager.getInstance().getCurrentUser();
+            UserDAO userDAO = new UserDAO();
+
+            // Validate old password using BCrypt
+            if (!userDAO.verifyCurrentPassword(currentUser.getId(), oldPassword)) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Mật khẩu cũ không đúng!",
+                        "Lỗi",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                return;
+            }
+
+            // Validate new password length
+            if (newPassword.length() < 6) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Mật khẩu mới phải có ít nhất 6 ký tự!",
+                        "Lỗi",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                return;
+            }
+
+            // Check password strength
+            if (!PasswordUtil.isPasswordStrong(newPassword)) {
+                String strengthDesc = PasswordUtil.getPasswordStrengthDescription(newPassword);
+                int confirm = JOptionPane.showConfirmDialog(
+                        this,
+                        "Mật khẩu không đủ mạnh!\n"
+                        + "Đánh giá: " + strengthDesc + "\n\n"
+                        + "Bạn có muốn tiếp tục với mật khẩu này không?",
+                        "Cảnh Báo Bảo Mật",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE
+                );
+
+                if (confirm != JOptionPane.YES_OPTION) {
+                    return;
+                }
+            }
+
+            // Validate password confirmation
+            if (!newPassword.equals(confirmPassword)) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Mật khẩu xác nhận không khớp!",
+                        "Lỗi",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                return;
+            }
+
+            // Check if new password is same as old
+            if (oldPassword.equals(newPassword)) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Mật khẩu mới phải khác mật khẩu cũ!",
+                        "Lỗi",
+                        JOptionPane.ERROR_MESSAGE
+                );
+                return;
+            }
+
+            // Change password (will be hashed by UserDAO)
+            if (userDAO.changePassword(currentUser.getId(), newPassword)) {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Đổi mật khẩu thành công!\n"
+                        + "Vui lòng đăng nhập lại với mật khẩu mới.",
+                        "Thành Công",
+                        JOptionPane.INFORMATION_MESSAGE
+                );
+
+                // Auto logout after password change for security
+                performLogout();
+            } else {
+                JOptionPane.showMessageDialog(
+                        this,
+                        "Đổi mật khẩu thất bại!\n"
+                        + "Vui lòng thử lại sau.",
+                        "Lỗi",
+                        JOptionPane.ERROR_MESSAGE
+                );
+            }
+        }
+    }
+
+    private JButton createMenuButton(String text, String iconChar, boolean isActive) {
+        JButton btn = new JButton();
+        btn.setLayout(new BorderLayout(10, 0));
+        btn.setBorder(new EmptyBorder(0, 15, 0, 15));
+
+        JPanel iconContainer = new JPanel(new GridBagLayout());
+        iconContainer.setOpaque(false);
+        iconContainer.setPreferredSize(new Dimension(30, 48));
+        JLabel iconLabel = new JLabel(iconChar);
+        iconLabel.setFont(new Font("Segoe UI Symbol", Font.BOLD, 22));
+        iconLabel.setForeground(isActive ? Color.WHITE : UIConstants.TEXT_SECONDARY);
+        iconLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        iconLabel.setVerticalAlignment(SwingConstants.CENTER);
+        iconContainer.add(iconLabel);
+
+        JLabel textLabel = new JLabel(text);
+        textLabel.setFont(UIConstants.FONT_MENU);
+        textLabel.setForeground(isActive ? Color.WHITE : UIConstants.TEXT_SECONDARY);
+        textLabel.setBorder(new EmptyBorder(0, 5, 0, 0));
+
+        btn.add(iconContainer, BorderLayout.WEST);
+        btn.add(textLabel, BorderLayout.CENTER);
+
+        btn.setBackground(isActive ? UIConstants.SIDEBAR_HOVER : UIConstants.SIDEBAR_COLOR);
+        btn.setFocusPainted(false);
+        btn.setBorderPainted(false);
+        btn.setContentAreaFilled(true);
+        btn.setOpaque(true);
+
+        Dimension buttonSize = new Dimension(UIConstants.SIDEBAR_WIDTH, 48);
+        btn.setMinimumSize(buttonSize);
+        btn.setMaximumSize(buttonSize);
+        btn.setPreferredSize(buttonSize);
+        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
+
+        btn.putClientProperty("iconLabel", iconLabel);
+        btn.putClientProperty("textLabel", textLabel);
+
+        btn.addMouseListener(new MouseAdapter() {
+            public void mouseEntered(MouseEvent e) {
+                if (btn != currentActiveButton) {
+                    btn.setBackground(new Color(55, 65, 81));
+                }
+            }
+
+            public void mouseExited(MouseEvent e) {
+                if (btn != currentActiveButton) {
+                    btn.setBackground(UIConstants.SIDEBAR_COLOR);
+                }
+            }
+        });
+        return btn;
+    }
+
+    private void setActiveMenuButton(JButton activeButton) {
+        JButton[] allButtons = {btnDashboard, btnBuildings, btnResidents, btnContracts, btnServices, btnInvoices, btnReports, btnUsers};
+        for (JButton btn : allButtons) {
+            if (btn == null) {
+                continue;
+            }
+            btn.setBackground(UIConstants.SIDEBAR_COLOR);
+            JLabel iconLabel = (JLabel) btn.getClientProperty("iconLabel");
+            JLabel textLabel = (JLabel) btn.getClientProperty("textLabel");
+            if (iconLabel != null) {
+                iconLabel.setForeground(UIConstants.TEXT_SECONDARY);
+            }
+            if (textLabel != null) {
+                textLabel.setForeground(UIConstants.TEXT_SECONDARY);
+            }
+        }
+
+        currentActiveButton = activeButton;
+        activeButton.setBackground(UIConstants.SIDEBAR_HOVER);
+        JLabel iconLabel = (JLabel) activeButton.getClientProperty("iconLabel");
+        JLabel textLabel = (JLabel) activeButton.getClientProperty("textLabel");
+        if (iconLabel != null) {
+            iconLabel.setForeground(Color.WHITE);
+        }
+        if (textLabel != null) {
+            textLabel.setForeground(Color.WHITE);
+        }
+
+        sidebarPanel.revalidate();
+        sidebarPanel.repaint();
+    }
+
+    private void createContentArea() {
+        contentPanel = new JPanel();
+        contentPanel.setLayout(new BorderLayout());
+        contentPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        contentPanel.setBorder(new EmptyBorder(0, 0, 0, 0));
+        add(contentPanel, BorderLayout.CENTER);
+    }
+
+    private void showDashboardPanel() {
+        showPanel(new DashboardPanel(this), "Dashboard", btnDashboard);
+    }
+
+    private void showResidentsPanel() {
+        showPanel(new ResidentManagementPanel(), "Quản Lý Cư Dân", btnResidents);
+    }
+
+    private void showContractsPanel() {
+        showPanel(new ContractManagementPanel(), "Quản Lý Hợp Đồng", btnContracts);
+    }
+
+    private void showServicesPanel() {
+        showPanel(new ServiceManagementPanel(), "Quản Lý Dịch Vụ", btnServices);
+    }
+
+    private void showInvoicesPanel() {
+        showPanel(new InvoiceManagementPanel(), "Quản Lý Hóa Đơn", btnInvoices);
+    }
+
+    private void showReportsPanel() {
+        showPanel(new ReportPanel(), "Báo Cáo", btnReports);
+    }
+
+    private void showUsersPanel() {
+        showPanel(new UserManagementPanel(), "Quản Lý Tài Khoản", btnUsers);
+    }
+
+    private void testDatabaseConnection() {
+        try (Connection conn = Db_connection.getConnection()) {
+            if (conn != null && !conn.isClosed()) {
+                System.out.println("✅ Database connection successful!");
+            }
+        } catch (SQLException e) {
+            System.err.println("❌ Database connection failed!");
+            e.printStackTrace();
+        }
     }
 
     private void performLogout() {
-        int cf = JOptionPane.showConfirmDialog(this, "Bạn có chắc chắn muốn đăng xuất?", "Đăng xuất", JOptionPane.YES_NO_OPTION);
-        if (cf == JOptionPane.YES_OPTION) {
+        if (JOptionPane.showConfirmDialog(this, "Bạn có chắc chắn muốn đăng xuất?", "Xác Nhận", JOptionPane.YES_NO_OPTION) == JOptionPane.YES_OPTION) {
             SessionManager.getInstance().logout();
-            new LoginFrame();
-            dispose();
-        }
-    }
-    
-    private void showChangePasswordDialog() {
-        JOptionPane.showMessageDialog(this, "Chức năng đổi mật khẩu đang được cập nhật."); 
-    }
-
-    // ==================== ICONS (WHITE VERSION) ====================
-    
-    private static class HeaderIcon implements Icon {
-        int size; Color color;
-        public HeaderIcon(int size, Color color) { this.size=size; this.color=color; }
-        public int getIconWidth() { return size; } public int getIconHeight() { return size; }
-        public void paintIcon(Component c, Graphics g, int x, int y) {
-            Graphics2D g2 = (Graphics2D)g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(color);
-            g2.fillRoundRect(x, y, size, size, 12, 12);
-            // Icon nội dung dùng màu nền Sidebar để đục lỗ
-            g2.setColor(new Color(2, 132, 199)); 
-            int p = size/4;
-            g2.fillRect(x+p, y+p, size/2, size/2); 
-            g2.setColor(color);
-            g2.setStroke(new BasicStroke(2f));
-            g2.drawLine(x+size/2, y+p, x+size/2, y+size-p);
-            g2.drawLine(x+p, y+size/2, x+size-p, y+size/2);
-            g2.dispose();
-        }
-    }
-    
-    private static class UserIcon implements Icon {
-        int size;
-        public UserIcon(int size) { this.size=size; }
-        public int getIconWidth() { return size; } public int getIconHeight() { return size; }
-        public void paintIcon(Component c, Graphics g, int x, int y) {
-            Graphics2D g2 = (Graphics2D)g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(new Color(255, 255, 255, 50)); // Nền tròn trắng mờ
-            g2.fillOval(x, y, size, size);
-            g2.setColor(Color.WHITE); // Hình người trắng
-            g2.setClip(new Ellipse2D.Float(x, y, size, size));
-            g2.fillOval(x+size/4, y+size/5, size/2, size/2); // Head
-            g2.fillOval(x+size/6, y+size/2+size/6, size*2/3, size/2); // Body
-            g2.dispose();
-        }
-    }
-    
-    // ✅ FIXED SETTINGS ICON (Vẽ bằng code)
-    private static class SettingsIcon implements Icon {
-        int size; Color color;
-        public SettingsIcon(int size, Color color) { this.size = size; this.color = color; }
-        public int getIconWidth() { return size; } public int getIconHeight() { return size; }
-        public void paintIcon(Component c, Graphics g, int x, int y) {
-            Graphics2D g2 = (Graphics2D)g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(color);
-            
-            int dotSize = 4;
-            int centerX = x + size/2 - dotSize/2;
-            int startY = y + 4;
-            int gap = 6;
-            
-            g2.fillOval(centerX, startY, dotSize, dotSize);
-            g2.fillOval(centerX, startY + gap, dotSize, dotSize);
-            g2.fillOval(centerX, startY + gap*2, dotSize, dotSize);
-            
-            g2.dispose();
+            SwingUtilities.invokeLater(() -> {
+                new LoginFrame();
+                dispose();
+            });
         }
     }
 
-    // ==================== NAVIGATOR ====================
-    @Override public void goToBuildings() { showBuildingsPanel(); }
-    @Override public void goToApartments() { showBuildingsPanel(); }
-    @Override public void goToResidents() { showResidentsPanel(); }
-    @Override public void goToContracts() { showContractsPanel(); }
-    @Override public void goToInvoices() { showInvoicesPanel(); }
-    @Override public void goToReports() { showReportsPanel(); }
-    @Override public void goToServices() { showServicesPanel(); }
+    public static void main(String[] args) {
+        try {
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+        }
+        SwingUtilities.invokeLater(() -> {
+            MainDashboard dashboard = new MainDashboard();
+            dashboard.setVisible(true);
+        });
+    }
+
+// ===== DashboardNavigator IMPLEMENTATION =====
+    @Override
+    public void goToBuildings() {
+        showBuildingsPanel();
+    }
+
+    @Override
+    public void goToApartments() {
+        showBuildingsPanel(); // hoặc tab Căn hộ nếu sau này tách riêng
+    }
+
+    @Override
+    public void goToResidents() {
+        showResidentsPanel();
+    }
+
+    @Override
+    public void goToContracts() {
+        showContractsPanel();
+    }
+
+    @Override
+    public void goToInvoices() {
+        showInvoicesPanel();
+    }
+
+    @Override
+    public void goToReports() {
+        showReportsPanel();
+    }
+
+    @Override
+    public void goToServices() {
+        throw new UnsupportedOperationException("Not supported yet."); // Generated from nbfs://nbhost/SystemFileSystem/Templates/Classes/Code/GeneratedMethodBody
+    }
+
 }
