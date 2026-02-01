@@ -21,7 +21,7 @@ import java.util.List;
 public class BuildingDialog extends JDialog {
 
     private JTextField txtName, txtAddress;
-    private JComboBox<User> cbbManager;
+    private JComboBox<User> cbbManager;  // ✅ Đúng tên biến
     private JComboBox<String> cbbStatus;
     private JTextArea txtDesc;
     
@@ -39,7 +39,7 @@ public class BuildingDialog extends JDialog {
         this.buildingDAO = new BuildingDAO();
         
         initUI();
-        loadManagers();
+        loadManagers();  // ✅ Load managers AFTER initUI
         fillData();
         
         dataChanged = false;
@@ -77,19 +77,20 @@ public class BuildingDialog extends JDialog {
         txtName = createRoundedField();
         txtAddress = createRoundedField();
         
-        // Cấu hình Dropdown Manager
+        // ✅ Cấu hình Dropdown Manager
         cbbManager = new JComboBox<>();
         cbbManager.setFont(UIConstants.FONT_REGULAR);
         cbbManager.setBackground(Color.WHITE);
         cbbManager.setPreferredSize(new Dimension(200, 35));
         
-        // Custom Renderer
+        // ✅ Custom Renderer - hiển thị tên + username
         cbbManager.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
                 super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
                 if (value instanceof User) {
                     User u = (User) value;
+                    // ✅ Hiển thị: Tên (username)
                     setText(u.getFullName() + " (" + u.getUsername() + ")");
                 }
                 return this;
@@ -166,18 +167,31 @@ public class BuildingDialog extends JDialog {
         });
     }
 
+    // ✅ FIX: Load ONLY MANAGER users
     private void loadManagers() {
         cbbManager.removeAllItems();
+        
         try {
-            List<User> users = userDAO.getAllUsers(); 
-            for (User u : users) {
-                if (u.isActive()) {
-                    cbbManager.addItem(u);
-                }
+            // ✅ Thêm option "Không chọn" ở đầu
+            User emptyOption = new User();
+            emptyOption.setId(null);
+            emptyOption.setFullName("-- Chọn người quản lý --");
+            emptyOption.setUsername("");
+            cbbManager.addItem(emptyOption);
+            
+            // ✅ Load ONLY MANAGER users
+            List<User> managers = userDAO.getAllManagers();
+            
+            for (User manager : managers) {
+                cbbManager.addItem(manager);
             }
+            
         } catch (Exception e) {
             e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Lỗi tải danh sách người quản lý: " + e.getMessage());
+            JOptionPane.showMessageDialog(this, 
+                "Lỗi tải danh sách người quản lý: " + e.getMessage(),
+                "Lỗi",
+                JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -191,14 +205,17 @@ public class BuildingDialog extends JDialog {
     }
 
     private void handleCancel() {
-        int choice = JOptionPane.showConfirmDialog(
-            this, 
-            "Bạn có chắc muốn đóng? Dữ liệu chưa lưu sẽ bị mất.", 
-            "Xác nhận đóng", 
-            JOptionPane.YES_NO_OPTION, 
-            JOptionPane.WARNING_MESSAGE
-        );
-        if (choice == JOptionPane.YES_OPTION) dispose();
+        if (dataChanged) {
+            int choice = JOptionPane.showConfirmDialog(
+                this, 
+                "Bạn có chắc muốn đóng? Dữ liệu chưa lưu sẽ bị mất.", 
+                "Xác nhận đóng", 
+                JOptionPane.YES_NO_OPTION, 
+                JOptionPane.WARNING_MESSAGE
+            );
+            if (choice != JOptionPane.YES_OPTION) return;
+        }
+        dispose();
     }
 
     private void onSave() {
@@ -212,7 +229,11 @@ public class BuildingDialog extends JDialog {
         StringBuilder errors = new StringBuilder();
         if (name.isEmpty()) errors.append("- Tên tòa nhà không được để trống.\n");
         if (address.isEmpty()) errors.append("- Địa chỉ không được để trống.\n");
-        if (selectedManager == null) errors.append("- Vui lòng chọn Người quản lý.\n");
+        
+        // ✅ Check nếu chọn option "-- Chọn người quản lý --"
+        if (selectedManager == null || selectedManager.getId() == null) {
+            errors.append("- Vui lòng chọn Người quản lý.\n");
+        }
 
         if (errors.length() > 0) {
             JOptionPane.showMessageDialog(this, 
@@ -275,7 +296,8 @@ public class BuildingDialog extends JDialog {
         building.setDescription(txtDesc.getText().trim());
         building.setStatus(newStatus);
         
-        if (selectedManager != null) {
+        // ✅ Set manager info
+        if (selectedManager != null && selectedManager.getId() != null) {
             building.setManagerUserId(selectedManager.getId());
             building.setManagerName(selectedManager.getFullName());
         }
@@ -292,7 +314,6 @@ public class BuildingDialog extends JDialog {
             // Trường hợp: CẬP NHẬT
             if (isStatusChanged) {
                 // Nếu đổi trạng thái -> Gọi hàm Cascade (Cập nhật lan truyền xuống Tầng/Căn hộ)
-                // Lưu ý: Cần update thông tin cơ bản trước, rồi update status sau hoặc gộp chung
                 buildingDAO.updateBuilding(building); // Lưu tên, địa chỉ...
                 success = buildingDAO.updateStatusCascade(building.getId(), newStatus); // Lưu status + lan truyền
             } else {
@@ -327,22 +348,16 @@ public class BuildingDialog extends JDialog {
                 }
             }
             
-            // [CẬP NHẬT] Chọn đúng Manager dựa trên ID trước, nếu không có thì dùng tên
+            // ✅ Chọn đúng Manager dựa trên ID
             Long mgrId = building.getManagerUserId();
-            String mgrName = building.getManagerName();
             
-            for (int i = 0; i < cbbManager.getItemCount(); i++) {
-                User u = cbbManager.getItemAt(i);
-                
-                // Ưu tiên so khớp theo ID (chính xác nhất)
-                if (mgrId != null && u.getId() != null && u.getId().equals(mgrId)) {
-                    cbbManager.setSelectedIndex(i);
-                    break;
-                }
-                // Fallback: So khớp theo tên nếu dữ liệu cũ chưa có ID
-                else if (mgrId == null && mgrName != null && u.getFullName().equalsIgnoreCase(mgrName)) {
-                    cbbManager.setSelectedIndex(i);
-                    break;
+            if (mgrId != null) {
+                for (int i = 0; i < cbbManager.getItemCount(); i++) {
+                    User u = cbbManager.getItemAt(i);
+                    if (u.getId() != null && u.getId().equals(mgrId)) {
+                        cbbManager.setSelectedIndex(i);
+                        break;
+                    }
                 }
             }
         }

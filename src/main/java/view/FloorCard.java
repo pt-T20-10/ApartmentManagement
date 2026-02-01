@@ -45,15 +45,9 @@ public class FloorCard extends JPanel {
         this.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (isBuildingMaintenance) {
-                    return; 
-                }
-                
-                if (onSelect != null) {
-                    onSelect.accept(floor);
-                }
+                if (isBuildingMaintenance) return; 
+                if (onSelect != null) onSelect.accept(floor);
             }
-
             @Override
             public void mouseEntered(MouseEvent e) {
                 if (!isBuildingMaintenance) {
@@ -61,7 +55,6 @@ public class FloorCard extends JPanel {
                     repaint();
                 }
             }
-
             @Override
             public void mouseExited(MouseEvent e) {
                 setBackground(null);
@@ -95,11 +88,7 @@ public class FloorCard extends JPanel {
 
         JLabel lblName = new JLabel(floor.getName());
         lblName.setFont(new Font("Segoe UI", Font.BOLD, 18));
-        if (isMaintenance(floor.getStatus())) {
-            lblName.setForeground(Color.GRAY);
-        } else {
-            lblName.setForeground(new Color(33, 33, 33));
-        }
+        lblName.setForeground(isMaintenance(floor.getStatus()) ? Color.GRAY : new Color(33, 33, 33));
         topPanel.add(lblName, BorderLayout.WEST);
 
         // Badge
@@ -126,7 +115,6 @@ public class FloorCard extends JPanel {
         centerContent.setOpaque(false);
         centerContent.setBorder(new EmptyBorder(10, 0, 0, 0)); 
 
-        // ✅ FIX: Hiển thị tổng số căn hộ
         JLabel lblTotal = new JLabel("Tổng số căn: " + stats.totalApartments);
         lblTotal.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         lblTotal.setForeground(Color.GRAY);
@@ -135,7 +123,6 @@ public class FloorCard extends JPanel {
         centerContent.add(lblTotal);
         centerContent.add(Box.createVerticalStrut(10)); 
 
-        // ✅ FIX: Progress bar tính cả RENTED + OWNED
         int occupiedApartments = stats.rentedApartments + stats.ownedApartments;
         OccupancyBar progressBar = new OccupancyBar(
             occupiedApartments, 
@@ -153,22 +140,26 @@ public class FloorCard extends JPanel {
         actionPanel.setOpaque(false);
         actionPanel.setBorder(new EmptyBorder(5, 0, 0, 0));
 
-        JButton btnEdit = createIconButton("EDIT", new Color(117, 117, 117));
-        JButton btnDelete = createIconButton("DELETE", new Color(239, 83, 80));
-
-        if (isBuildingMaintenance) {
-            btnEdit.setEnabled(false);
-            btnDelete.setEnabled(false);
-        } else {
-            btnEdit.addActionListener(e -> { if (onEdit != null) onEdit.accept(floor); });
-            btnDelete.addActionListener(e -> { if (onDelete != null) onDelete.accept(floor); });
-            
-            btnEdit.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
-            btnDelete.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
+        // --- LOGIC ẨN NÚT SỬA/XÓA ---
+        if (onEdit != null) {
+            JButton btnEdit = createIconButton("EDIT", new Color(117, 117, 117));
+            if (isBuildingMaintenance) btnEdit.setEnabled(false);
+            else {
+                btnEdit.addActionListener(e -> onEdit.accept(floor));
+                btnEdit.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
+            }
+            actionPanel.add(btnEdit);
         }
 
-        actionPanel.add(btnEdit);
-        actionPanel.add(btnDelete);
+        if (onDelete != null) {
+            JButton btnDelete = createIconButton("DELETE", new Color(239, 83, 80));
+            if (isBuildingMaintenance) btnDelete.setEnabled(false);
+            else {
+                btnDelete.addActionListener(e -> onDelete.accept(floor));
+                btnDelete.addMouseListener(new MouseAdapter() { @Override public void mousePressed(MouseEvent e) { e.consume(); } });
+            }
+            actionPanel.add(btnDelete);
+        }
         
         add(actionPanel, BorderLayout.SOUTH);
     }
@@ -208,134 +199,37 @@ public class FloorCard extends JPanel {
         return btn;
     }
 
-    // --- INNER CLASSES ---
-
+    // --- INNER CLASSES (Giữ nguyên từ file gốc) ---
     private static class StatusBadge extends JLabel {
         private Color bgColor, textColor;
         public StatusBadge(String text, Color bg, Color txt) {
-            super(text); 
-            setFont(new Font("Segoe UI", Font.BOLD, 10));
-            setBorder(new EmptyBorder(2, 8, 2, 8));
-            this.bgColor = bg;
-            this.textColor = txt;
-            setForeground(textColor);
+            super(text); setFont(new Font("Segoe UI", Font.BOLD, 10)); setBorder(new EmptyBorder(2, 8, 2, 8)); this.bgColor = bg; this.textColor = txt; setForeground(textColor);
         }
         @Override protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create(); 
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(bgColor); 
-            g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12);
-            g2.dispose(); 
-            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(bgColor); g2.fillRoundRect(0, 0, getWidth(), getHeight(), 12, 12); g2.dispose(); super.paintComponent(g);
         }
     }
-
-    /**
-     * ✅ UPDATED: OccupancyBar hiển thị cả RENTED + OWNED
-     */
     private static class OccupancyBar extends JPanel {
         int occupied, total, rented, owned;
-
-        public OccupancyBar(int occupied, int total, int rented, int owned) {
-            this.occupied = occupied; // RENTED + OWNED
-            this.total = total;
-            this.rented = rented;
-            this.owned = owned;
-            setPreferredSize(new Dimension(200, 26)); 
-            setOpaque(false);
-        }
-
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-
-            int w = getWidth();
-            int h = getHeight();
-            int arc = 10; 
-            
-            double percent = (total == 0) ? 0 : (double) occupied / total;
-            int filledWidth = (int) (w * percent);
-
-            // Background (còn trống)
-            g2.setColor(new Color(240, 240, 240));
-            g2.fillRoundRect(0, 0, w, h, arc, arc);
-
-            // ✅ Filled area - tính cả RENTED + OWNED
-            if (filledWidth > 0) {
-                // Gradient hoặc solid color
-                g2.setColor(new Color(33, 150, 243)); // Blue
-                
-                if (occupied == total && total > 0) {
-                    g2.fillRoundRect(0, 0, w, h, arc, arc); 
-                } else {
-                    g2.fillRoundRect(0, 0, filledWidth, h, arc, arc);
-                    if (filledWidth > arc) {
-                        g2.fillRect(filledWidth - arc, 0, arc, h);
-                    }
-                }
-            }
-
-            // ✅ Text hiển thị chi tiết
-            g2.setFont(new Font("Segoe UI", Font.BOLD, 11));
-            FontMetrics fm = g2.getFontMetrics();
-            
-            // Hiển thị: "X/Y đã sử dụng" hoặc chi tiết hơn
-            String statusText;
-            if (owned > 0 && rented > 0) {
-                // Có cả thuê và mua
-                statusText = String.format("%d/%d (Thuê: %d | Bán: %d)", 
-                    occupied, total, rented, owned);
-            } else if (owned > 0) {
-                // Chỉ có bán
-                statusText = String.format("%d/%d đã bán", owned, total);
-            } else {
-                // Chỉ có thuê hoặc không có gì
-                statusText = String.format("%d/%d đã thuê", rented, total);
-            }
-            
-            int textX = (w - fm.stringWidth(statusText)) / 2;
-            int textY = (h + fm.getAscent()) / 2 - 2;
-
-            // Màu text: trắng nếu > 50% filled, xám nếu < 50%
-            g2.setColor(percent > 0.5 ? Color.WHITE : new Color(100, 100, 100));
-            g2.drawString(statusText, textX, textY);
-
-            g2.dispose();
+        public OccupancyBar(int occupied, int total, int rented, int owned) { this.occupied = occupied; this.total = total; this.rented = rented; this.owned = owned; setPreferredSize(new Dimension(200, 26)); setOpaque(false); }
+        @Override protected void paintComponent(Graphics g) {
+            super.paintComponent(g); Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            int w = getWidth(); int h = getHeight(); int arc = 10; double percent = (total == 0) ? 0 : (double) occupied / total; int filledWidth = (int) (w * percent);
+            g2.setColor(new Color(240, 240, 240)); g2.fillRoundRect(0, 0, w, h, arc, arc);
+            if (filledWidth > 0) { g2.setColor(new Color(33, 150, 243)); if (occupied == total && total > 0) { g2.fillRoundRect(0, 0, w, h, arc, arc); } else { g2.fillRoundRect(0, 0, filledWidth, h, arc, arc); if (filledWidth > arc) { g2.fillRect(filledWidth - arc, 0, arc, h); } } }
+            g2.setFont(new Font("Segoe UI", Font.BOLD, 11)); FontMetrics fm = g2.getFontMetrics();
+            String statusText; if (owned > 0 && rented > 0) { statusText = String.format("%d/%d (Thuê: %d | Bán: %d)", occupied, total, rented, owned); } else if (owned > 0) { statusText = String.format("%d/%d đã bán", owned, total); } else { statusText = String.format("%d/%d đã thuê", rented, total); }
+            int textX = (w - fm.stringWidth(statusText)) / 2; int textY = (h + fm.getAscent()) / 2 - 2;
+            g2.setColor(percent > 0.5 ? Color.WHITE : new Color(100, 100, 100)); g2.drawString(statusText, textX, textY); g2.dispose();
         }
     }
-
     private static class CardIcon implements Icon {
         private String type; private int size; private Color color;
         public CardIcon(String type, int size, Color color) { this.type = type; this.size = size; this.color = color; }
         @Override public void paintIcon(Component c, Graphics g, int x, int y) {
-            Graphics2D g2 = (Graphics2D) g.create(); 
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            g2.setColor(color); 
-            g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); 
-            g2.translate(x, y);
-            
-            if ("EDIT".equals(type)) { 
-                g2.rotate(Math.toRadians(45), size/2.0, size/2.0); 
-                g2.drawRoundRect(size/2-2, 0, 4, size-4, 1, 1); 
-                g2.drawLine(size/2-2, 3, size/2+2, 3); 
-                Path2D tip = new Path2D.Float(); 
-                tip.moveTo(size/2-2, size-4); 
-                tip.lineTo(size/2, size); 
-                tip.lineTo(size/2+2, size-4); 
-                g2.fill(tip); 
-            } else if ("DELETE".equals(type)) { 
-                int w = size-6; int h = size-4; int mx = 3; int my = 4; 
-                g2.drawRoundRect(mx, my, w, h, 3, 3); 
-                g2.drawLine(1, my, size-1, my); 
-                g2.drawArc(size/2-2, 0, 4, 4, 0, 180); 
-                g2.drawLine(size/2-2, my+3, size/2-2, my+h-3); 
-                g2.drawLine(size/2+2, my+3, size/2+2, my+h-3); 
-            }
-            g2.dispose();
+            Graphics2D g2 = (Graphics2D) g.create(); g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON); g2.setColor(color); g2.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); g2.translate(x, y);
+            if ("EDIT".equals(type)) { g2.rotate(Math.toRadians(45), size/2.0, size/2.0); g2.drawRoundRect(size/2-2, 0, 4, size-4, 1, 1); g2.drawLine(size/2-2, 3, size/2+2, 3); Path2D tip = new Path2D.Float(); tip.moveTo(size/2-2, size-4); tip.lineTo(size/2, size); tip.lineTo(size/2+2, size-4); g2.fill(tip); } else if ("DELETE".equals(type)) { int w = size-6; int h = size-4; int mx = 3; int my = 4; g2.drawRoundRect(mx, my, w, h, 3, 3); g2.drawLine(1, my, size-1, my); g2.drawArc(size/2-2, 0, 4, 4, 0, 180); g2.drawLine(size/2-2, my+3, size/2-2, my+h-3); g2.drawLine(size/2+2, my+3, size/2+2, my+h-3); } g2.dispose();
         }
-        @Override public int getIconWidth() { return size; } 
-        @Override public int getIconHeight() { return size; }
+        @Override public int getIconWidth() { return size; } @Override public int getIconHeight() { return size; }
     }
 }
