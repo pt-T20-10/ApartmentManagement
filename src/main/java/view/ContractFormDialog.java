@@ -260,7 +260,7 @@ public class ContractFormDialog extends JDialog {
     }
     
     private JPanel createResidentSection() {
-        JPanel section = createSection("👤 Thông Tin Khách Thuê / Chủ Hộ");
+        JPanel section = createSection("👤 Thông Tin Chủ Hộ Mới");
         section.setLayout(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.fill = GridBagConstraints.HORIZONTAL;
