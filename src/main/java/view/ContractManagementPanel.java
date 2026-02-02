@@ -19,8 +19,6 @@ import javax.swing.table.DefaultTableModel;
 import javax.swing.table.JTableHeader;
 import javax.swing.table.TableCellRenderer;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.text.SimpleDateFormat;
@@ -28,8 +26,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Contract Management Panel
- * Cập nhật: Thêm Context Menu (Chuột phải) để Sửa/Gia hạn/Thanh lý nhanh
+ * Contract Management Panel - FIXED FILTERS
+ * Fix: Lọc dựa trên status code (TERMINATED, ACTIVE...) thay vì text hiển thị.
+ * Update: Mặc định chỉ hiển thị Hợp đồng Đang hiệu lực và Sắp hết hạn.
  */
 public class ContractManagementPanel extends JPanel {
 
@@ -104,7 +103,7 @@ public class ContractManagementPanel extends JPanel {
                 new EmptyBorder(25, 30, 25, 30)
         ));
 
-        // ROW 1: Title + Search + Action Buttons
+        // ROW 1: Title + Search
         JPanel row1 = new JPanel(new BorderLayout(20, 0));
         row1.setBackground(Color.WHITE);
 
@@ -161,7 +160,6 @@ public class ContractManagementPanel extends JPanel {
                     searchField.setForeground(TEXT_COLOR);
                 }
             }
-
             public void focusLost(java.awt.event.FocusEvent evt) {
                 if (searchField.getText().isEmpty()) {
                     searchField.setText(PLACEHOLDER);
@@ -198,11 +196,9 @@ public class ContractManagementPanel extends JPanel {
         JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         actionPanel.setBackground(Color.WHITE);
 
-        // Check permission for Add button
         JButton addBtn = createModernButton("➕ Tạo hợp đồng", new Color(99, 102, 241));
         addBtn.setPreferredSize(new Dimension(160, 42));
         addBtn.addActionListener(e -> showCreateContractDialog());
-        // Ẩn nút nếu không có quyền ADD
         addBtn.setVisible(permissionManager.canAdd(PermissionManager.MODULE_CONTRACTS));
 
         JButton statsBtn = createModernButton("📊 Thống kê", new Color(103, 58, 181));
@@ -244,7 +240,6 @@ public class ContractManagementPanel extends JPanel {
         filterLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         filterLabel.setForeground(new Color(66, 66, 66));
 
-        // Building filter
         JLabel buildingLabel = new JLabel("Tòa nhà:");
         buildingLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         buildingFilterCombo = new JComboBox<>();
@@ -255,7 +250,6 @@ public class ContractManagementPanel extends JPanel {
             if (!isUpdatingCombos) applyFilters();
         });
 
-        // Type filter
         JLabel typeLabel = new JLabel("Loại:");
         typeLabel.setFont(new Font("Segoe UI", Font.PLAIN, 13));
         typeFilterCombo = createFilterCombo();
@@ -283,10 +277,11 @@ public class ContractManagementPanel extends JPanel {
         statusLabel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         statusLabel.setForeground(new Color(66, 66, 66));
 
+        // ✅ CẬP NHẬT: Mặc định chỉ chọn Active và Expiring, bỏ chọn Expired và Terminated
         chkShowActive = createStatusCheckbox("● Đang hiệu lực", new Color(46, 125, 50), true);
         chkShowExpiring = createStatusCheckbox("⚠ Sắp hết hạn", new Color(230, 126, 34), true);
         chkShowExpired = createStatusCheckbox("✕ Đã hết hạn", new Color(211, 47, 47), false);
-        chkShowTerminated = createStatusCheckbox("○ Đã kết thúc", new Color(158, 158, 158), false);
+        chkShowTerminated = createStatusCheckbox("○ Đã thanh lý/Kết thúc", new Color(117, 117, 117), false); // Changed to false
 
         row2.add(statusLabel);
         row2.add(Box.createHorizontalStrut(15));
@@ -333,10 +328,7 @@ public class ContractManagementPanel extends JPanel {
             "Số HĐ", "Căn hộ", "Chủ hộ", "Loại", "Ngày ký/BĐ", "Kết thúc", "Trạng thái", "Thao tác"
         };
         tableModel = new DefaultTableModel(columns, 0) {
-            @Override
-            public boolean isCellEditable(int row, int column) {
-                return column == 7;
-            }
+            @Override public boolean isCellEditable(int row, int column) { return column == 7; }
         };
 
         contractTable = new JTable(tableModel);
@@ -348,36 +340,28 @@ public class ContractManagementPanel extends JPanel {
         contractTable.setSelectionBackground(new Color(232, 245, 253));
         contractTable.setSelectionForeground(new Color(33, 33, 33));
 
-        // --- TÍNH NĂNG MỚI: CONTEXT MENU (CHUỘT PHẢI) ---
+        // Context Menu
         JPopupMenu popupMenu = new JPopupMenu();
-        
         JMenuItem itemDetail = new JMenuItem("Xem chi tiết");
         itemDetail.addActionListener(e -> {
             int row = contractTable.getSelectedRow();
             if (row != -1) showContractDetail(row);
         });
 
-        // Chỉ hiện tính năng Sửa/Gia hạn/Thanh lý nếu user có quyền Sửa
         if (permissionManager.canEdit(PermissionManager.MODULE_CONTRACTS)) {
             JMenuItem itemEdit = new JMenuItem("Chỉnh sửa thông tin");
             itemEdit.addActionListener(e -> {
                 int row = contractTable.getSelectedRow();
                 if (row != -1) performEditContract(row);
             });
-
             JMenuItem itemRenew = new JMenuItem("Gia hạn hợp đồng");
             itemRenew.addActionListener(e -> {
-                // Bạn có thể implement logic gia hạn nhanh ở đây hoặc mở form
-                JOptionPane.showMessageDialog(this, "Vui lòng vào 'Xem chi tiết' để gia hạn.", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
                 int row = contractTable.getSelectedRow();
                 if (row != -1) showContractDetail(row);
             });
-            
             JMenuItem itemTerminate = new JMenuItem("Thanh lý hợp đồng");
             itemTerminate.setForeground(new Color(211, 47, 47));
             itemTerminate.addActionListener(e -> {
-                // Tương tự, vào chi tiết để thanh lý cho an toàn
-                JOptionPane.showMessageDialog(this, "Vui lòng vào 'Xem chi tiết' để thực hiện thanh lý.", "Thông báo", JOptionPane.INFORMATION_MESSAGE);
                 int row = contractTable.getSelectedRow();
                 if (row != -1) showContractDetail(row);
             });
@@ -393,11 +377,8 @@ public class ContractManagementPanel extends JPanel {
         }
 
         contractTable.setComponentPopupMenu(popupMenu);
-        
-        // Tự động chọn dòng khi click chuột phải
         contractTable.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
+            @Override public void mousePressed(MouseEvent e) {
                 if (SwingUtilities.isRightMouseButton(e)) {
                     int row = contractTable.rowAtPoint(e.getPoint());
                     if (row >= 0 && row < contractTable.getRowCount()) {
@@ -406,11 +387,10 @@ public class ContractManagementPanel extends JPanel {
                 }
             }
         });
-        // -------------------------------------------
 
+        // Columns Config
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
-
         for (int i = 0; i < contractTable.getColumnCount() - 1; i++) {
             contractTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
         }
@@ -425,25 +405,167 @@ public class ContractManagementPanel extends JPanel {
         header.setForeground(new Color(66, 66, 66));
         header.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(224, 224, 224)));
         header.setPreferredSize(new Dimension(header.getWidth(), 45));
-
         ((DefaultTableCellRenderer) header.getDefaultRenderer()).setHorizontalAlignment(SwingConstants.CENTER);
 
         contractTable.getColumnModel().getColumn(0).setPreferredWidth(130);
         contractTable.getColumnModel().getColumn(1).setPreferredWidth(100);
         contractTable.getColumnModel().getColumn(2).setPreferredWidth(150);
-        contractTable.getColumnModel().getColumn(3).setPreferredWidth(90);
-        contractTable.getColumnModel().getColumn(4).setPreferredWidth(100);
-        contractTable.getColumnModel().getColumn(5).setPreferredWidth(100);
         contractTable.getColumnModel().getColumn(6).setPreferredWidth(130);
         contractTable.getColumnModel().getColumn(7).setPreferredWidth(130);
 
         JScrollPane scrollPane = new JScrollPane(contractTable);
         scrollPane.setBorder(null);
         scrollPane.getViewport().setBackground(Color.WHITE);
-
         tablePanel.add(scrollPane, BorderLayout.CENTER);
 
         return tablePanel;
+    }
+
+    // ✅ Helper method to categorize contract status (Logic cốt lõi)
+    private String getContractCategory(Contract c) {
+        if ("TERMINATED".equalsIgnoreCase(c.getStatus()) || "CANCELLED".equalsIgnoreCase(c.getStatus())) {
+            return "TERMINATED";
+        }
+        if ("ACTIVE".equalsIgnoreCase(c.getStatus())) {
+            if (c.getEndDate() == null) return "ACTIVE"; // Vô thời hạn
+            long diff = c.getEndDate().getTime() - System.currentTimeMillis();
+            if (diff < 0) return "EXPIRED";
+            if (diff <= 30L * 24 * 60 * 60 * 1000) return "EXPIRING";
+            return "ACTIVE";
+        }
+        return "UNKNOWN";
+    }
+
+    // ✅ Helper method to get display string consistent with logic
+    private String getStatusDisplayString(Contract c) {
+        String cat = getContractCategory(c);
+        switch (cat) {
+            case "ACTIVE": return "Đang hiệu lực";
+            case "EXPIRING": return "Sắp hết hạn";
+            case "EXPIRED": return "Đã hết hạn";
+            case "TERMINATED": return "Đã thanh lý"; // Changed text to match logic
+            default: return "Không xác định";
+        }
+    }
+
+    // ✅ FIXED: Apply Filters using robust logic
+    private void applyFilters() {
+        if (allContracts == null) return;
+        String searchText = searchField.getText().trim().toLowerCase();
+        final String keyword = searchText.equals("tìm số hđ, chủ hộ, căn hộ...") ? "" : searchText;
+        final BuildingDisplay selectedBuilding = (BuildingDisplay) buildingFilterCombo.getSelectedItem();
+        final String selectedType = (String) typeFilterCombo.getSelectedItem();
+
+        List<Contract> filtered = allContracts.stream().filter(contract -> {
+            // 1. Status Filter (Using Logic, not Text)
+            String category = getContractCategory(contract);
+            boolean showThis = false;
+            
+            if (chkShowActive.isSelected() && "ACTIVE".equals(category)) showThis = true;
+            if (chkShowExpiring.isSelected() && "EXPIRING".equals(category)) showThis = true;
+            if (chkShowExpired.isSelected() && "EXPIRED".equals(category)) showThis = true;
+            if (chkShowTerminated.isSelected() && "TERMINATED".equals(category)) showThis = true;
+            
+            if (!showThis) return false;
+
+            // 2. Keyword Filter
+            if (!keyword.isEmpty()) {
+                String contractNumber = contract.getContractNumber() != null ? contract.getContractNumber().toLowerCase() : "";
+                Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
+                String apartmentNumber = apt != null ? apt.getRoomNumber().toLowerCase() : "";
+                Resident resident = residentDAO.getResidentById(contract.getResidentId());
+                String residentName = resident != null ? resident.getFullName().toLowerCase() : "";
+                if (!contractNumber.contains(keyword) && !apartmentNumber.contains(keyword) && !residentName.contains(keyword)) return false;
+            }
+
+            // 3. Building Filter
+            if (selectedBuilding != null && selectedBuilding.building.getId() != null) {
+                Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
+                if (apt == null) return false;
+                List<Apartment> buildingApts = apartmentDAO.getApartmentsByBuildingId(selectedBuilding.building.getId());
+                boolean inBuilding = buildingApts.stream().anyMatch(a -> a.getId().equals(apt.getId()));
+                if (!inBuilding) return false;
+            }
+
+            // 4. Type Filter
+            if (!"Tất cả".equals(selectedType)) {
+                if (!selectedType.equals(contract.getContractTypeDisplay())) return false;
+            }
+            return true;
+        }).collect(Collectors.toList());
+        
+        displayContracts(filtered);
+    }
+
+    private void displayContracts(List<Contract> contracts) {
+        tableModel.setRowCount(0);
+        for (Contract contract : contracts) {
+            Apartment apartment = apartmentDAO.getApartmentById(contract.getApartmentId());
+            String apartmentNumber = apartment != null ? apartment.getRoomNumber() : "N/A";
+            Resident resident = residentDAO.getResidentById(contract.getResidentId());
+            String residentName = resident != null ? resident.getFullName() : "N/A";
+            
+            String startDateStr = "";
+            String endDateStr = "";
+            if (contract.isRental()) {
+                startDateStr = contract.getStartDate() != null ? dateFormat.format(contract.getStartDate()) : "";
+                endDateStr = contract.getEndDate() != null ? dateFormat.format(contract.getEndDate()) : "Vô thời hạn";
+            } else {
+                startDateStr = contract.getSignedDate() != null ? "Ký: " + dateFormat.format(contract.getSignedDate()) : "N/A";
+                endDateStr = "—";
+            }
+            
+            // ✅ Use standardized status string
+            String statusStr = getStatusDisplayString(contract);
+            
+            Object[] row = {
+                contract.getContractNumber(), apartmentNumber, residentName, contract.getContractTypeDisplay(),
+                startDateStr, endDateStr, statusStr, "👁️ Chi tiết"
+            };
+            tableModel.addRow(row);
+        }
+        countLabel.setText(contracts.size() == allContracts.size() ? 
+            "📋 Tổng số: " + contracts.size() + " hợp đồng" : 
+            "🔍 Hiển thị: " + contracts.size() + "/" + allContracts.size() + " hợp đồng");
+    }
+
+    // ✅ FIXED: Statistics using robust logic
+    private void showStatistics() {
+        if (allContracts == null) return;
+        int totalContracts = allContracts.size();
+        
+        int activeCount = 0, expiringCount = 0, expiredCount = 0, terminatedCount = 0;
+        
+        for(Contract c : allContracts) {
+            String cat = getContractCategory(c);
+            switch(cat) {
+                case "ACTIVE": activeCount++; break;
+                case "EXPIRING": expiringCount++; break;
+                case "EXPIRED": expiredCount++; break;
+                case "TERMINATED": terminatedCount++; break;
+            }
+        }
+        
+        int rentalCount = (int) allContracts.stream().filter(c -> "RENTAL".equals(c.getContractType())).count();
+        int ownershipCount = (int) allContracts.stream().filter(c -> "OWNERSHIP".equals(c.getContractType())).count();
+
+        String stats = String.format("<html><body style='width: 400px; padding: 20px; font-family: Segoe UI;'>"
+                + "<h2 style='color: #1976d2; text-align: center;'>📊 Thống Kê Hợp Đồng</h2>"
+                + "<hr style='border: 1px solid #e0e0e0; margin: 20px 0;'>"
+                + "<table cellpadding='10' style='width: 100%%; font-size: 14px;'>"
+                + "<tr style='background: #f5f5f5;'><td colspan='2'><b>📋 Tổng quan</b></td></tr>"
+                + "<tr><td>Tổng số hợp đồng:</td><td align='right'><b style='color: #1976d2; font-size: 16px;'>%d</b></td></tr>"
+                + "<tr style='background: #f5f5f5;'><td colspan='2'><b>📑 Theo loại</b></td></tr>"
+                + "<tr><td style='padding-left: 25px;'>Thuê:</td><td align='right'><b>%d</b></td></tr>"
+                + "<tr><td style='padding-left: 25px;'>Sở hữu:</td><td align='right'><b>%d</b></td></tr>"
+                + "<tr style='background: #f5f5f5;'><td colspan='2'><b>🎯 Theo trạng thái</b></td></tr>"
+                + "<tr><td style='padding-left: 25px;'><span style='color: #2e7d32;'>● Đang hiệu lực:</span></td><td align='right'><b>%d</b></td></tr>"
+                + "<tr><td style='padding-left: 25px;'><span style='color: #e67e22;'>⚠ Sắp hết hạn:</span></td><td align='right'><b>%d</b></td></tr>"
+                + "<tr><td style='padding-left: 25px;'><span style='color: #d32f2f;'>✕ Đã hết hạn:</span></td><td align='right'><b>%d</b></td></tr>"
+                + "<tr><td style='padding-left: 25px;'><span style='color: #757575;'>○ Đã thanh lý:</span></td><td align='right'>%d</td></tr>"
+                + "</table></body></html>",
+                totalContracts, rentalCount, ownershipCount, activeCount, expiringCount, expiredCount, terminatedCount);
+        JOptionPane.showMessageDialog(this, stats, "Thống kê hợp đồng", JOptionPane.PLAIN_MESSAGE);
     }
 
     class StatusCellRenderer extends DefaultTableCellRenderer {
@@ -476,10 +598,10 @@ public class ContractManagementPanel extends JPanel {
                     label.setForeground(new Color(211, 47, 47));
                 }
                 label.setText("✕ " + status);
-            } else if ("Đã hủy".equals(status)) {
+            } else if ("Đã thanh lý".equals(status)) { // ✅ Updated text
                 if (!isSelected) {
-                    label.setBackground(new Color(250, 250, 250));
-                    label.setForeground(new Color(158, 158, 158));
+                    label.setBackground(new Color(245, 245, 245));
+                    label.setForeground(new Color(117, 117, 117));
                 }
                 label.setText("○ " + status);
             }
@@ -580,7 +702,6 @@ public class ContractManagementPanel extends JPanel {
         return btn;
     }
 
-    // ===== DATA LOADING =====
     private void loadInitialData() {
         isUpdatingCombos = true;
         try {
@@ -607,72 +728,6 @@ public class ContractManagementPanel extends JPanel {
         applyFilters();
     }
 
-    private void applyFilters() {
-        if (allContracts == null) return;
-        String searchText = searchField.getText().trim().toLowerCase();
-        final String keyword = searchText.equals("tìm số hđ, chủ hộ, căn hộ...") ? "" : searchText;
-        final BuildingDisplay selectedBuilding = (BuildingDisplay) buildingFilterCombo.getSelectedItem();
-        final String selectedType = (String) typeFilterCombo.getSelectedItem();
-
-        List<Contract> filtered = allContracts.stream().filter(contract -> {
-            String statusDisplay = contract.getStatusDisplay();
-            boolean showThis = false;
-            if (chkShowActive.isSelected() && "Đang hiệu lực".equals(statusDisplay)) showThis = true;
-            if (chkShowExpiring.isSelected() && "Sắp hết hạn".equals(statusDisplay)) showThis = true;
-            if (chkShowExpired.isSelected() && "Đã hết hạn".equals(statusDisplay)) showThis = true;
-            if (chkShowTerminated.isSelected() && "Đã hủy".equals(statusDisplay)) showThis = true;
-            if (!showThis) return false;
-
-            if (!keyword.isEmpty()) {
-                String contractNumber = contract.getContractNumber() != null ? contract.getContractNumber().toLowerCase() : "";
-                Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
-                String apartmentNumber = apt != null ? apt.getRoomNumber().toLowerCase() : "";
-                Resident resident = residentDAO.getResidentById(contract.getResidentId());
-                String residentName = resident != null ? resident.getFullName().toLowerCase() : "";
-                if (!contractNumber.contains(keyword) && !apartmentNumber.contains(keyword) && !residentName.contains(keyword)) return false;
-            }
-            if (selectedBuilding != null && selectedBuilding.building.getId() != null) {
-                Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
-                if (apt == null) return false;
-                List<Apartment> buildingApts = apartmentDAO.getApartmentsByBuildingId(selectedBuilding.building.getId());
-                boolean inBuilding = buildingApts.stream().anyMatch(a -> a.getId().equals(apt.getId()));
-                if (!inBuilding) return false;
-            }
-            if (!"Tất cả".equals(selectedType)) {
-                if (!selectedType.equals(contract.getContractTypeDisplay())) return false;
-            }
-            return true;
-        }).collect(Collectors.toList());
-        displayContracts(filtered);
-    }
-
-    private void displayContracts(List<Contract> contracts) {
-        tableModel.setRowCount(0);
-        for (Contract contract : contracts) {
-            Apartment apartment = apartmentDAO.getApartmentById(contract.getApartmentId());
-            String apartmentNumber = apartment != null ? apartment.getRoomNumber() : "N/A";
-            Resident resident = residentDAO.getResidentById(contract.getResidentId());
-            String residentName = resident != null ? resident.getFullName() : "N/A";
-            String startDateStr = "";
-            String endDateStr = "";
-            if (contract.isRental()) {
-                startDateStr = contract.getStartDate() != null ? dateFormat.format(contract.getStartDate()) : "";
-                endDateStr = contract.getEndDate() != null ? dateFormat.format(contract.getEndDate()) : "Vô thời hạn";
-            } else {
-                startDateStr = contract.getSignedDate() != null ? "Ký: " + dateFormat.format(contract.getSignedDate()) : "N/A";
-                endDateStr = "—";
-            }
-            Object[] row = {
-                contract.getContractNumber(), apartmentNumber, residentName, contract.getContractTypeDisplay(),
-                startDateStr, endDateStr, contract.getStatusDisplay(), "👁️ Chi tiết"
-            };
-            tableModel.addRow(row);
-        }
-        countLabel.setText(contracts.size() == allContracts.size() ? 
-            "📋 Tổng số: " + contracts.size() + " hợp đồng" : 
-            "🔍 Hiển thị: " + contracts.size() + "/" + allContracts.size() + " hợp đồng");
-    }
-
     private void resetFilters() {
         searchField.setText("Tìm số HĐ, chủ hộ, căn hộ...");
         searchField.setForeground(new Color(158, 158, 158));
@@ -680,6 +735,8 @@ public class ContractManagementPanel extends JPanel {
         try {
             buildingFilterCombo.setSelectedIndex(0);
             typeFilterCombo.setSelectedIndex(0);
+            
+            // ✅ CẬP NHẬT MẶC ĐỊNH KHI RESET:
             chkShowActive.setSelected(true);
             chkShowExpiring.setSelected(true);
             chkShowExpired.setSelected(false);
@@ -700,14 +757,12 @@ public class ContractManagementPanel extends JPanel {
         reloadData();
     }
     
-    // --- HÀM XỬ LÝ SỬA HỢP ĐỒNG ---
     private void performEditContract(int row) {
         List<Contract> filteredContracts = getFilteredContracts();
         if (row < 0 || filteredContracts == null || row >= filteredContracts.size()) return;
 
         Contract selectedContract = filteredContracts.get(row);
         
-        // Kiểm tra nghiệp vụ: Không sửa hợp đồng đã thanh lý
         if ("TERMINATED".equals(selectedContract.getStatus()) || "CANCELLED".equals(selectedContract.getStatus())) {
             JOptionPane.showMessageDialog(this, 
                 "Không thể chỉnh sửa hợp đồng đã kết thúc hoặc đã hủy!", 
@@ -715,13 +770,12 @@ public class ContractManagementPanel extends JPanel {
             return;
         }
 
-        // Mở form chỉnh sửa (truyền object contract vào)
         JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
         ContractFormDialog dialog = new ContractFormDialog(parentFrame, selectedContract); 
         dialog.setVisible(true);
 
         if (dialog.isConfirmed()) {
-            reloadData(); // Refresh dữ liệu nếu có thay đổi
+            reloadData(); 
         }
     }
 
@@ -733,13 +787,14 @@ public class ContractManagementPanel extends JPanel {
         final String selectedType = (String) typeFilterCombo.getSelectedItem();
 
         return allContracts.stream().filter(contract -> {
-             String statusDisplay = contract.getStatusDisplay();
+             String category = getContractCategory(contract);
              boolean showThis = false;
-             if (chkShowActive.isSelected() && "Đang hiệu lực".equals(statusDisplay)) showThis = true;
-             if (chkShowExpiring.isSelected() && "Sắp hết hạn".equals(statusDisplay)) showThis = true;
-             if (chkShowExpired.isSelected() && "Đã hết hạn".equals(statusDisplay)) showThis = true;
-             if (chkShowTerminated.isSelected() && "Đã hủy".equals(statusDisplay)) showThis = true;
+             if (chkShowActive.isSelected() && "ACTIVE".equals(category)) showThis = true;
+             if (chkShowExpiring.isSelected() && "EXPIRING".equals(category)) showThis = true;
+             if (chkShowExpired.isSelected() && "EXPIRED".equals(category)) showThis = true;
+             if (chkShowTerminated.isSelected() && "TERMINATED".equals(category)) showThis = true;
              if (!showThis) return false;
+             
              if (!keyword.isEmpty()) {
                  String contractNumber = contract.getContractNumber() != null ? contract.getContractNumber().toLowerCase() : "";
                  Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
@@ -766,35 +821,6 @@ public class ContractManagementPanel extends JPanel {
         ContractFormDialog dialog = new ContractFormDialog(parentFrame, null);
         dialog.setVisible(true);
         if (dialog.isConfirmed()) reloadData();
-    }
-
-    private void showStatistics() {
-        if (allContracts == null) return;
-        int totalContracts = allContracts.size();
-        int activeCount = (int) allContracts.stream().filter(c -> "Đang hiệu lực".equals(c.getStatusDisplay())).count();
-        int expiringCount = (int) allContracts.stream().filter(c -> "Sắp hết hạn".equals(c.getStatusDisplay())).count();
-        int expiredCount = (int) allContracts.stream().filter(c -> "Đã hết hạn".equals(c.getStatusDisplay())).count();
-        int terminatedCount = (int) allContracts.stream().filter(c -> "Đã hủy".equals(c.getStatusDisplay())).count();
-        int rentalCount = (int) allContracts.stream().filter(c -> "RENTAL".equals(c.getContractType())).count();
-        int ownershipCount = (int) allContracts.stream().filter(c -> "OWNERSHIP".equals(c.getContractType())).count();
-
-        String stats = String.format("<html><body style='width: 400px; padding: 20px; font-family: Segoe UI;'>"
-                + "<h2 style='color: #1976d2; text-align: center;'>📊 Thống Kê Hợp Đồng</h2>"
-                + "<hr style='border: 1px solid #e0e0e0; margin: 20px 0;'>"
-                + "<table cellpadding='10' style='width: 100%%; font-size: 14px;'>"
-                + "<tr style='background: #f5f5f5;'><td colspan='2'><b>📋 Tổng quan</b></td></tr>"
-                + "<tr><td>Tổng số hợp đồng:</td><td align='right'><b style='color: #1976d2; font-size: 16px;'>%d</b></td></tr>"
-                + "<tr style='background: #f5f5f5;'><td colspan='2'><b>📑 Theo loại</b></td></tr>"
-                + "<tr><td style='padding-left: 25px;'>Thuê:</td><td align='right'><b>%d</b></td></tr>"
-                + "<tr><td style='padding-left: 25px;'>Sở hữu:</td><td align='right'><b>%d</b></td></tr>"
-                + "<tr style='background: #f5f5f5;'><td colspan='2'><b>🎯 Theo trạng thái</b></td></tr>"
-                + "<tr><td style='padding-left: 25px;'><span style='color: #2e7d32;'>● Đang hiệu lực:</span></td><td align='right'><b>%d</b></td></tr>"
-                + "<tr><td style='padding-left: 25px;'><span style='color: #e67e22;'>⚠ Sắp hết hạn:</span></td><td align='right'><b>%d</b></td></tr>"
-                + "<tr><td style='padding-left: 25px;'><span style='color: #d32f2f;'>✕ Đã hết hạn:</span></td><td align='right'><b>%d</b></td></tr>"
-                + "<tr><td style='padding-left: 25px;'><span style='color: #9e9e9e;'>○ Đã kết thúc:</span></td><td align='right'>%d</td></tr>"
-                + "</table></body></html>",
-                totalContracts, rentalCount, ownershipCount, activeCount, expiringCount, expiredCount, terminatedCount);
-        JOptionPane.showMessageDialog(this, stats, "Thống kê hợp đồng", JOptionPane.PLAIN_MESSAGE);
     }
 
     private void exportToExcel() {

@@ -9,6 +9,7 @@ import java.util.List;
 /**
  * DAO class for ContractService operations
  * Manages services applied to contracts
+ * Updated: Removed 'is_active' column logic to match database schema.
  */
 public class ContractServiceDAO {
     
@@ -25,7 +26,8 @@ public class ContractServiceDAO {
         }
         
         cs.setUnitPrice(rs.getBigDecimal("unit_price"));
-        cs.setActive(rs.getBoolean("is_active"));
+        // Mặc định là active vì không còn cột status trong DB
+        cs.setActive(true); 
         
         Timestamp createdAt = rs.getTimestamp("created_at");
         if (createdAt != null) {
@@ -53,11 +55,12 @@ public class ContractServiceDAO {
     // --- GET SERVICES BY CONTRACT ---
     public List<ContractService> getServicesByContract(Long contractId) {
         List<ContractService> services = new ArrayList<>();
+        // Đã xóa is_active khỏi ORDER BY
         String sql = "SELECT cs.*, s.service_name, s.unit_type " +
                      "FROM contract_services cs " +
                      "INNER JOIN services s ON cs.service_id = s.id " +
                      "WHERE cs.contract_id = ? " +
-                     "ORDER BY cs.is_active DESC, cs.applied_date DESC";
+                     "ORDER BY cs.applied_date DESC";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -75,12 +78,13 @@ public class ContractServiceDAO {
     }
     
     // --- GET ACTIVE SERVICES BY CONTRACT ---
+    // Vì không có is_active, hàm này trả về tất cả dịch vụ của hợp đồng
     public List<ContractService> getActiveServicesByContract(Long contractId) {
         List<ContractService> services = new ArrayList<>();
         String sql = "SELECT cs.*, s.service_name, s.unit_type " +
                      "FROM contract_services cs " +
                      "INNER JOIN services s ON cs.service_id = s.id " +
-                     "WHERE cs.contract_id = ? AND cs.is_active = 1 " +
+                     "WHERE cs.contract_id = ? " +
                      "ORDER BY s.service_name";
         
         try (Connection conn = Db_connection.getConnection();
@@ -122,9 +126,10 @@ public class ContractServiceDAO {
     
     // --- INSERT CONTRACT SERVICE ---
     public boolean insert(ContractService contractService) {
+        // Đã xóa is_active khỏi câu lệnh INSERT
         String sql = "INSERT INTO contract_services " +
-                     "(contract_id, service_id, applied_date, unit_price, is_active) " +
-                     "VALUES (?, ?, ?, ?, ?)";
+                     "(contract_id, service_id, applied_date, unit_price) " +
+                     "VALUES (?, ?, ?, ?)";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
@@ -133,7 +138,6 @@ public class ContractServiceDAO {
             pstmt.setLong(2, contractService.getServiceId());
             pstmt.setDate(3, new java.sql.Date(contractService.getAppliedDate().getTime()));
             pstmt.setBigDecimal(4, contractService.getUnitPrice());
-            pstmt.setBoolean(5, contractService.isActive());
             
             int affected = pstmt.executeUpdate();
             
@@ -157,9 +161,10 @@ public class ContractServiceDAO {
     public boolean insertServicesForContract(Long contractId, List<Long> serviceIds, 
                                             java.util.Date appliedDate) {
         String sqlGetPrice = "SELECT unit_price FROM services WHERE id = ?";
+        // Đã xóa is_active khỏi câu lệnh INSERT
         String sqlInsert = "INSERT INTO contract_services " +
-                          "(contract_id, service_id, applied_date, unit_price, is_active) " +
-                          "VALUES (?, ?, ?, ?, 1)";
+                          "(contract_id, service_id, applied_date, unit_price) " +
+                          "VALUES (?, ?, ?, ?)";
         
         Connection conn = null;
         try {
@@ -204,10 +209,24 @@ public class ContractServiceDAO {
         return false;
     }
     
+    // --- DELETE ALL SERVICES FOR CONTRACT (Used in Update) ---
+    public boolean deleteServicesByContract(Long contractId) {
+        String sql = "DELETE FROM contract_services WHERE contract_id = ?";
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setLong(1, contractId);
+            return ps.executeUpdate() > 0;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return false;
+    }
+    
     // --- UPDATE CONTRACT SERVICE ---
     public boolean update(ContractService contractService) {
+        // Đã xóa is_active khỏi câu lệnh UPDATE
         String sql = "UPDATE contract_services SET " +
-                     "service_id = ?, applied_date = ?, unit_price = ?, is_active = ? " +
+                     "service_id = ?, applied_date = ?, unit_price = ? " +
                      "WHERE id = ?";
         
         try (Connection conn = Db_connection.getConnection();
@@ -216,44 +235,8 @@ public class ContractServiceDAO {
             pstmt.setLong(1, contractService.getServiceId());
             pstmt.setDate(2, new java.sql.Date(contractService.getAppliedDate().getTime()));
             pstmt.setBigDecimal(3, contractService.getUnitPrice());
-            pstmt.setBoolean(4, contractService.isActive());
-            pstmt.setLong(5, contractService.getId());
+            pstmt.setLong(4, contractService.getId());
             
-            return pstmt.executeUpdate() > 0;
-            
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
-    
-    // --- TOGGLE ACTIVE STATUS ---
-    public boolean toggleActiveStatus(Long id) {
-        String sql = "UPDATE contract_services SET is_active = NOT is_active WHERE id = ?";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
-            pstmt.setLong(1, id);
-            return pstmt.executeUpdate() > 0;
-            
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
-    
-    // --- DEACTIVATE SERVICE (SET is_active = 0) ---
-    public boolean deactivateService(Long contractId, Long serviceId) {
-        String sql = "UPDATE contract_services " +
-                     "SET is_active = 0 " +
-                     "WHERE contract_id = ? AND service_id = ? AND is_active = 1";
-        
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            
-            pstmt.setLong(1, contractId);
-            pstmt.setLong(2, serviceId);
             return pstmt.executeUpdate() > 0;
             
         } catch (SQLException e) {
@@ -280,8 +263,9 @@ public class ContractServiceDAO {
     
     // --- CHECK IF SERVICE EXISTS FOR CONTRACT ---
     public boolean hasService(Long contractId, Long serviceId) {
+        // Đã xóa check is_active
         String sql = "SELECT COUNT(*) FROM contract_services " +
-                     "WHERE contract_id = ? AND service_id = ? AND is_active = 1";
+                     "WHERE contract_id = ? AND service_id = ?";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
@@ -302,8 +286,9 @@ public class ContractServiceDAO {
     
     // --- COUNT ACTIVE SERVICES FOR CONTRACT ---
     public int countActiveServices(Long contractId) {
+        // Đếm tất cả dịch vụ (vì không còn is_active)
         String sql = "SELECT COUNT(*) FROM contract_services " +
-                     "WHERE contract_id = ? AND is_active = 1";
+                     "WHERE contract_id = ?";
         
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {

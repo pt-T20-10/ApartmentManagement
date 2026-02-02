@@ -10,23 +10,15 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.math.BigDecimal;
-import java.text.SimpleDateFormat;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.ArrayList;
 import javax.swing.DefaultListCellRenderer;
-import util.SessionManager;
 
 /**
  * Contract Form Dialog with DYNAMIC UI based on contract type
- * 
- * RENTAL (Thuê):
- * - Price field: "Tiền thuê/tháng"
- * - Dates: Ngày ký + Ngày bắt đầu + Ngày kết thúc
- * 
- * OWNERSHIP (Sở hữu):
- * - Price field: "Giá mua"
- * - Dates: CHỈ Ngày ký (no start/end dates)
+ * Fixed: Binding data correctly in Edit Mode & Service Update Logic
  */
 public class ContractFormDialog extends JDialog {
     
@@ -67,7 +59,7 @@ public class ContractFormDialog extends JDialog {
     private JLabel lblEndDate;
     private JSpinner spnEndDate;
     private JCheckBox chkIndefinite;
-    private JPanel datesSection; // Reference to rebuild
+    private JPanel datesSection;
     
     // Financial (dynamic label)
     private JLabel lblPriceField;
@@ -81,7 +73,6 @@ public class ContractFormDialog extends JDialog {
     // Notes
     private JTextArea txtNotes;
     
-    private SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
     private boolean isUpdatingCombos = false;
     
     public ContractFormDialog(JFrame parent, Contract contract) {
@@ -99,13 +90,20 @@ public class ContractFormDialog extends JDialog {
         this.isEditMode = contract != null && contract.getId() != null;
         
         initComponents();
-        loadData();
+        loadData(); // Load buildings & services
         
         if (isEditMode) {
             loadContractData();
+        } else {
+            // Set defaults for new contract
+            txtContractNumber.setText(contractDAO.generateContractNumber());
+            // Try to auto-select if only 1 building
+            if (cmbBuilding.getItemCount() > 0) {
+                // logic handled in loadData->loadBuildingData
+            }
         }
         
-        setSize(900, 870);
+        setSize(950, 800);
         setLocationRelativeTo(parent);
     }
     
@@ -126,9 +124,9 @@ public class ContractFormDialog extends JDialog {
         mainPanel.add(Box.createVerticalStrut(12));
         mainPanel.add(createResidentSection());
         mainPanel.add(Box.createVerticalStrut(12));
-        mainPanel.add(createDatesSection()); // ✅ Dynamic dates
+        mainPanel.add(createDatesSection());
         mainPanel.add(Box.createVerticalStrut(12));
-        mainPanel.add(createFinancialSection()); // ✅ Dynamic price
+        mainPanel.add(createFinancialSection());
         mainPanel.add(Box.createVerticalStrut(12));
         mainPanel.add(createServicesSection());
         mainPanel.add(Box.createVerticalStrut(12));
@@ -179,7 +177,6 @@ public class ContractFormDialog extends JDialog {
         txtContractNumber.setPreferredSize(new Dimension(0, 32));
         txtContractNumber.setEnabled(false);
         txtContractNumber.setBackground(new Color(245, 245, 245));
-        txtContractNumber.setText(isEditMode ? "" : "Tự động tạo");
         section.add(txtContractNumber, gbc);
         
         gbc.gridx = 2; gbc.weightx = 0;
@@ -189,39 +186,30 @@ public class ContractFormDialog extends JDialog {
         cmbContractType = new JComboBox<>(new String[]{"Thuê", "Sở hữu"});
         cmbContractType.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         cmbContractType.setPreferredSize(new Dimension(0, 32));
-        
-        // ✅ LISTENER: Update UI when contract type changes
         cmbContractType.addActionListener(e -> onContractTypeChanged());
-        
         section.add(cmbContractType, gbc);
         
         return section;
     }
     
-    // ✅ NEW: Handle contract type change
     private void onContractTypeChanged() {
         String selectedType = (String) cmbContractType.getSelectedItem();
         boolean isRental = "Thuê".equals(selectedType);
         
-        // Update price label
         if (lblPriceField != null) {
             lblPriceField.setText(isRental ? 
                 "<html>Tiền thuê/tháng: <font color='red'>*</font></html>" : 
                 "<html>Giá mua: <font color='red'>*</font></html>");
         }
         
-        // Update dates visibility
         if (lblStartDate != null && lblEndDate != null) {
             lblStartDate.setVisible(isRental);
             spnStartDate.setVisible(isRental);
             lblEndDate.setVisible(isRental);
             spnEndDate.setVisible(isRental);
-            if (chkIndefinite != null) {
-                chkIndefinite.setVisible(isRental);
-            }
+            if (chkIndefinite != null) chkIndefinite.setVisible(isRental);
         }
         
-        // Force repaint
         if (datesSection != null) {
             datesSection.revalidate();
             datesSection.repaint();
@@ -264,7 +252,6 @@ public class ContractFormDialog extends JDialog {
         cmbApartment.setPreferredSize(new Dimension(0, 32));
         section.add(cmbApartment, gbc);
         
-        // Renderers
         cmbBuilding.setRenderer(new PlaceholderRenderer("-- Chọn tòa nhà --"));
         cmbFloor.setRenderer(new PlaceholderRenderer("-- Chọn tầng --"));
         cmbApartment.setRenderer(new PlaceholderRenderer("-- Chọn căn hộ --"));
@@ -279,7 +266,6 @@ public class ContractFormDialog extends JDialog {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(6, 8, 6, 8);
         
-        // Row 1: Full Name
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
         section.add(createLabel("Họ và tên:", true), gbc);
         
@@ -289,7 +275,6 @@ public class ContractFormDialog extends JDialog {
         txtResidentName.setPreferredSize(new Dimension(0, 32));
         section.add(txtResidentName, gbc);
         
-        // Row 2: Phone + Identity Card
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0; gbc.gridwidth = 1;
         section.add(createLabel("Số điện thoại:", true), gbc);
         
@@ -308,7 +293,6 @@ public class ContractFormDialog extends JDialog {
         txtResidentIdentityCard.setPreferredSize(new Dimension(0, 32));
         section.add(txtResidentIdentityCard, gbc);
         
-        // Row 3: Gender + DOB
         gbc.gridx = 0; gbc.gridy = 2; gbc.weightx = 0;
         section.add(createLabel("Giới tính:", true), gbc);
         
@@ -323,12 +307,11 @@ public class ContractFormDialog extends JDialog {
         
         gbc.gridx = 3; gbc.weightx = 1;
         spnResidentDob = createDateSpinner();
-        java.util.Calendar cal = java.util.Calendar.getInstance();
-        cal.add(java.util.Calendar.YEAR, -30);
+        Calendar cal = Calendar.getInstance();
+        cal.add(Calendar.YEAR, -30);
         spnResidentDob.setValue(cal.getTime());
         section.add(spnResidentDob, gbc);
         
-        // Row 4: Email
         gbc.gridx = 0; gbc.gridy = 3; gbc.weightx = 0;
         section.add(createLabel("Email:", false), gbc);
         
@@ -341,7 +324,6 @@ public class ContractFormDialog extends JDialog {
         return section;
     }
     
-    // ✅ NEW: Dynamic dates section
     private JPanel createDatesSection() {
         datesSection = createSection("📅 Thời Hạn Hợp Đồng");
         datesSection.setLayout(new GridBagLayout());
@@ -349,7 +331,6 @@ public class ContractFormDialog extends JDialog {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(6, 8, 6, 8);
         
-        // Row 1: Signed Date (ALWAYS visible)
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
         lblSignedDate = createLabel("Ngày ký:", true);
         datesSection.add(lblSignedDate, gbc);
@@ -358,7 +339,6 @@ public class ContractFormDialog extends JDialog {
         spnSignedDate = createDateSpinner();
         datesSection.add(spnSignedDate, gbc);
         
-        // Row 1 continued: Start Date (ONLY for RENTAL)
         gbc.gridx = 2; gbc.weightx = 0;
         lblStartDate = createLabel("Ngày bắt đầu:", true);
         datesSection.add(lblStartDate, gbc);
@@ -367,7 +347,6 @@ public class ContractFormDialog extends JDialog {
         spnStartDate = createDateSpinner();
         datesSection.add(spnStartDate, gbc);
         
-        // Row 2: End Date + Indefinite (ONLY for RENTAL)
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
         lblEndDate = createLabel("Ngày kết thúc:", true);
         datesSection.add(lblEndDate, gbc);
@@ -383,13 +362,11 @@ public class ContractFormDialog extends JDialog {
         chkIndefinite.addActionListener(e -> spnEndDate.setEnabled(!chkIndefinite.isSelected()));
         datesSection.add(chkIndefinite, gbc);
         
-        // Initial visibility: Show all for RENTAL (default)
         onContractTypeChanged();
         
         return datesSection;
     }
     
-    // ✅ NEW: Dynamic financial section
     private JPanel createFinancialSection() {
         JPanel section = createSection("💰 Thông Tin Tài Chính");
         section.setLayout(new GridBagLayout());
@@ -397,7 +374,6 @@ public class ContractFormDialog extends JDialog {
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.insets = new Insets(6, 8, 6, 8);
         
-        // Row 1: Deposit
         gbc.gridx = 0; gbc.gridy = 0; gbc.weightx = 0;
         section.add(createLabel("Tiền cọc:", true), gbc);
         
@@ -411,9 +387,8 @@ public class ContractFormDialog extends JDialog {
         lblDepositCurrency.setForeground(UIConstants.PRIMARY_COLOR);
         section.add(lblDepositCurrency, gbc);
         
-        // Row 2: Price (dynamic label)
         gbc.gridx = 0; gbc.gridy = 1; gbc.weightx = 0;
-        lblPriceField = createLabel("Tiền thuê/tháng:", true); // Default
+        lblPriceField = createLabel("Tiền thuê/tháng:", true);
         section.add(lblPriceField, gbc);
         
         gbc.gridx = 1; gbc.weightx = 1;
@@ -480,184 +455,166 @@ public class ContractFormDialog extends JDialog {
         return panel;
     }
     
-    // CASCADE LOGIC
+    // ===== LOGIC & DATA LOADING =====
+    
     private void onBuildingChanged() {
         BuildingDisplay selected = (BuildingDisplay) cmbBuilding.getSelectedItem();
         if (selected == null) {
-            cmbFloor.removeAllItems();
-            cmbFloor.addItem(null);
-            cmbApartment.removeAllItems();
-            cmbApartment.addItem(null);
+            cmbFloor.removeAllItems(); cmbFloor.addItem(null);
+            cmbApartment.removeAllItems(); cmbApartment.addItem(null);
             return;
         }
-        
-        isUpdatingCombos = true;
-        try {
-            List<Floor> floors = floorDAO.getFloorsByBuildingId(selected.building.getId());
-            cmbFloor.removeAllItems();
-            cmbFloor.addItem(null);
-            for (Floor floor : floors) {
-                cmbFloor.addItem(new FloorDisplay(floor));
-            }
-            cmbFloor.setSelectedIndex(0);
-            cmbApartment.removeAllItems();
-            cmbApartment.addItem(null);
-            cmbApartment.setSelectedIndex(0);
-        } finally {
-            isUpdatingCombos = false;
-        }
+        loadFloorData(selected.building.getId());
     }
     
     private void onFloorChanged() {
         FloorDisplay selected = (FloorDisplay) cmbFloor.getSelectedItem();
         if (selected == null) {
-            cmbApartment.removeAllItems();
-            cmbApartment.addItem(null);
+            cmbApartment.removeAllItems(); cmbApartment.addItem(null);
             return;
         }
-        
+        loadApartmentData(selected.floor.getId());
+    }
+    
+    // Load initial data
+    private void loadData() {
         isUpdatingCombos = true;
         try {
-            List<Apartment> apartments = apartmentDAO.getApartmentsByFloorId(selected.floor.getId());
+            if (!isEditMode) cmbBuilding.addItem(null);
+            List<Building> buildings = buildingDAO.getAllBuildings();
+            for (Building building : buildings) {
+                cmbBuilding.addItem(new BuildingDisplay(building));
+            }
+            
+            // Auto select if only 1 building (Staff/Manager)
+            if (buildings.size() == 1) {
+                cmbBuilding.setSelectedIndex(isEditMode ? 0 : 1);
+                cmbBuilding.setEnabled(false);
+                loadFloorData(buildings.get(0).getId());
+            }
+        } finally {
+            isUpdatingCombos = false;
+        }
+        
+        loadServices();
+    }
+    
+    private void loadFloorData(Long buildingId) {
+        boolean oldState = isUpdatingCombos;
+        isUpdatingCombos = true;
+        try {
+            cmbFloor.removeAllItems();
+            cmbFloor.addItem(null);
+            List<Floor> floors = floorDAO.getFloorsByBuildingId(buildingId);
+            for (Floor f : floors) {
+                cmbFloor.addItem(new FloorDisplay(f));
+            }
+            cmbFloor.setSelectedIndex(0);
             cmbApartment.removeAllItems();
             cmbApartment.addItem(null);
-            for (Apartment apt : apartments) {
-                if (isEditMode || "AVAILABLE".equals(apt.getStatus())) {
-                    cmbApartment.addItem(new ApartmentDisplay(apt));
+        } finally {
+            isUpdatingCombos = oldState;
+        }
+    }
+    
+    private void loadApartmentData(Long floorId) {
+        boolean oldState = isUpdatingCombos;
+        isUpdatingCombos = true;
+        try {
+            cmbApartment.removeAllItems();
+            cmbApartment.addItem(null);
+            List<Apartment> apartments = apartmentDAO.getApartmentsByFloorId(floorId);
+            for (Apartment a : apartments) {
+                // Edit Mode: Show current apt + available ones
+                // Create Mode: Show only available
+                if (isEditMode || "AVAILABLE".equals(a.getStatus())) {
+                    cmbApartment.addItem(new ApartmentDisplay(a));
                 }
             }
             cmbApartment.setSelectedIndex(0);
         } finally {
-            isUpdatingCombos = false;
+            isUpdatingCombos = oldState;
         }
     }
-    
-    private void loadData() {
-    // ✅ Get current user for building filter
-    User currentUser = util.SessionManager.getInstance().getCurrentUser();
-    
-    if (!isEditMode) {
-        cmbBuilding.addItem(null);
-    }
-    
-    // ✅ FIXED: Use getAllBuildings(currentUser) instead of getAllBuildings()
-    List<Building> buildings = buildingDAO.getAllBuildings(currentUser);
-    for (Building building : buildings) {
-        cmbBuilding.addItem(new BuildingDisplay(building));
-    }
-    
-    if (!isEditMode) {
-        cmbBuilding.setSelectedIndex(0);
-    }
-    
-    loadServices();
-}
     
     private void loadServices() {
         List<Service> services = serviceDAO.getAllServices();
         serviceCheckboxes.clear();
         servicesPanel.removeAll();
-        
         for (Service service : services) {
-            JCheckBox cb = new JCheckBox(
-                service.getServiceName() + " (" + 
-                service.getUnitPrice().toPlainString() + " VNĐ/" + 
-                service.getUnit() + ")"
-            );
+            JCheckBox cb = new JCheckBox(service.getServiceName() + " (" + 
+                service.getUnitPrice().toPlainString() + " VNĐ/" + service.getUnit() + ")");
             cb.setFont(new Font("Segoe UI", Font.PLAIN, 13));
             cb.setBackground(Color.WHITE);
             cb.putClientProperty("service", service);
-            
-            if (service.isMandatory()) {
-                cb.setSelected(true);
-                cb.setEnabled(false);
-            }
-            
+            if (service.isMandatory()) { cb.setSelected(true); cb.setEnabled(false); }
             serviceCheckboxes.add(cb);
             servicesPanel.add(cb);
         }
-        
-        servicesPanel.revalidate();
-        servicesPanel.repaint();
+        servicesPanel.revalidate(); servicesPanel.repaint();
     }
     
+    // ✅ FIX: Load data for Edit Mode with sequential updates
     private void loadContractData() {
-        // 1. Load thông tin cơ bản
+        // 1. Basic Info
         txtContractNumber.setText(contract.getContractNumber());
+        cmbContractType.setSelectedItem("RENTAL".equals(contract.getContractType()) ? "Thuê" : "Sở hữu");
         
-        String type = contract.getContractType();
-        cmbContractType.setSelectedItem("RENTAL".equals(type) ? "Thuê" : "Sở hữu");
-        
-        // --- QUAN TRỌNG: KHÓA CÁC TRƯỜNG KHÔNG NÊN SỬA ---
-        // Không cho đổi loại hợp đồng khi đang sửa
-        cmbContractType.setEnabled(false); 
-        
-        // Không cho đổi căn hộ khi đang sửa (Muốn đổi phải thanh lý rồi tạo mới)
-        cmbBuilding.setEnabled(false);
+        // Disable fixed fields
+        cmbContractType.setEnabled(false);
+        cmbBuilding.setEnabled(false); 
         cmbFloor.setEnabled(false);
         cmbApartment.setEnabled(false);
-        // ---------------------------------------------------
-
-        if (contract.getSignedDate() != null) {
-            spnSignedDate.setValue(contract.getSignedDate());
-        }
         
-        // Load ngày tháng
+        // Dates & Money
+        if (contract.getSignedDate() != null) spnSignedDate.setValue(contract.getSignedDate());
         if (contract.isRental()) {
-            if (contract.getStartDate() != null) {
-                spnStartDate.setValue(contract.getStartDate());
-            }
-            if (contract.getEndDate() != null) {
-                spnEndDate.setValue(contract.getEndDate());
-            } else {
-                chkIndefinite.setSelected(true);
-                spnEndDate.setEnabled(false);
-            }
+            if (contract.getStartDate() != null) spnStartDate.setValue(contract.getStartDate());
+            if (contract.getEndDate() != null) spnEndDate.setValue(contract.getEndDate());
+            else { chkIndefinite.setSelected(true); spnEndDate.setEnabled(false); }
         }
         
-        // Load tiền
         MoneyFormatter.setValue(txtDepositAmount, contract.getDepositAmount().longValue());
-        if (contract.getMonthlyRent() != null) {
-            MoneyFormatter.setValue(txtPriceAmount, contract.getMonthlyRent().longValue());
-        }
+        if (contract.getMonthlyRent() != null) MoneyFormatter.setValue(txtPriceAmount, contract.getMonthlyRent().longValue());
+        if (contract.getNotes() != null) txtNotes.setText(contract.getNotes());
         
-        if (contract.getNotes() != null) {
-            txtNotes.setText(contract.getNotes());
-        }
-        
-        // 2. Load Vị trí Căn hộ (Để hiển thị, dù đã bị disable)
+        // 2. Cascade Selection (FIXED HERE)
         Apartment apartment = apartmentDAO.getApartmentById(contract.getApartmentId());
         if (apartment != null) {
             Floor floor = floorDAO.getFloorById(apartment.getFloorId());
             if (floor != null) {
-                // Biến cờ isUpdatingCombos giúp tránh trigger sự kiện khi set data
-                isUpdatingCombos = true; 
-                try {
-                    selectBuildingAndFloor(floor.getBuildingId(), floor.getId(), apartment.getId());
-                } finally {
-                    isUpdatingCombos = false;
-                }
+                // Call explicit select to trigger loading
+                selectBuildingAndFloor(floor.getBuildingId(), floor.getId(), apartment.getId());
             }
         }
         
-        // 3. ✅ SỬA LỖI: Load thông tin Cư dân (Resident)
-        Resident resident = residentDAO.getResidentById(contract.getResidentId());
-        if (resident != null) {
-            txtResidentName.setText(resident.getFullName());
-            txtResidentPhone.setText(resident.getPhone());
-            txtResidentIdentityCard.setText(resident.getIdentityCard());
-            cmbResidentGender.setSelectedItem(resident.getGender());
-            if (resident.getDob() != null) spnResidentDob.setValue(resident.getDob());
-            txtResidentEmail.setText(resident.getEmail());
+        // 3. Resident
+        Resident r = residentDAO.getResidentById(contract.getResidentId());
+        if (r != null) {
+            txtResidentName.setText(r.getFullName());
+            txtResidentPhone.setText(r.getPhone());
+            txtResidentIdentityCard.setText(r.getIdentityCard());
+            cmbResidentGender.setSelectedItem(r.getGender());
+            if (r.getDob() != null) spnResidentDob.setValue(r.getDob());
+            txtResidentEmail.setText(r.getEmail());
         }
         
-        // 4. Load Dịch vụ
-        loadContractServices();
+        // 4. Services
+        List<ContractService> css = contractServiceDAO.getServicesByContract(contract.getId());
+        for (JCheckBox cb : serviceCheckboxes) {
+            Service s = (Service) cb.getClientProperty("service");
+            for (ContractService cs : css) {
+                if (cs.getServiceId().equals(s.getId())) { cb.setSelected(true); break; }
+            }
+        }
     }
     
+    // ✅ FIX: Force data loading when selecting items via code
     private void selectBuildingAndFloor(Long buildingId, Long floorId, Long apartmentId) {
-        isUpdatingCombos = true;
+        boolean oldState = isUpdatingCombos;
+        isUpdatingCombos = true; // Prevent events during batch update
         try {
+            // 1. Select Building
             for (int i = 0; i < cmbBuilding.getItemCount(); i++) {
                 BuildingDisplay bd = cmbBuilding.getItemAt(i);
                 if (bd != null && bd.building.getId().equals(buildingId)) {
@@ -666,6 +623,11 @@ public class ContractFormDialog extends JDialog {
                 }
             }
             
+            // 2. FORCE Load Floors (since events are disabled)
+            loadFloorData(buildingId);
+            isUpdatingCombos = true;
+            
+            // 3. Select Floor
             for (int i = 0; i < cmbFloor.getItemCount(); i++) {
                 FloorDisplay fd = cmbFloor.getItemAt(i);
                 if (fd != null && fd.floor.getId().equals(floorId)) {
@@ -674,6 +636,11 @@ public class ContractFormDialog extends JDialog {
                 }
             }
             
+            // 4. FORCE Load Apartments
+            loadApartmentData(floorId);
+            isUpdatingCombos = true;
+            
+            // 5. Select Apartment
             for (int i = 0; i < cmbApartment.getItemCount(); i++) {
                 ApartmentDisplay ad = cmbApartment.getItemAt(i);
                 if (ad != null && ad.apartment.getId().equals(apartmentId)) {
@@ -681,290 +648,141 @@ public class ContractFormDialog extends JDialog {
                     break;
                 }
             }
+            
         } finally {
-            isUpdatingCombos = false;
+            isUpdatingCombos = false; // Re-enable events
         }
     }
     
-    private void loadContractServices() {
-        List<ContractService> contractServices = contractServiceDAO.getServicesByContract(contract.getId());
-        
-        for (JCheckBox cb : serviceCheckboxes) {
-            Service service = (Service) cb.getClientProperty("service");
-            for (ContractService cs : contractServices) {
-                if (cs.getServiceId().equals(service.getId())) {
-                    cb.setSelected(true);
-                    break;
-                }
-            }
-        }
-    }
-    
-    // ✅ VALIDATION (updated for contract type)
-    private boolean validateForm() {
-        if (cmbApartment.getSelectedItem() == null) {
-            JOptionPane.showMessageDialog(this, "Vui lòng chọn căn hộ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        
-        // Resident validation
-        if (txtResidentName.getText().trim().isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập họ tên!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        
-        String phone = txtResidentPhone.getText().trim();
-        if (phone.isEmpty() || !phone.matches("^[0-9]{10,11}$")) {
-            JOptionPane.showMessageDialog(this, "SĐT không hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        
-        String identityCard = txtResidentIdentityCard.getText().trim();
-        if (identityCard.isEmpty() || (!identityCard.matches("^[0-9]{9}$") && !identityCard.matches("^[0-9]{12}$"))) {
-            JOptionPane.showMessageDialog(this, "CCCD/CMND không hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        
-        if (!isEditMode && residentDAO.isIdentityCardExists(identityCard)) {
-            JOptionPane.showMessageDialog(this, "CCCD/CMND đã tồn tại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        
-        // ✅ NEW: Validate dates based on contract type
-        String selectedType = (String) cmbContractType.getSelectedItem();
-        boolean isRental = "Thuê".equals(selectedType);
-        
-        if (isRental) {
-            // RENTAL: Need start and end dates
-            Date startDate = (Date) spnStartDate.getValue();
-            if (!chkIndefinite.isSelected()) {
-                Date endDate = (Date) spnEndDate.getValue();
-                if (endDate.before(startDate)) {
-                    JOptionPane.showMessageDialog(this, "Ngày kết thúc phải sau ngày bắt đầu!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-                    return false;
-                }
-            }
-        }
-        // OWNERSHIP: No validation for start/end dates (they're hidden)
-        
-        // Deposit
-        Long depositValue = MoneyFormatter.getValue(txtDepositAmount);
-        if (depositValue == null || depositValue <= 0) {
-            JOptionPane.showMessageDialog(this, "Tiền cọc không hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        
-        // Price
-        Long priceValue = MoneyFormatter.getValue(txtPriceAmount);
-        if (priceValue == null || priceValue <= 0) {
-            String label = isRental ? "tiền thuê" : "giá mua";
-            JOptionPane.showMessageDialog(this, "Vui lòng nhập " + label + "!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            return false;
-        }
-        
-        return true;
-    }
-    
-    // ✅ SAVE (updated for contract type)
     private void saveContract() {
         if (!validateForm()) return;
-        
         try {
-            // 1. Xử lý Cư dân (Tạo mới hoặc Cập nhật)
-            Resident residentToSave = new Resident();
-            // Lấy ID nếu đang sửa (để update)
-            if (isEditMode) {
-                residentToSave = residentDAO.getResidentById(contract.getResidentId());
-            }
+            // 1. Resident
+            Resident resident = new Resident();
+            if (isEditMode) resident = residentDAO.getResidentById(contract.getResidentId());
             
-            residentToSave.setFullName(txtResidentName.getText().trim());
-            residentToSave.setPhone(txtResidentPhone.getText().trim());
-            residentToSave.setIdentityCard(txtResidentIdentityCard.getText().trim());
-            residentToSave.setGender((String) cmbResidentGender.getSelectedItem());
-            residentToSave.setDob((Date) spnResidentDob.getValue());
-            residentToSave.setEmail(txtResidentEmail.getText().trim().isEmpty() ? null : txtResidentEmail.getText().trim());
+            resident.setFullName(txtResidentName.getText().trim());
+            resident.setPhone(txtResidentPhone.getText().trim());
+            resident.setIdentityCard(txtResidentIdentityCard.getText().trim());
+            resident.setGender((String) cmbResidentGender.getSelectedItem());
+            resident.setDob((Date) spnResidentDob.getValue());
+            resident.setEmail(txtResidentEmail.getText().trim());
             
-            if (isEditMode) {
-                // Update cư dân hiện tại
-                residentDAO.updateResident(residentToSave);
-            } else {
-                // Tạo mới cư dân (Logic cũ)
-                if (!residentDAO.insertResident(residentToSave) || residentToSave.getId() == null) {
-                    JOptionPane.showMessageDialog(this, "Không thể tạo chủ hộ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-                    return;
+            if (isEditMode) residentDAO.updateResident(resident);
+            else {
+                if (!residentDAO.insertResident(resident)) {
+                    JOptionPane.showMessageDialog(this, "Lỗi tạo cư dân!", "Lỗi", JOptionPane.ERROR_MESSAGE); return;
                 }
-                contract.setResidentId(residentToSave.getId());
+                contract.setResidentId(resident.getId());
             }
             
-            // 2. Xử lý Hợp đồng
-            // Chỉ set lại Apartment ID nếu là tạo mới (vì edit mode đã khóa combo box)
+            // 2. Contract
             if (!isEditMode) {
                 ApartmentDisplay ad = (ApartmentDisplay) cmbApartment.getSelectedItem();
                 contract.setApartmentId(ad.apartment.getId());
+                contract.setContractNumber(contractDAO.generateContractNumber());
             }
             
-            // ... (Phần còn lại giữ nguyên như file cũ) ...
-            
-            String typeDisplay = (String) cmbContractType.getSelectedItem();
-            contract.setContractType("Thuê".equals(typeDisplay) ? "RENTAL" : "OWNERSHIP");
-            
+            contract.setContractType("Thuê".equals(cmbContractType.getSelectedItem()) ? "RENTAL" : "OWNERSHIP");
             contract.setSignedDate((Date) spnSignedDate.getValue());
-            
             if (contract.isRental()) {
                 contract.setStartDate((Date) spnStartDate.getValue());
                 contract.setEndDate(chkIndefinite.isSelected() ? null : (Date) spnEndDate.getValue());
             } else {
-                contract.setStartDate(null);
-                contract.setEndDate(null);
+                contract.setStartDate(null); contract.setEndDate(null);
             }
-            
             contract.setDepositAmount(BigDecimal.valueOf(MoneyFormatter.getValue(txtDepositAmount)));
             contract.setMonthlyRent(BigDecimal.valueOf(MoneyFormatter.getValue(txtPriceAmount)));
             contract.setNotes(txtNotes.getText().trim());
             contract.setStatus("ACTIVE");
             
-            if (!isEditMode) {
-                contract.setContractNumber(contractDAO.generateContractNumber());
-            }
-            
             boolean success = isEditMode ? contractDAO.updateContract(contract) : contractDAO.insertContract(contract);
-            
             if (success) {
+                // ✅ FIX: LOGIC UPDATE DỊCH VỤ (XÓA CŨ -> THÊM MỚI)
                 if (contract.getId() != null) {
-                    // Update services (xóa cũ thêm mới hoặc update logic)
-                    // Để đơn giản: contractServiceDAO.deleteByContract(id) -> insert lại
-                    // Nhưng ở đây ta dùng hàm có sẵn
-                    // Lưu ý: Logic lưu service cần xem lại nếu muốn update chính xác
-                    // Hiện tại tạm thời giữ nguyên
-                    saveContractServices(); 
-                }
-                isConfirmed = true;
-                JOptionPane.showMessageDialog(this, "Lưu hợp đồng thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
-                dispose();
-            } else {
-                JOptionPane.showMessageDialog(this, "Lưu hợp đồng thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Lỗi: " + e.getMessage(), "Lỗi", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-    
-    private void saveContractServices() {
-        try {
-            List<Long> selectedServiceIds = new ArrayList<>();
-            for (JCheckBox cb : serviceCheckboxes) {
-                if (cb.isSelected()) {
-                    Service service = (Service) cb.getClientProperty("service");
-                    if (service != null && service.getId() != null) {
-                        selectedServiceIds.add(service.getId());
+                    contractServiceDAO.deleteServicesByContract(contract.getId()); // Clean old
+                    
+                    List<Long> sIds = new ArrayList<>();
+                    for (JCheckBox cb : serviceCheckboxes) {
+                        if (cb.isSelected()) sIds.add(((Service) cb.getClientProperty("service")).getId());
+                    }
+                    if (!sIds.isEmpty()) {
+                        contractServiceDAO.insertServicesForContract(contract.getId(), sIds, 
+                            contract.getStartDate() != null ? contract.getStartDate() : new Date());
                     }
                 }
+                
+                // Update Apartment Status if new
+                if (!isEditMode) {
+                    ApartmentDisplay ad = (ApartmentDisplay) cmbApartment.getSelectedItem();
+                    Apartment apt = ad.apartment;
+                    apt.setStatus(contract.isRental() ? "RENTED" : "OWNED");
+                    apartmentDAO.updateApartment(apt);
+                }
+                
+                isConfirmed = true;
+                JOptionPane.showMessageDialog(this, "Thành công!");
+                dispose();
+            } else {
+                JOptionPane.showMessageDialog(this, "Lỗi lưu hợp đồng!", "Lỗi", JOptionPane.ERROR_MESSAGE);
             }
-            
-            if (!selectedServiceIds.isEmpty()) {
-                Date appliedDate = contract.getStartDate() != null ? contract.getStartDate() : new Date();
-                contractServiceDAO.insertServicesForContract(contract.getId(), selectedServiceIds, appliedDate);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); JOptionPane.showMessageDialog(this, "Lỗi: " + e.getMessage()); }
     }
     
-    // HELPERS
+    private boolean validateForm() {
+        if (cmbApartment.getSelectedItem() == null) { JOptionPane.showMessageDialog(this, "Chọn căn hộ!"); return false; }
+        if (txtResidentName.getText().trim().isEmpty()) { JOptionPane.showMessageDialog(this, "Nhập tên cư dân!"); return false; }
+        if (MoneyFormatter.getValue(txtPriceAmount) <= 0) { JOptionPane.showMessageDialog(this, "Nhập giá!"); return false; }
+        return true;
+    }
+    
+    // Components helpers
     private JPanel createSection(String title) {
-        JPanel panel = new JPanel();
-        panel.setBackground(Color.WHITE);
-        panel.setBorder(BorderFactory.createTitledBorder(
-            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1, true),
-            title, TitledBorder.LEFT, TitledBorder.TOP,
-            new Font("Segoe UI", Font.BOLD, 14), new Color(66, 66, 66)
-        ));
-        return panel;
+        JPanel p = new JPanel(); p.setBackground(Color.WHITE);
+        p.setBorder(BorderFactory.createTitledBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR), title, TitledBorder.LEFT, TitledBorder.TOP, new Font("Segoe UI", Font.BOLD, 14), new Color(66,66,66)));
+        return p;
     }
-    
-    private JLabel createLabel(String text, boolean required) {
-        JLabel label = new JLabel(text);
-        label.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        if (required) {
-            label.setText("<html>" + text + " <font color='red'>*</font></html>");
-        }
-        return label;
+    private JLabel createLabel(String text, boolean req) {
+        JLabel l = new JLabel(text); l.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        if(req) l.setText("<html>"+text+" <font color='red'>*</font></html>");
+        return l;
     }
-    
     private JSpinner createDateSpinner() {
-        SpinnerDateModel model = new SpinnerDateModel();
-        JSpinner spinner = new JSpinner(model);
-        JSpinner.DateEditor editor = new JSpinner.DateEditor(spinner, "dd/MM/yyyy");
-        spinner.setEditor(editor);
-        spinner.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        spinner.setPreferredSize(new Dimension(0, 32));
-        return spinner;
+        JSpinner s = new JSpinner(new SpinnerDateModel());
+        s.setEditor(new JSpinner.DateEditor(s, "dd/MM/yyyy"));
+        s.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        s.setPreferredSize(new Dimension(0, 32));
+        return s;
+    }
+    private JButton createButton(String text, Color bg) {
+        JButton b = new JButton(text); b.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        b.setForeground(Color.WHITE); b.setBackground(bg); b.setFocusPainted(false);
+        b.setPreferredSize(new Dimension(140, 38)); b.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return b;
     }
     
-    private JButton createButton(String text, Color bgColor) {
-        JButton btn = new JButton(text);
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        btn.setForeground(Color.WHITE);
-        btn.setBackground(bgColor);
-        btn.setFocusPainted(false);
-        btn.setBorderPainted(false);
-        btn.setPreferredSize(new Dimension(140, 38));
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        return btn;
-    }
-    
-    // INNER CLASSES
+    // Display wrappers
     private class BuildingDisplay {
-        Building building;
-        BuildingDisplay(Building b) { this.building = b; }
-        @Override
-        public String toString() { return building.getName(); }
+        Building building; BuildingDisplay(Building b) { this.building = b; }
+        @Override public String toString() { return building.getName(); }
     }
-    
     private class FloorDisplay {
-        Floor floor;
-        FloorDisplay(Floor f) { this.floor = f; }
-        @Override
-        public String toString() {
-            return floor.getName() != null && !floor.getName().trim().isEmpty() ? 
-                   floor.getName() : "Tầng " + floor.getFloorNumber();
-        }
+        Floor floor; FloorDisplay(Floor f) { this.floor = f; }
+        @Override public String toString() { return floor.getName(); }
     }
-    
     private class ApartmentDisplay {
-        Apartment apartment;
-        ApartmentDisplay(Apartment a) { this.apartment = a; }
-        @Override
-        public String toString() {
-            return apartment.getRoomNumber() + " - " + apartment.getArea() + "m²";
-        }
+        Apartment apartment; ApartmentDisplay(Apartment a) { this.apartment = a; }
+        @Override public String toString() { return apartment.getRoomNumber() + " - " + apartment.getArea() + "m²"; }
     }
-    
     private class PlaceholderRenderer extends DefaultListCellRenderer {
-        private String placeholder;
-        
-        PlaceholderRenderer(String placeholder) {
-            this.placeholder = placeholder;
-        }
-        
-        @Override
-        public Component getListCellRendererComponent(JList<?> list, Object value, 
-                                                      int index, boolean isSelected, boolean cellHasFocus) {
+        String ph; PlaceholderRenderer(String p) { this.ph = p; }
+        @Override public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
             super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-            if (value == null) {
-                setText(placeholder);
-                setForeground(new Color(158, 158, 158));
-            }
+            if (value == null) { setText(ph); setForeground(Color.GRAY); }
             return this;
         }
     }
     
-    public boolean isConfirmed() {
-        return isConfirmed;
-    }
-    
-    public Contract getContract() {
-        return contract;
-    }
+    public boolean isConfirmed() { return isConfirmed; }
+    public Contract getContract() { return contract; }
 }

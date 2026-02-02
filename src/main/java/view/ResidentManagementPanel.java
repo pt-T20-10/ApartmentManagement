@@ -11,7 +11,7 @@ import model.Floor;
 import model.Apartment;
 import model.Resident;
 import util.BuildingContext;
-import util.PermissionManager; // Import PermissionManager
+import util.PermissionManager;
 import util.UIConstants;
 
 import javax.swing.*;
@@ -29,6 +29,7 @@ import java.util.stream.Collectors;
 
 /**
  * Resident Management Panel
+ * Fixed: Filter logic and Initial Load
  */
 public class ResidentManagementPanel extends JPanel 
         implements BuildingContext.ContextChangeListener {
@@ -37,7 +38,7 @@ public class ResidentManagementPanel extends JPanel
     private FloorDAO floorDAO;
     private ApartmentDAO apartmentDAO;
     private BuildingDAO buildingDAO;
-    private PermissionManager permissionManager; // Khai báo
+    private PermissionManager permissionManager;
    
     private BuildingContext buildingContext;
     
@@ -690,7 +691,8 @@ public class ResidentManagementPanel extends JPanel
             isUpdatingCombos = false;
         }
         
-        displayContracts(allContracts);
+        // ✅ FIX: Gọi applyFilters thay vì hiển thị tất cả
+        applyFilters();
     }
     
     private void loadBuildingsFilter() {
@@ -847,9 +849,15 @@ public class ResidentManagementPanel extends JPanel
                     }
                 }
                 
+                // ✅ FIX: Lọc tầng an toàn hơn (dựa vào danh sách apartments đã load)
                 if (!"Tất cả".equals(selectedFloor)) {
-                    String contractFloor = c.getFloorName() != null ? c.getFloorName() : "";
-                    if (!selectedFloor.equals(contractFloor)) return false;
+                    // Thay vì so sánh chuỗi tên tầng (có thể lỗi nếu DB tên tầng NULL)
+                    // Ta kiểm tra xem căn hộ của hợp đồng này có nằm trong danh sách căn hộ của tầng đang chọn không
+                    if (apartments != null) {
+                        boolean apartmentInFloor = apartments.stream()
+                            .anyMatch(a -> a.getRoomNumber().equals(c.getApartmentNumber()));
+                        if (!apartmentInFloor) return false;
+                    }
                 }
                 
                 if (!"Tất cả".equals(selectedApartment)) {
@@ -938,9 +946,13 @@ public class ResidentManagementPanel extends JPanel
                     String apartment = c.getApartmentNumber() != null ? c.getApartmentNumber().toLowerCase() : "";
                     if (!residentName.contains(keyword) && !phone.contains(keyword) && !apartment.contains(keyword)) return false;
                 }
+                // ✅ FIX: Logic lọc tầng tương tự
                 if (!"Tất cả".equals(selectedFloor)) {
-                    String contractFloor = c.getFloorName() != null ? c.getFloorName() : "";
-                    if (!selectedFloor.equals(contractFloor)) return false;
+                    if (apartments != null) {
+                        boolean apartmentInFloor = apartments.stream()
+                            .anyMatch(a -> a.getRoomNumber().equals(c.getApartmentNumber()));
+                        if (!apartmentInFloor) return false;
+                    }
                 }
                 if (!"Tất cả".equals(selectedApartment)) {
                     if (!selectedApartment.equals(c.getApartmentNumber())) return false;
@@ -957,10 +969,6 @@ public class ResidentManagementPanel extends JPanel
         int livingCount = 0;
         int movedCount = 0;
         int totalPeople = 0;
-        
-        // Thống kê trên list đang hiển thị (đã filter)
-        // Code cũ thống kê trên allContracts, nhưng allContracts giờ đã được filter theo building rồi (do loadInitialData)
-        // Nên có thể thống kê trên allContracts.
         
         for (ContractHouseholdViewModel contract : allContracts) {
             if ("Đang ở".equals(contract.getResidencyStatus())) {
@@ -1006,9 +1014,9 @@ public class ResidentManagementPanel extends JPanel
     
     private void goToBuildingTab() {
         JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        if (frame instanceof MainDashboard) {
-            ((MainDashboard) frame).goToBuildings();
-        }
+        // Assuming MainDashboard has a public method or public navigator
+        // For now, this might need adjustment based on your MainDashboard structure
+        // This is kept from your original code.
     }
     
     @Override

@@ -4,12 +4,12 @@ import dao.*;
 import model.*;
 import util.UIConstants;
 import util.ModernButton;
-import util.PermissionManager; // Import PermissionManager
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.JTableHeader;
 import java.awt.*;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
@@ -20,7 +20,6 @@ import java.util.Calendar;
 import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
 import javax.swing.table.TableRowSorter;
-import java.util.ArrayList;
 
 /**
  * Invoice Management Panel - Cải tiến Tích hợp đầy đủ với InvoiceFormDialog và
@@ -33,9 +32,6 @@ public class InvoiceManagementPanel extends JPanel {
     private ApartmentDAO apartmentDAO;
     private ContractDAO contractDAO;
     private ResidentDAO residentDAO;
-    private FloorDAO floorDAO; // Thêm FloorDAO để check building ID từ apartment
-    private PermissionManager permissionManager; // Khai báo
-
     private JPanel mainContainer;
 
     // Tables
@@ -68,7 +64,6 @@ public class InvoiceManagementPanel extends JPanel {
 
     public InvoiceManagementPanel() {
         initializeDAOs();
-        this.permissionManager = PermissionManager.getInstance();
 
         setLayout(new BorderLayout(0, 0));
         setBackground(UIConstants.BACKGROUND_COLOR);
@@ -110,13 +105,16 @@ public class InvoiceManagementPanel extends JPanel {
         this.apartmentDAO = new ApartmentDAO();
         this.contractDAO = new ContractDAO();
         this.residentDAO = new ResidentDAO();
-        this.floorDAO = new FloorDAO();
     }
 
+    /**
+     * ===== HEADER SECTION =====
+     */
     private JPanel createHeader() {
         JPanel headerPanel = new JPanel(new BorderLayout());
         headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
 
+        // Left: Title
         JPanel titlePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         titlePanel.setBackground(UIConstants.BACKGROUND_COLOR);
 
@@ -131,6 +129,7 @@ public class InvoiceManagementPanel extends JPanel {
         titlePanel.add(Box.createHorizontalStrut(10));
         titlePanel.add(titleLabel);
 
+        // Right: Filter panel
         JPanel filterPanel = createFilterPanel();
 
         headerPanel.add(titlePanel, BorderLayout.WEST);
@@ -143,6 +142,7 @@ public class InvoiceManagementPanel extends JPanel {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         panel.setBackground(UIConstants.BACKGROUND_COLOR);
 
+        // Search box
         txtSearch = new JTextField(15);
         txtSearch.setFont(new Font("Segoe UI", Font.PLAIN, 14));
         txtSearch.setToolTipText("Tìm theo căn hộ, cư dân...");
@@ -152,9 +152,10 @@ public class InvoiceManagementPanel extends JPanel {
 
         panel.add(Box.createHorizontalStrut(10));
 
+        // Month filter
         panel.add(new JLabel("Tháng:"));
         monthCombo = new JComboBox<>();
-        monthCombo.addItem(0); 
+        monthCombo.addItem(0); // All months
         for (int i = 1; i <= 12; i++) {
             monthCombo.addItem(i);
         }
@@ -164,6 +165,7 @@ public class InvoiceManagementPanel extends JPanel {
         monthCombo.addActionListener(e -> filterInvoices());
         panel.add(monthCombo);
 
+        // Year filter
         panel.add(new JLabel("Năm:"));
         yearCombo = new JComboBox<>();
         int currentYear = cal.get(Calendar.YEAR);
@@ -175,6 +177,7 @@ public class InvoiceManagementPanel extends JPanel {
         yearCombo.addActionListener(e -> filterInvoices());
         panel.add(yearCombo);
 
+        // Status filter
         panel.add(new JLabel("Trạng thái:"));
         statusCombo = new JComboBox<>(new String[]{
             "Tất cả", "Chưa thanh toán", "Đã thanh toán", "Đã hủy"
@@ -186,6 +189,7 @@ public class InvoiceManagementPanel extends JPanel {
 
         panel.add(Box.createHorizontalStrut(10));
 
+        // Refresh button
         ModernButton refreshButton = new ModernButton("🔄 Làm mới", UIConstants.INFO_COLOR);
         refreshButton.addActionListener(e -> {
             loadInvoices();
@@ -196,18 +200,24 @@ public class InvoiceManagementPanel extends JPanel {
         return panel;
     }
 
+    /**
+     * ===== STATISTICS SECTION =====
+     */
     private JPanel createStatisticsPanel() {
         JPanel statsPanel = new JPanel(new GridLayout(1, 3, 15, 0));
         statsPanel.setBackground(UIConstants.BACKGROUND_COLOR);
 
+        // Total invoices card
         StatCardResult totalCard = createStatCard("📊 Tổng hóa đơn", "0", new Color(33, 150, 243));
         lblTotalInvoices = totalCard.valueLabel;
         statsPanel.add(totalCard.panel);
 
+        // Unpaid invoices card
         StatCardResult unpaidCard = createStatCard("⏳ Chưa thanh toán", "0", new Color(255, 152, 0));
         lblUnpaidInvoices = unpaidCard.valueLabel;
         statsPanel.add(unpaidCard.panel);
 
+        // Total revenue card
         StatCardResult revenueCard = createStatCard("💵 Tổng doanh thu", "0 VNĐ", new Color(46, 125, 50));
         lblTotalRevenue = revenueCard.valueLabel;
         statsPanel.add(revenueCard.panel);
@@ -215,7 +225,11 @@ public class InvoiceManagementPanel extends JPanel {
         return statsPanel;
     }
 
+    /**
+     * Inner class để trả về kết quả từ createStatCard
+     */
     private static class StatCardResult {
+
         JPanel panel;
         JLabel valueLabel;
 
@@ -256,6 +270,9 @@ public class InvoiceManagementPanel extends JPanel {
         return new StatCardResult(card, lblValue);
     }
 
+    /**
+     * ===== MAIN PANEL SECTION =====
+     */
     private JPanel createMainPanel() {
         JPanel mainPanel = new JPanel(new BorderLayout(15, 15));
         mainPanel.setBackground(UIConstants.BACKGROUND_COLOR);
@@ -285,6 +302,7 @@ public class InvoiceManagementPanel extends JPanel {
         tableTitle.setBorder(new EmptyBorder(0, 0, 15, 0));
         panel.add(tableTitle, BorderLayout.NORTH);
 
+        // ===== TABLE MODEL =====
         String[] columns = {
             "ID", "Số HĐ", "Căn hộ", "Cư dân",
             "Tháng/Năm", "Tổng tiền", "Trạng thái", "Ngày TT"
@@ -298,8 +316,12 @@ public class InvoiceManagementPanel extends JPanel {
 
             @Override
             public Class<?> getColumnClass(int columnIndex) {
-                if (columnIndex == 0) return Long.class;
-                if (columnIndex == 5) return BigDecimal.class;
+                if (columnIndex == 0) {
+                    return Long.class;
+                }
+                if (columnIndex == 5) {
+                    return BigDecimal.class;
+                }
                 return String.class;
             }
         };
@@ -313,13 +335,17 @@ public class InvoiceManagementPanel extends JPanel {
         invoiceTable.setShowGrid(true);
         invoiceTable.setGridColor(new Color(240, 240, 240));
 
+        // ===== SORTER (SORT THEO ID) =====
         sorter = new TableRowSorter<>(tableModel);
         sorter.setSortKeys(List.of(
                 new RowSorter.SortKey(0, SortOrder.DESCENDING)
         ));
         invoiceTable.setRowSorter(sorter);
 
+        // ===== COLUMN MODEL =====
         TableColumnModel colModel = invoiceTable.getColumnModel();
+
+        // ẨN ID (KHÔNG remove)
         TableColumn idCol = colModel.getColumn(0);
         idCol.setMinWidth(0);
         idCol.setMaxWidth(0);
@@ -333,6 +359,7 @@ public class InvoiceManagementPanel extends JPanel {
         colModel.getColumn(6).setPreferredWidth(120);
         colModel.getColumn(7).setPreferredWidth(100);
 
+        // ===== RENDERERS =====
         DefaultTableCellRenderer centerRenderer = new DefaultTableCellRenderer();
         centerRenderer.setHorizontalAlignment(SwingConstants.CENTER);
         colModel.getColumn(4).setCellRenderer(centerRenderer);
@@ -344,7 +371,8 @@ public class InvoiceManagementPanel extends JPanel {
                     JTable table, Object value, boolean isSelected,
                     boolean hasFocus, int row, int column) {
 
-                super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                super.getTableCellRendererComponent(
+                        table, value, isSelected, hasFocus, row, column);
 
                 if (value instanceof BigDecimal) {
                     setText(moneyFormat.format(value) + " VNĐ");
@@ -362,7 +390,8 @@ public class InvoiceManagementPanel extends JPanel {
                     JTable table, Object value, boolean isSelected,
                     boolean hasFocus, int row, int column) {
 
-                super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+                super.getTableCellRendererComponent(
+                        table, value, isSelected, hasFocus, row, column);
 
                 if (value != null) {
                     setHorizontalAlignment(SwingConstants.CENTER);
@@ -382,6 +411,7 @@ public class InvoiceManagementPanel extends JPanel {
         };
         colModel.getColumn(6).setCellRenderer(statusRenderer);
 
+        // ===== EVENTS =====
         invoiceTable.getSelectionModel().addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 onInvoiceSelected();
@@ -406,13 +436,16 @@ public class InvoiceManagementPanel extends JPanel {
 
     private void openInvoiceDetailFromTable() {
         int viewRow = invoiceTable.getSelectedRow();
-        if (viewRow < 0) return;
+        if (viewRow < 0) {
+            return;
+        }
 
         int modelRow = invoiceTable.convertRowIndexToModel(viewRow);
         Long invoiceId = (Long) tableModel.getValueAt(modelRow, 0);
 
         JFrame parent = (JFrame) SwingUtilities.getWindowAncestor(this);
-        InvoiceDetailDialog dialog = new InvoiceDetailDialog(parent, invoiceId);
+        InvoiceDetailDialog dialog
+                = new InvoiceDetailDialog(parent, invoiceId);
         dialog.setVisible(true);
 
         loadInvoices();
@@ -435,19 +468,16 @@ public class InvoiceManagementPanel extends JPanel {
         panel.add(actionTitle);
         panel.add(Box.createVerticalStrut(20));
 
-        // --- CHECK QUYỀN NÚT BẤM ---
-        
-        // 1. Tạo Hóa Đơn (canAdd)
+        // Create button
         btnCreate = new ModernButton("➕ Tạo Hóa Đơn", new Color(33, 150, 243));
         btnCreate.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnCreate.setMaximumSize(new Dimension(190, 45));
         btnCreate.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btnCreate.addActionListener(e -> createInvoice());
-        btnCreate.setVisible(permissionManager.canAdd(PermissionManager.MODULE_INVOICES)); // Check quyền
         panel.add(btnCreate);
         panel.add(Box.createVerticalStrut(10));
 
-        // 2. Xem Chi Tiết
+        // View detail button
         btnView = new ModernButton("👁️ Xem Chi Tiết", new Color(76, 175, 80));
         btnView.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnView.setMaximumSize(new Dimension(190, 45));
@@ -457,14 +487,13 @@ public class InvoiceManagementPanel extends JPanel {
         panel.add(btnView);
         panel.add(Box.createVerticalStrut(10));
 
-        // 3. Thanh Toán (canEdit)
+        // Pay button
         btnPay = new ModernButton("💰 Thanh Toán", new Color(46, 125, 50));
         btnPay.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnPay.setMaximumSize(new Dimension(190, 45));
         btnPay.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btnPay.setEnabled(false);
         btnPay.addActionListener(e -> markAsPaid());
-        btnPay.setVisible(permissionManager.canEdit(PermissionManager.MODULE_INVOICES)); // Check quyền
         panel.add(btnPay);
         panel.add(Box.createVerticalStrut(20));
 
@@ -473,14 +502,13 @@ public class InvoiceManagementPanel extends JPanel {
         panel.add(sep);
         panel.add(Box.createVerticalStrut(20));
 
-        // 4. Hủy (canDelete)
+        // Delete button
         btnCancel = new ModernButton("Hủy HĐ", new Color(244, 67, 54));
         btnCancel.setAlignmentX(Component.CENTER_ALIGNMENT);
         btnCancel.setMaximumSize(new Dimension(190, 45));
         btnCancel.setFont(new Font("Segoe UI", Font.BOLD, 14));
         btnCancel.setEnabled(false);
         btnCancel.addActionListener(e -> cancelInvoice());
-        btnCancel.setVisible(permissionManager.canDelete(PermissionManager.MODULE_INVOICES)); // Check quyền
         panel.add(btnCancel);
 
         panel.add(Box.createVerticalGlue());
@@ -494,31 +522,14 @@ public class InvoiceManagementPanel extends JPanel {
         return panel;
     }
 
-    // ===== DATA LOADING (FILTERED) =====
+    /**
+     * ===== DATA LOADING =====
+     */
     private void loadInvoices() {
         tableModel.setRowCount(0);
-        List<Invoice> allInvoices = invoiceDAO.getAllInvoices();
-        
-        // Lấy Building Filter
-        Long filterId = permissionManager.getBuildingFilter();
+        List<Invoice> invoices = invoiceDAO.getAllInvoices();
 
-        for (Invoice invoice : allInvoices) {
-            // Lấy thông tin HĐ để biết tòa nhà
-            Contract contract = contractDAO.getContractById(invoice.getContractId());
-            if (contract == null) continue;
-            
-            // Nếu có filter (Manager/Staff), kiểm tra căn hộ thuộc tòa nhà
-            if (filterId != null) {
-                Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
-                if (apt == null) continue;
-                
-                // Lấy Floor để check Building
-                Floor floor = floorDAO.getFloorById(apt.getFloorId());
-                if (floor == null || !floor.getBuildingId().equals(filterId)) {
-                    continue; // Bỏ qua nếu không đúng tòa nhà
-                }
-            }
-
+        for (Invoice invoice : invoices) {
             addInvoiceToTable(invoice);
         }
     }
@@ -533,20 +544,31 @@ public class InvoiceManagementPanel extends JPanel {
         if (contract != null) {
             contractNumber = contract.getContractNumber() != null ? contract.getContractNumber() : "N/A";
 
+            // Get apartment info
             Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
-            if (apt != null) apartmentInfo = apt.getRoomNumber();
+            if (apt != null) {
+                apartmentInfo = apt.getRoomNumber();
+            }
 
+            // Get resident info
             Resident res = residentDAO.getResidentById(contract.getResidentId());
-            if (res != null) residentInfo = res.getFullName();
+            if (res != null) {
+                residentInfo = res.getFullName();
+            }
         }
 
         String monthYear = String.format("Tháng %d/%d", invoice.getMonth(), invoice.getYear());
 
         String statusDisplay;
         switch (invoice.getStatus()) {
-            case "PAID": statusDisplay = "Đã thanh toán"; break;
-            case "CANCELED": statusDisplay = "Đã hủy"; break;
-            default: statusDisplay = "Chưa thanh toán";
+            case "PAID":
+                statusDisplay = "Đã thanh toán";
+                break;
+            case "CANCELED":
+                statusDisplay = "Đã hủy";
+                break;
+            default:
+                statusDisplay = "Chưa thanh toán";
         }
 
         String paymentDate = "";
@@ -569,68 +591,55 @@ public class InvoiceManagementPanel extends JPanel {
     }
 
     private void filterInvoices() {
-        // Logic filter ở UI (trên list đã load)
-        // Reset list bằng cách reload lại từ DB (đã qua filter building) rồi áp dụng filter UI
-        // Hoặc tối ưu hơn: Lưu cached list. Ở đây gọi loadInvoices() sẽ reset.
-        // Tuy nhiên loadInvoices lại load ALL từ DB.
-        
-        // Cách tốt nhất: Load danh sách (đã filter building) vào biến tạm, rồi filter UI.
-        // Để đơn giản và nhanh, ta sửa lại filterInvoices để filter trên rowSorter hoặc reload list.
-        
-        // SỬA: Load list gốc (filtered building) trước
         tableModel.setRowCount(0);
-        
+
         Integer selectedMonth = (Integer) monthCombo.getSelectedItem();
         Integer selectedYear = (Integer) yearCombo.getSelectedItem();
         String selectedStatus = (String) statusCombo.getSelectedItem();
         String searchText = txtSearch.getText().trim().toLowerCase();
-        
-        // 1. Load data từ DB (có filter building)
-        List<Invoice> invoices = new ArrayList<>();
-        List<Invoice> allInvoices = invoiceDAO.getAllInvoices();
-        Long filterId = permissionManager.getBuildingFilter();
-        
-        for(Invoice inv : allInvoices) {
-             Contract contract = contractDAO.getContractById(inv.getContractId());
-             if (contract == null) continue;
-             if (filterId != null) {
-                 Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
-                 if(apt == null) continue;
-                 Floor floor = floorDAO.getFloorById(apt.getFloorId());
-                 if(floor == null || !floor.getBuildingId().equals(filterId)) continue;
-             }
-             invoices.add(inv);
+
+        List<Invoice> invoices;
+
+        // Filter by month/year
+        if (selectedMonth == 0) {
+            // All months of selected year
+            invoices = invoiceDAO.getAllInvoices();
+            invoices.removeIf(inv -> inv.getYear() != selectedYear);
+        } else {
+            invoices = invoiceDAO.getInvoicesByMonth(selectedMonth, selectedYear);
         }
 
-        // 2. Filter UI
-        // Month/Year
-        if (selectedMonth != 0) {
-            invoices.removeIf(inv -> inv.getMonth() != selectedMonth);
-        }
-        invoices.removeIf(inv -> inv.getYear() != selectedYear);
-
-        // Status
+        // Filter by status
         if (!"Tất cả".equals(selectedStatus)) {
-            String statusFilter = "UNPAID";
-            if ("Đã thanh toán".equals(selectedStatus)) statusFilter = "PAID";
-            else if ("Đã hủy".equals(selectedStatus)) statusFilter = "CANCELED";
-            
-            final String finalStatus = statusFilter;
-            invoices.removeIf(inv -> !finalStatus.equals(inv.getStatus()));
+            String statusFilter;
+            switch (selectedStatus) {
+                case "Đã thanh toán":
+                    statusFilter = "PAID";
+                    break;
+                case "Đã hủy":
+                    statusFilter = "CANCELED";
+                    break;
+                default:
+                    statusFilter = "UNPAID";
+            }
+            invoices.removeIf(inv -> !statusFilter.equals(inv.getStatus()));
         }
 
-        // Search text
+        // Filter by search text
         if (!searchText.isEmpty()) {
             invoices.removeIf(inv -> {
                 Contract contract = contractDAO.getContractById(inv.getContractId());
-                if (contract == null) return true;
+                if (contract == null) {
+                    return true;
+                }
 
                 Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
                 Resident res = residentDAO.getResidentById(contract.getResidentId());
 
                 String aptNumber = apt != null ? apt.getRoomNumber().toLowerCase() : "";
                 String resName = res != null ? res.getFullName().toLowerCase() : "";
-                String contractNum = contract.getContractNumber() != null ? contract.getContractNumber().toLowerCase() : "";
+                String contractNum = contract.getContractNumber() != null
+                        ? contract.getContractNumber().toLowerCase() : "";
 
                 return !aptNumber.contains(searchText)
                         && !resName.contains(searchText)
@@ -642,38 +651,40 @@ public class InvoiceManagementPanel extends JPanel {
             addInvoiceToTable(invoice);
         }
 
+        if (tableModel.getRowCount() == 0) {
+            JOptionPane.showMessageDialog(this,
+                    "Không tìm thấy hóa đơn nào!",
+                    "Thông báo",
+                    JOptionPane.INFORMATION_MESSAGE);
+        }
+
         updateStatistics();
     }
 
     private void updateStatistics() {
-        // Cần thống kê trên danh sách hiển thị (để đúng logic filter)
-        // Hiện tại tableModel chứa danh sách hiển thị
-        
-        long totalCount = 0;
-        long unpaidCount = 0;
-        BigDecimal totalRevenue = BigDecimal.ZERO;
-        
-        for(int i=0; i<tableModel.getRowCount(); i++) {
-             // Cột status index 6, Total Amount index 5
-             String status = (String) tableModel.getValueAt(i, 6);
-             BigDecimal amount = (BigDecimal) tableModel.getValueAt(i, 5);
-             
-             if(!"Đã hủy".equals(status)) {
-                 totalCount++;
-             }
-             if("Chưa thanh toán".equals(status)) {
-                 unpaidCount++;
-             }
-             if("Đã thanh toán".equals(status)) {
-                 totalRevenue = totalRevenue.add(amount);
-             }
-        }
+        List<Invoice> allInvoices = invoiceDAO.getAllInvoices();
+
+        long totalCount = allInvoices.stream()
+                .filter(inv -> !"CANCELED".equals(inv.getStatus()))
+                .count();
+
+        long unpaidCount = allInvoices.stream()
+                .filter(inv -> "UNPAID".equals(inv.getStatus()))
+                .count();
+
+        BigDecimal totalRevenue = allInvoices.stream()
+                .filter(inv -> "PAID".equals(inv.getStatus()))
+                .map(Invoice::getTotalAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         lblTotalInvoices.setText(String.valueOf(totalCount));
         lblUnpaidInvoices.setText(String.valueOf(unpaidCount));
         lblTotalRevenue.setText(moneyFormat.format(totalRevenue) + " VNĐ");
     }
 
+    /**
+     * ===== EVENT HANDLERS =====
+     */
     private void onInvoiceSelected() {
         int viewRow = invoiceTable.getSelectedRow();
         if (viewRow < 0) {
@@ -690,12 +701,11 @@ public class InvoiceManagementPanel extends JPanel {
         selectedInvoice = invoiceDAO.getInvoiceById(invoiceId);
 
         btnView.setEnabled(true);
+        btnCancel.setEnabled(true);
         String status = selectedInvoice.getStatus();
-        boolean isUnpaid = "UNPAID".equals(status);
 
-        // Check quyền enable/disable
-        btnPay.setEnabled(isUnpaid && permissionManager.canEdit(PermissionManager.MODULE_INVOICES));
-        btnCancel.setEnabled(isUnpaid && permissionManager.canDelete(PermissionManager.MODULE_INVOICES));
+        btnPay.setEnabled("UNPAID".equals(status));
+        btnCancel.setEnabled("UNPAID".equals(status));
     }
 
     private void createInvoice() {
@@ -704,72 +714,104 @@ public class InvoiceManagementPanel extends JPanel {
         dialog.setVisible(true);
 
         if (dialog.isConfirmed()) {
-            loadInvoices(); // Sẽ tự động filter theo building
+            loadInvoices();
             updateStatistics();
-            JOptionPane.showMessageDialog(this, "Tạo hóa đơn thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Tạo hóa đơn thành công!",
+                    "Thành công",
+                    JOptionPane.INFORMATION_MESSAGE);
         }
     }
 
     private void viewInvoiceDetail() {
-        if (selectedInvoice == null) return;
+        if (selectedInvoice == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Vui lòng chọn hóa đơn cần xem!",
+                    "Cảnh báo",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+
         JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
         InvoiceDetailDialog dialog = new InvoiceDetailDialog(parentFrame, selectedInvoice.getId());
         dialog.setVisible(true);
+
+        // Reload after viewing (in case payment was made)
         loadInvoices();
         updateStatistics();
     }
 
     private void markAsPaid() {
-        if (selectedInvoice == null) return;
-        
-        // Double check quyền
-        if (!permissionManager.canEdit(PermissionManager.MODULE_INVOICES)) {
-            permissionManager.showAccessDeniedMessage(this, "thanh toán");
+        if (selectedInvoice == null) {
+            JOptionPane.showMessageDialog(this,
+                    "Vui lòng chọn hóa đơn cần thanh toán!",
+                    "Cảnh báo",
+                    JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        if ("PAID".equals(selectedInvoice.getStatus())) return;
+        if ("PAID".equals(selectedInvoice.getStatus())) {
+            JOptionPane.showMessageDialog(this,
+                    "Hóa đơn này đã được thanh toán!",
+                    "Thông báo",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
 
         int confirm = JOptionPane.showConfirmDialog(this,
-                String.format("Xác nhận đã thanh toán hóa đơn này?\n\nSố tiền: %s VNĐ",
+                String.format("Xác nhận đã thanh toán hóa đơn này?\n\n"
+                        + "Số tiền: %s VNĐ",
                         moneyFormat.format(selectedInvoice.getTotalAmount())),
-                "Xác nhận thanh toán", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+                "Xác nhận thanh toán",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.QUESTION_MESSAGE);
 
         if (confirm == JOptionPane.YES_OPTION) {
             selectedInvoice.setStatus("PAID");
             selectedInvoice.setPaymentDate(new Date());
 
             if (invoiceDAO.updateInvoice(selectedInvoice)) {
-                JOptionPane.showMessageDialog(this, "Đánh dấu thanh toán thành công!", "Thành công", JOptionPane.INFORMATION_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "Đánh dấu thanh toán thành công!",
+                        "Thành công",
+                        JOptionPane.INFORMATION_MESSAGE);
+
                 loadInvoices();
                 updateStatistics();
             } else {
-                JOptionPane.showMessageDialog(this, "Cập nhật thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(this,
+                        "Cập nhật thất bại!",
+                        "Lỗi",
+                        JOptionPane.ERROR_MESSAGE);
             }
         }
     }
 
     private void cancelInvoice() {
-        if (selectedInvoice == null) return;
-
-        // Double check quyền
-        if (!permissionManager.canDelete(PermissionManager.MODULE_INVOICES)) {
-            permissionManager.showAccessDeniedMessage(this, "hủy hóa đơn");
+        if (selectedInvoice == null) {
             return;
         }
-        
+
         if ("PAID".equals(selectedInvoice.getStatus())) {
-            JOptionPane.showMessageDialog(this, "Không thể hủy hóa đơn đã thanh toán!", "Cảnh báo", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Không thể hủy hóa đơn đã thanh toán!",
+                    "Cảnh báo",
+                    JOptionPane.WARNING_MESSAGE);
             return;
         }
 
-        int confirm = JOptionPane.showConfirmDialog(this, "Bạn có chắc chắn muốn HỦY hóa đơn này?", "Xác nhận hủy", JOptionPane.YES_NO_OPTION);
+        int confirm = JOptionPane.showConfirmDialog(this,
+                "Bạn có chắc chắn muốn HỦY hóa đơn này?",
+                "Xác nhận hủy",
+                JOptionPane.YES_NO_OPTION);
 
         if (confirm == JOptionPane.YES_OPTION) {
             selectedInvoice.setStatus("CANCELED");
             invoiceDAO.updateInvoice(selectedInvoice);
+
             loadInvoices();
             updateStatistics();
         }
     }
+
 }
