@@ -8,6 +8,8 @@ import model.Contract;
 import model.Building;
 import model.Apartment;
 import model.Resident;
+import util.ExcelExporter;
+import util.PermissionManager;
 import util.UIConstants;
 
 import javax.swing.*;
@@ -24,9 +26,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Contract Management Panel - FIXED FILTERS
- * Fix: Lọc dựa trên status code (TERMINATED, ACTIVE...) thay vì text hiển thị.
- * Update: Mặc định chỉ hiển thị Hợp đồng Đang hiệu lực và Sắp hết hạn.
+ * Contract Management Panel - FIXED FILTERS Fix: Lọc dựa trên status code
+ * (TERMINATED, ACTIVE...) thay vì text hiển thị. Update: Mặc định chỉ hiển thị
+ * Hợp đồng Đang hiệu lực và Sắp hết hạn.
  */
 public class ContractManagementPanel extends JPanel {
 
@@ -158,6 +160,7 @@ public class ContractManagementPanel extends JPanel {
                     searchField.setForeground(TEXT_COLOR);
                 }
             }
+
             public void focusLost(java.awt.event.FocusEvent evt) {
                 if (searchField.getText().isEmpty()) {
                     searchField.setText(PLACEHOLDER);
@@ -340,7 +343,10 @@ public class ContractManagementPanel extends JPanel {
             "Thao tác"
         };
         tableModel = new DefaultTableModel(columns, 0) {
-            @Override public boolean isCellEditable(int row, int column) { return column == 7; }
+            @Override
+            public boolean isCellEditable(int row, int column) {
+                return column == 7;
+            }
         };
 
         contractTable = new JTable(tableModel);
@@ -357,25 +363,33 @@ public class ContractManagementPanel extends JPanel {
         JMenuItem itemDetail = new JMenuItem("Xem chi tiết");
         itemDetail.addActionListener(e -> {
             int row = contractTable.getSelectedRow();
-            if (row != -1) showContractDetail(row);
+            if (row != -1) {
+                showContractDetail(row);
+            }
         });
 
         if (permissionManager.canEdit(PermissionManager.MODULE_CONTRACTS)) {
             JMenuItem itemEdit = new JMenuItem("Chỉnh sửa thông tin");
             itemEdit.addActionListener(e -> {
                 int row = contractTable.getSelectedRow();
-                if (row != -1) performEditContract(row);
+                if (row != -1) {
+                    performEditContract(row);
+                }
             });
             JMenuItem itemRenew = new JMenuItem("Gia hạn hợp đồng");
             itemRenew.addActionListener(e -> {
                 int row = contractTable.getSelectedRow();
-                if (row != -1) showContractDetail(row);
+                if (row != -1) {
+                    showContractDetail(row);
+                }
             });
             JMenuItem itemTerminate = new JMenuItem("Thanh lý hợp đồng");
             itemTerminate.setForeground(new Color(211, 47, 47));
             itemTerminate.addActionListener(e -> {
                 int row = contractTable.getSelectedRow();
-                if (row != -1) showContractDetail(row);
+                if (row != -1) {
+                    showContractDetail(row);
+                }
             });
 
             popupMenu.add(itemDetail);
@@ -390,7 +404,8 @@ public class ContractManagementPanel extends JPanel {
 
         contractTable.setComponentPopupMenu(popupMenu);
         contractTable.addMouseListener(new MouseAdapter() {
-            @Override public void mousePressed(MouseEvent e) {
+            @Override
+            public void mousePressed(MouseEvent e) {
                 if (SwingUtilities.isRightMouseButton(e)) {
                     int row = contractTable.rowAtPoint(e.getPoint());
                     if (row >= 0 && row < contractTable.getRowCount()) {
@@ -442,10 +457,16 @@ public class ContractManagementPanel extends JPanel {
             return "TERMINATED";
         }
         if ("ACTIVE".equalsIgnoreCase(c.getStatus())) {
-            if (c.getEndDate() == null) return "ACTIVE"; // Vô thời hạn
+            if (c.getEndDate() == null) {
+                return "ACTIVE"; // Vô thời hạn
+            }
             long diff = c.getEndDate().getTime() - System.currentTimeMillis();
-            if (diff < 0) return "EXPIRED";
-            if (diff <= 30L * 24 * 60 * 60 * 1000) return "EXPIRING";
+            if (diff < 0) {
+                return "EXPIRED";
+            }
+            if (diff <= 30L * 24 * 60 * 60 * 1000) {
+                return "EXPIRING";
+            }
             return "ACTIVE";
         }
         return "UNKNOWN";
@@ -455,17 +476,24 @@ public class ContractManagementPanel extends JPanel {
     private String getStatusDisplayString(Contract c) {
         String cat = getContractCategory(c);
         switch (cat) {
-            case "ACTIVE": return "Đang hiệu lực";
-            case "EXPIRING": return "Sắp hết hạn";
-            case "EXPIRED": return "Đã hết hạn";
-            case "TERMINATED": return "Đã thanh lý"; // Changed text to match logic
-            default: return "Không xác định";
+            case "ACTIVE":
+                return "Đang hiệu lực";
+            case "EXPIRING":
+                return "Sắp hết hạn";
+            case "EXPIRED":
+                return "Đã hết hạn";
+            case "TERMINATED":
+                return "Đã thanh lý"; // Changed text to match logic
+            default:
+                return "Không xác định";
         }
     }
 
     // ✅ FIXED: Apply Filters using robust logic
     private void applyFilters() {
-        if (allContracts == null) return;
+        if (allContracts == null) {
+            return;
+        }
         String searchText = searchField.getText().trim().toLowerCase();
         final String keyword = searchText.equals("tìm số hđ, chủ hộ, căn hộ...") ? "" : searchText;
         final BuildingDisplay selectedBuilding = (BuildingDisplay) buildingFilterCombo.getSelectedItem();
@@ -475,13 +503,23 @@ public class ContractManagementPanel extends JPanel {
             // 1. Status Filter (Using Logic, not Text)
             String category = getContractCategory(contract);
             boolean showThis = false;
-            
-            if (chkShowActive.isSelected() && "ACTIVE".equals(category)) showThis = true;
-            if (chkShowExpiring.isSelected() && "EXPIRING".equals(category)) showThis = true;
-            if (chkShowExpired.isSelected() && "EXPIRED".equals(category)) showThis = true;
-            if (chkShowTerminated.isSelected() && "TERMINATED".equals(category)) showThis = true;
-            
-            if (!showThis) return false;
+
+            if (chkShowActive.isSelected() && "ACTIVE".equals(category)) {
+                showThis = true;
+            }
+            if (chkShowExpiring.isSelected() && "EXPIRING".equals(category)) {
+                showThis = true;
+            }
+            if (chkShowExpired.isSelected() && "EXPIRED".equals(category)) {
+                showThis = true;
+            }
+            if (chkShowTerminated.isSelected() && "TERMINATED".equals(category)) {
+                showThis = true;
+            }
+
+            if (!showThis) {
+                return false;
+            }
 
             // 2. Keyword Filter
             if (!keyword.isEmpty()) {
@@ -490,25 +528,33 @@ public class ContractManagementPanel extends JPanel {
                 String apartmentNumber = apt != null ? apt.getRoomNumber().toLowerCase() : "";
                 Resident resident = residentDAO.getResidentById(contract.getResidentId());
                 String residentName = resident != null ? resident.getFullName().toLowerCase() : "";
-                if (!contractNumber.contains(keyword) && !apartmentNumber.contains(keyword) && !residentName.contains(keyword)) return false;
+                if (!contractNumber.contains(keyword) && !apartmentNumber.contains(keyword) && !residentName.contains(keyword)) {
+                    return false;
+                }
             }
 
             // 3. Building Filter
             if (selectedBuilding != null && selectedBuilding.building.getId() != null) {
                 Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
-                if (apt == null) return false;
+                if (apt == null) {
+                    return false;
+                }
                 List<Apartment> buildingApts = apartmentDAO.getApartmentsByBuildingId(selectedBuilding.building.getId());
                 boolean inBuilding = buildingApts.stream().anyMatch(a -> a.getId().equals(apt.getId()));
-                if (!inBuilding) return false;
+                if (!inBuilding) {
+                    return false;
+                }
             }
 
             // 4. Type Filter
             if (!"Tất cả".equals(selectedType)) {
-                if (!selectedType.equals(contract.getContractTypeDisplay())) return false;
+                if (!selectedType.equals(contract.getContractTypeDisplay())) {
+                    return false;
+                }
             }
             return true;
         }).collect(Collectors.toList());
-        
+
         displayContracts(filtered);
     }
 
@@ -519,7 +565,7 @@ public class ContractManagementPanel extends JPanel {
             String apartmentNumber = apartment != null ? apartment.getRoomNumber() : "N/A";
             Resident resident = residentDAO.getResidentById(contract.getResidentId());
             String residentName = resident != null ? resident.getFullName() : "N/A";
-            
+
             String startDateStr = "";
             String endDateStr = "";
             if (contract.isRental()) {
@@ -529,38 +575,48 @@ public class ContractManagementPanel extends JPanel {
                 startDateStr = contract.getSignedDate() != null ? "Ký: " + dateFormat.format(contract.getSignedDate()) : "N/A";
                 endDateStr = "—";
             }
-            
+
             // ✅ Use standardized status string
             String statusStr = getStatusDisplayString(contract);
-            
+
             Object[] row = {
                 contract.getContractNumber(), apartmentNumber, residentName, contract.getContractTypeDisplay(),
                 startDateStr, endDateStr, statusStr, "👁️ Chi tiết"
             };
             tableModel.addRow(row);
         }
-        countLabel.setText(contracts.size() == allContracts.size() ? 
-            "📋 Tổng số: " + contracts.size() + " hợp đồng" : 
-            "🔍 Hiển thị: " + contracts.size() + "/" + allContracts.size() + " hợp đồng");
+        countLabel.setText(contracts.size() == allContracts.size()
+                ? "📋 Tổng số: " + contracts.size() + " hợp đồng"
+                : "🔍 Hiển thị: " + contracts.size() + "/" + allContracts.size() + " hợp đồng");
     }
 
     // ✅ FIXED: Statistics using robust logic
     private void showStatistics() {
-        if (allContracts == null) return;
+        if (allContracts == null) {
+            return;
+        }
         int totalContracts = allContracts.size();
-        
+
         int activeCount = 0, expiringCount = 0, expiredCount = 0, terminatedCount = 0;
-        
-        for(Contract c : allContracts) {
+
+        for (Contract c : allContracts) {
             String cat = getContractCategory(c);
-            switch(cat) {
-                case "ACTIVE": activeCount++; break;
-                case "EXPIRING": expiringCount++; break;
-                case "EXPIRED": expiredCount++; break;
-                case "TERMINATED": terminatedCount++; break;
+            switch (cat) {
+                case "ACTIVE":
+                    activeCount++;
+                    break;
+                case "EXPIRING":
+                    expiringCount++;
+                    break;
+                case "EXPIRED":
+                    expiredCount++;
+                    break;
+                case "TERMINATED":
+                    terminatedCount++;
+                    break;
             }
         }
-        
+
         int rentalCount = (int) allContracts.stream().filter(c -> "RENTAL".equals(c.getContractType())).count();
         int ownershipCount = (int) allContracts.stream().filter(c -> "OWNERSHIP".equals(c.getContractType())).count();
 
@@ -755,9 +811,23 @@ public class ContractManagementPanel extends JPanel {
             // Load buildings
             buildings = buildingDAO.getAllBuildings();
             buildingFilterCombo.removeAllItems();
-            buildingFilterCombo.addItem(new BuildingDisplay(new Building(null, "Tất cả", null, null, null, null, false)));
-            for (Building building : buildings) {
-                buildingFilterCombo.addItem(new BuildingDisplay(building));
+            Long filterId = permissionManager.getBuildingFilter();
+
+            if (filterId == null) {
+                buildingFilterCombo.addItem(new BuildingDisplay(new Building(null, "Tất cả", null, null, null, null, false)));
+                for (Building building : buildings) {
+                    buildingFilterCombo.addItem(new BuildingDisplay(building));
+                }
+            } else {
+                for (Building building : buildings) {
+                    if (building.getId().equals(filterId)) {
+                        buildingFilterCombo.addItem(new BuildingDisplay(building));
+                    }
+                }
+                if (buildingFilterCombo.getItemCount() > 0) {
+                    buildingFilterCombo.setSelectedIndex(0);
+                    buildingFilterCombo.setEnabled(false);
+                }
             }
 
             // Load all contracts
@@ -778,7 +848,7 @@ public class ContractManagementPanel extends JPanel {
         try {
             buildingFilterCombo.setSelectedIndex(0);
             typeFilterCombo.setSelectedIndex(0);
-            
+
             // ✅ CẬP NHẬT MẶC ĐỊNH KHI RESET:
             chkShowActive.setSelected(true);
             chkShowExpiring.setSelected(true);
@@ -795,33 +865,37 @@ public class ContractManagementPanel extends JPanel {
     private void showContractDetail(int row) {
         // Get filtered contracts list
         List<Contract> filteredContracts = getFilteredContracts();
-        if (row < 0 || filteredContracts == null || row >= filteredContracts.size()) return;
+        if (row < 0 || filteredContracts == null || row >= filteredContracts.size()) {
+            return;
+        }
         Contract selectedContract = filteredContracts.get(row);
         JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
         ContractDetailDialog dialog = new ContractDetailDialog(parentFrame, selectedContract.getId());
         dialog.setVisible(true);
         reloadData();
     }
-    
+
     private void performEditContract(int row) {
         List<Contract> filteredContracts = getFilteredContracts();
-        if (row < 0 || filteredContracts == null || row >= filteredContracts.size()) return;
+        if (row < 0 || filteredContracts == null || row >= filteredContracts.size()) {
+            return;
+        }
 
         Contract selectedContract = filteredContracts.get(row);
-        
+
         if ("TERMINATED".equals(selectedContract.getStatus()) || "CANCELLED".equals(selectedContract.getStatus())) {
-            JOptionPane.showMessageDialog(this, 
-                "Không thể chỉnh sửa hợp đồng đã kết thúc hoặc đã hủy!", 
-                "Thao tác bị chặn", JOptionPane.WARNING_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                    "Không thể chỉnh sửa hợp đồng đã kết thúc hoặc đã hủy!",
+                    "Thao tác bị chặn", JOptionPane.WARNING_MESSAGE);
             return;
         }
 
         JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        ContractDetailDialog dialog = new ContractDetailDialog(parentFrame, selectedContract.getId());
+        ContractFormDialog dialog = new ContractFormDialog(parentFrame, selectedContract);
         dialog.setVisible(true);
 
         if (dialog.isConfirmed()) {
-            reloadData(); 
+            reloadData();
         }
     }
 
@@ -830,7 +904,6 @@ public class ContractManagementPanel extends JPanel {
         if (allContracts == null) {
             return null;
         }
-
         String searchText = searchField.getText().trim().toLowerCase();
         final String keyword = searchText.equals("tìm số hđ, chủ hộ, căn hộ...") ? "" : searchText;
 
@@ -838,32 +911,50 @@ public class ContractManagementPanel extends JPanel {
         final String selectedType = (String) typeFilterCombo.getSelectedItem();
 
         return allContracts.stream().filter(contract -> {
-             String category = getContractCategory(contract);
-             boolean showThis = false;
-             if (chkShowActive.isSelected() && "ACTIVE".equals(category)) showThis = true;
-             if (chkShowExpiring.isSelected() && "EXPIRING".equals(category)) showThis = true;
-             if (chkShowExpired.isSelected() && "EXPIRED".equals(category)) showThis = true;
-             if (chkShowTerminated.isSelected() && "TERMINATED".equals(category)) showThis = true;
-             if (!showThis) return false;
-             
-             if (!keyword.isEmpty()) {
-                 String contractNumber = contract.getContractNumber() != null ? contract.getContractNumber().toLowerCase() : "";
-                 Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
-                 String apartmentNumber = apt != null ? apt.getRoomNumber().toLowerCase() : "";
-                 Resident resident = residentDAO.getResidentById(contract.getResidentId());
-                 String residentName = resident != null ? resident.getFullName().toLowerCase() : "";
-                 if (!contractNumber.contains(keyword) && !apartmentNumber.contains(keyword) && !residentName.contains(keyword)) return false;
-             }
-             if (selectedBuilding != null && selectedBuilding.building.getId() != null) {
-                 Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
-                 if (apt == null) return false;
-                 List<Apartment> buildingApts = apartmentDAO.getApartmentsByBuildingId(selectedBuilding.building.getId());
-                 if (buildingApts.stream().noneMatch(a -> a.getId().equals(apt.getId()))) return false;
-             }
-             if (!"Tất cả".equals(selectedType)) {
-                 if (!selectedType.equals(contract.getContractTypeDisplay())) return false;
-             }
-             return true;
+            String category = getContractCategory(contract);
+            boolean showThis = false;
+            if (chkShowActive.isSelected() && "ACTIVE".equals(category)) {
+                showThis = true;
+            }
+            if (chkShowExpiring.isSelected() && "EXPIRING".equals(category)) {
+                showThis = true;
+            }
+            if (chkShowExpired.isSelected() && "EXPIRED".equals(category)) {
+                showThis = true;
+            }
+            if (chkShowTerminated.isSelected() && "TERMINATED".equals(category)) {
+                showThis = true;
+            }
+            if (!showThis) {
+                return false;
+            }
+
+            if (!keyword.isEmpty()) {
+                String contractNumber = contract.getContractNumber() != null ? contract.getContractNumber().toLowerCase() : "";
+                Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
+                String apartmentNumber = apt != null ? apt.getRoomNumber().toLowerCase() : "";
+                Resident resident = residentDAO.getResidentById(contract.getResidentId());
+                String residentName = resident != null ? resident.getFullName().toLowerCase() : "";
+                if (!contractNumber.contains(keyword) && !apartmentNumber.contains(keyword) && !residentName.contains(keyword)) {
+                    return false;
+                }
+            }
+            if (selectedBuilding != null && selectedBuilding.building.getId() != null) {
+                Apartment apt = apartmentDAO.getApartmentById(contract.getApartmentId());
+                if (apt == null) {
+                    return false;
+                }
+                List<Apartment> buildingApts = apartmentDAO.getApartmentsByBuildingId(selectedBuilding.building.getId());
+                if (buildingApts.stream().noneMatch(a -> a.getId().equals(apt.getId()))) {
+                    return false;
+                }
+            }
+            if (!"Tất cả".equals(selectedType)) {
+                if (!selectedType.equals(contract.getContractTypeDisplay())) {
+                    return false;
+                }
+            }
+            return true;
         }).collect(Collectors.toList());
     }
 
@@ -871,7 +962,6 @@ public class ContractManagementPanel extends JPanel {
         JFrame parentFrame = (JFrame) SwingUtilities.getWindowAncestor(this);
         ContractFormDialog dialog = new ContractFormDialog(parentFrame, null);
         dialog.setVisible(true);
-
         if (dialog.isConfirmed()) {
             reloadData();
         }

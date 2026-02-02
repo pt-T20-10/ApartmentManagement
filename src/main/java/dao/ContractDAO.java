@@ -664,4 +664,4 @@ public class ContractDAO {
         String dateStr = new java.text.SimpleDateFormat("yyyyMMdd").format(new java.util.Date());
         return String.format("HD%s001", dateStr);
     }
-}
+} //hehe
