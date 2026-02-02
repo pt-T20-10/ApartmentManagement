@@ -14,8 +14,6 @@ import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
 import java.util.List;
 import java.util.Locale;
-import util.MoneyFormatter;
-import java.util.Calendar;
 
 /**
  * Contract Detail Dialog with DYNAMIC DISPLAY based on contract type Updated:
@@ -535,8 +533,12 @@ public class ContractDetailDialog extends JDialog {
     }
 
     private void renewContract() {
+        // Double check it's a rental contract
         if (!contract.isRental()) {
-            JOptionPane.showMessageDialog(this, "Chỉ hợp đồng thuê mới có thể gia hạn!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this,
+                "Chỉ hợp đồng thuê mới có thể gia hạn!",
+                "Lỗi",
+                JOptionPane.ERROR_MESSAGE);
             return;
         }
         JPanel panel = new JPanel(new GridBagLayout());
@@ -599,11 +601,17 @@ public class ContractDetailDialog extends JDialog {
                     this.contract = contractDAO.getContractById(contract.getId());
                     dispose();
                 } else {
-                    JOptionPane.showMessageDialog(this, "Gia hạn thất bại!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                    JOptionPane.showMessageDialog(this,
+                        "Gia hạn hợp đồng thất bại!",
+                        "Lỗi",
+                        JOptionPane.ERROR_MESSAGE);
                 }
-            } catch (Exception e) {
-                e.printStackTrace();
-                JOptionPane.showMessageDialog(this, "Dữ liệu nhập không hợp lệ!", "Lỗi", JOptionPane.ERROR_MESSAGE);
+                
+            } catch (NumberFormatException e) {
+                JOptionPane.showMessageDialog(this,
+                    "Số tháng không hợp lệ!",
+                    "Lỗi",
+                    JOptionPane.ERROR_MESSAGE);
             }
         }
     }

@@ -2,389 +2,336 @@ package view;
 
 import model.HouseholdMember;
 import util.UIConstants;
+import util.ModernButton;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.border.TitledBorder;
 import java.awt.*;
+import java.text.SimpleDateFormat;
+import java.text.ParseException;
 import java.util.Date;
 
 /**
- * Household Member Dialog — Add / Edit
- * Redesigned: sectioned layout, 2-col grid, styled inputs consistent with ContractFormDialog
+ * Household Member Dialog - Add/Edit Household Member
+ * Popup form for adding/editing household members
  */
 public class HouseholdMemberDialog extends JDialog {
-
-    private Long contractId;
+    
+    private JTextField nameField;
+    private JComboBox<String> relationshipCombo;
+    private JComboBox<String> genderCombo;
+    private JTextField dobField;
+    private JTextField idCardField;
+    private JTextField phoneField;
+    private JCheckBox isActiveCheck;
+    
     private HouseholdMember member;
     private boolean confirmed = false;
-
-    // --- Form fields ---
-    private JTextField txtFullName;
-    private JComboBox<String> cmbRelationship;
-    private JComboBox<String> cmbGender;
-    private JSpinner spnDob;
-    private JTextField txtIdentityCard;
-    private JTextField txtPhone;
-    private JCheckBox chkActive;
-
-    // ===================== CONSTRUCTORS =====================
-
-    /** Add mode */
+    private SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+    
+    /**
+     * Constructor for Add mode
+     */
     public HouseholdMemberDialog(JDialog parent, Long contractId) {
-        super(parent, "Thêm Thành Viên", true);
-        this.contractId = contractId;
-        this.member = new HouseholdMember();
-        buildUI();
+        this(parent, null, contractId);
     }
-
-    /** Edit mode */
-    public HouseholdMemberDialog(JDialog parent, HouseholdMember existing, Long contractId) {
-        super(parent, "Sửa Thành Viên", true);
-        this.contractId = contractId;
-        this.member = existing;
-        buildUI();
-        populateFields();
+    
+    /**
+     * Constructor for Edit mode
+     */
+    public HouseholdMemberDialog(JDialog parent, HouseholdMember member, Long contractId) {
+        super(parent, member == null ? "Thêm Thành Viên" : "Sửa Thành Viên", true);
+        
+        if (member == null) {
+            this.member = new HouseholdMember();
+            this.member.setContractId(contractId);
+            this.member.setActive(true);
+        } else {
+            this.member = member;
+        }
+        
+        initializeDialog();
+        createContent();
+        
+        if (member != null) {
+            loadMemberData();
+        }
+        
+        pack();
+        setLocationRelativeTo(parent);
     }
-
-    // ===================== BUILD UI =====================
-
-    private void buildUI() {
-        setSize(560, 600);
+    
+    private void initializeDialog() {
+        setSize(500, 650);
         setResizable(false);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-        setLocationRelativeTo(getParent());
         getContentPane().setBackground(UIConstants.BACKGROUND_COLOR);
-
-        JPanel root = new JPanel(new BorderLayout());
-        root.setBackground(UIConstants.BACKGROUND_COLOR);
-
-        root.add(buildHeader(), BorderLayout.NORTH);
-        root.add(buildBody(), BorderLayout.CENTER);
-        root.add(buildFooter(), BorderLayout.SOUTH);
-
-        setContentPane(root);
     }
-
-    // ---------- Header ----------
-    private JPanel buildHeader() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 14, 0));
-        panel.setBackground(UIConstants.PRIMARY_COLOR);
-        panel.setBorder(new EmptyBorder(18, 22, 18, 22));
-
-        JLabel icon = new JLabel(member.getId() == null ? "➕" : "✏️");
-        icon.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 26));
-
-        JLabel title = new JLabel(member.getId() == null ? "Thêm Thành Viên Mới" : "Sửa Thành Viên");
-        title.setFont(new Font("Segoe UI", Font.BOLD, 20));
-        title.setForeground(Color.WHITE);
-
-        panel.add(icon);
-        panel.add(title);
-        return panel;
+    
+    private void createContent() {
+        JPanel mainPanel = new JPanel(new BorderLayout(0, 20));
+        mainPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        mainPanel.setBorder(new EmptyBorder(25, 30, 25, 30));
+        
+        mainPanel.add(createHeader(), BorderLayout.NORTH);
+        mainPanel.add(createForm(), BorderLayout.CENTER);
+        mainPanel.add(createButtonPanel(), BorderLayout.SOUTH);
+        
+        setContentPane(mainPanel);
     }
-
-    // ---------- Body ----------
-    private JPanel buildBody() {
-        JPanel body = new JPanel();
-        body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
-        body.setBackground(UIConstants.BACKGROUND_COLOR);
-        body.setBorder(new EmptyBorder(16, 20, 8, 20));
-
-        body.add(buildInfoSection());
-        body.add(Box.createVerticalStrut(12));
-        body.add(buildContactSection());
-        body.add(Box.createVerticalStrut(12));
-        body.add(buildStatusSection());
-
-        JScrollPane scroll = new JScrollPane(body,
-                JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED,
-                JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        scroll.setBorder(null);
-        scroll.setBackground(UIConstants.BACKGROUND_COLOR);
-        scroll.getViewport().setBackground(UIConstants.BACKGROUND_COLOR);
-
-        JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.setBackground(UIConstants.BACKGROUND_COLOR);
-        wrapper.add(scroll, BorderLayout.CENTER);
-        return wrapper;
+    
+    private JPanel createHeader() {
+        JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        headerPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        
+        JLabel iconLabel = new JLabel(member.getId() == null ? "➕" : "✏️");
+        iconLabel.setFont(new Font("Segoe UI", Font.PLAIN, 36));
+        
+        JLabel titleLabel = new JLabel(member.getId() == null ? "Thêm Thành Viên Mới" : "Sửa Thông Tin Thành Viên");
+        titleLabel.setFont(new Font("Segoe UI", Font.BOLD, 22));
+        titleLabel.setForeground(UIConstants.TEXT_PRIMARY);
+        
+        headerPanel.add(iconLabel);
+        headerPanel.add(Box.createHorizontalStrut(10));
+        headerPanel.add(titleLabel);
+        
+        return headerPanel;
     }
-
-    // ---------- Section: Thông tin cơ bản ----------
-    private JPanel buildInfoSection() {
-        JPanel section = createSection("👤  Thông Tin Cơ Bản");
-        section.setLayout(new GridBagLayout());
-        GridBagConstraints g = defaultGBC();
-
-        // Row 0-1: Họ tên (full width)
-        g.gridx = 0; g.gridy = 0; g.gridwidth = 2; g.weightx = 1;
-        section.add(label("Họ và tên", true), g);
-
-        g.gridy = 1;
-        txtFullName = styledTextField();
-        section.add(txtFullName, g);
-
-        // Row 2-3: Quan hệ | Giới tính (2 cột)
-        g.gridwidth = 1;
-
-        g.gridx = 0; g.gridy = 2; g.weightx = 1;
-        section.add(label("Mối quan hệ", true), g);
-
-        g.gridx = 1;
-        section.add(label("Giới tính", true), g);
-
-        g.gridy = 3;
-        g.gridx = 0;
-        cmbRelationship = styledComboBox(new String[]{
-                "Vợ", "Chồng", "Con", "Cha", "Mẹ", "Anh/Chị", "Em", "Khác"
-        });
-        section.add(cmbRelationship, g);
-
-        g.gridx = 1;
-        cmbGender = styledComboBox(new String[]{"Nam", "Nữ", "Khác"});
-        section.add(cmbGender, g);
-
-        // Row 4-5: Ngày sinh (full width)
-        g.gridx = 0; g.gridy = 4; g.gridwidth = 2;
-        section.add(label("Ngày sinh", false), g);
-
-        g.gridy = 5;
-        spnDob = createDateSpinner();
-        section.add(spnDob, g);
-
-        return section;
-    }
-
-    // ---------- Section: Liên lạc ----------
-    private JPanel buildContactSection() {
-        JPanel section = createSection("📞  Thông Tin Liên Lạc");
-        section.setLayout(new GridBagLayout());
-        GridBagConstraints g = defaultGBC();
-
-        // Labels
-        g.gridx = 0; g.gridy = 0; g.weightx = 1;
-        section.add(label("CMND / CCCD", false), g);
-
-        g.gridx = 1;
-        section.add(label("Số điện thoại", false), g);
-
-        // Fields
-        g.gridy = 1;
-        g.gridx = 0;
-        txtIdentityCard = styledTextField();
-        txtIdentityCard.setToolTipText("9 hoặc 12 chữ số");
-        section.add(txtIdentityCard, g);
-
-        g.gridx = 1;
-        txtPhone = styledTextField();
-        txtPhone.setToolTipText("10 hoặc 11 chữ số");
-        section.add(txtPhone, g);
-
-        return section;
-    }
-
-    // ---------- Section: Trạng thái ----------
-    private JPanel buildStatusSection() {
-        JPanel section = createSection("📋  Trạng Thái");
-        section.setLayout(new GridBagLayout());
-        GridBagConstraints g = defaultGBC();
-        g.gridx = 0; g.gridy = 0; g.weightx = 1; g.gridwidth = 2;
-
-        chkActive = new JCheckBox("  Đang cư trú tại căn hộ");
-        chkActive.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        chkActive.setBackground(Color.WHITE);
-        chkActive.setForeground(new Color(44, 44, 44));
-        chkActive.setSelected(true);
-        chkActive.setFocusPainted(false);
-        section.add(chkActive, g);
-
-        return section;
-    }
-
-    // ---------- Footer ----------
-    private JPanel buildFooter() {
-        JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 14));
-        panel.setBackground(UIConstants.BACKGROUND_COLOR);
-        panel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, UIConstants.BORDER_COLOR));
-
-        JButton btnCancel = footerButton("Hủy", new Color(158, 158, 158));
-        btnCancel.addActionListener(e -> dispose());
-
-        JButton btnSave = footerButton(
-                member.getId() == null ? "✅  Thêm" : "💾  Lưu",
-                UIConstants.SUCCESS_COLOR
-        );
-        btnSave.addActionListener(e -> onSave());
-
-        panel.add(btnCancel);
-        panel.add(btnSave);
-        return panel;
-    }
-
-    // ===================== POPULATE (Edit mode) =====================
-
-    private void populateFields() {
-        if (member == null) return;
-
-        txtFullName.setText(member.getFullName());
-        if (member.getRelationship() != null) cmbRelationship.setSelectedItem(member.getRelationship());
-        if (member.getGender() != null)        cmbGender.setSelectedItem(member.getGender());
-        if (member.getDob() != null)           spnDob.setValue(member.getDob());
-        if (member.getIdentityCard() != null)  txtIdentityCard.setText(member.getIdentityCard());
-        if (member.getPhone() != null)         txtPhone.setText(member.getPhone());
-        chkActive.setSelected(member.isActive());
-    }
-
-    // ===================== SAVE =====================
-
-    private void onSave() {
-        // Validation
-        String name = txtFullName.getText().trim();
-        if (name.isEmpty()) {
-            focus(txtFullName, "Họ và tên không được để trống!");
-            return;
-        }
-
-        String idCard = txtIdentityCard.getText().trim();
-        if (!idCard.isEmpty() && !idCard.matches("^[0-9]{9}$") && !idCard.matches("^[0-9]{12}$")) {
-            focus(txtIdentityCard, "CMND/CCCD phải là 9 hoặc 12 chữ số!");
-            return;
-        }
-
-        String phone = txtPhone.getText().trim();
-        if (!phone.isEmpty() && !phone.matches("^[0-9]{10,11}$")) {
-            focus(txtPhone, "SĐT phải là 10 hoặc 11 chữ số!");
-            return;
-        }
-
-        // Map to model
-        member.setFullName(name);
-        member.setRelationship((String) cmbRelationship.getSelectedItem());
-        member.setGender((String) cmbGender.getSelectedItem());
-        member.setDob((Date) spnDob.getValue());
-        member.setIdentityCard(idCard.isEmpty() ? null : idCard);
-        member.setPhone(phone.isEmpty() ? null : phone);
-        member.setActive(chkActive.isSelected());
-        member.setContractId(contractId);
-
-        confirmed = true;
-        dispose();
-    }
-
-    // ===================== COMPONENT FACTORIES =====================
-
-    private JPanel createSection(String title) {
-        JPanel panel = new JPanel();
-        panel.setBackground(Color.WHITE);
-        TitledBorder tb = BorderFactory.createTitledBorder(
-                BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1, true),
-                title, TitledBorder.LEFT, TitledBorder.TOP,
-                new Font("Segoe UI", Font.BOLD, 13),
-                new Color(66, 66, 66)
-        );
-        panel.setBorder(BorderFactory.createCompoundBorder(tb, new EmptyBorder(10, 14, 14, 14)));
-        return panel;
-    }
-
-    private JLabel label(String text, boolean required) {
-        JLabel lbl = new JLabel();
-        lbl.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        lbl.setText(required
-                ? "<html>" + text + " <font color='#e53935'>*</font></html>"
-                : text);
-        return lbl;
-    }
-
-    private JTextField styledTextField() {
-        JTextField tf = new JTextField();
-        tf.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        tf.setPreferredSize(new Dimension(0, 34));
-        tf.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-                new EmptyBorder(6, 10, 6, 10)
+    
+    private JPanel createForm() {
+        JPanel formPanel = new JPanel();
+        formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
+        formPanel.setBackground(Color.WHITE);
+        formPanel.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
+            new EmptyBorder(25, 25, 25, 25)
         ));
-        tf.addFocusListener(new java.awt.event.FocusAdapter() {
-            @Override
-            public void focusGained(java.awt.event.FocusEvent e) {
-                tf.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(UIConstants.PRIMARY_COLOR, 2),
-                        new EmptyBorder(5, 9, 5, 9)
-                ));
-            }
-            @Override
-            public void focusLost(java.awt.event.FocusEvent e) {
-                tf.setBorder(BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-                        new EmptyBorder(6, 10, 6, 10)
-                ));
-            }
+        
+        // Full name
+        formPanel.add(createFieldLabel("Họ và Tên *"));
+        nameField = createTextField();
+        formPanel.add(nameField);
+        formPanel.add(Box.createVerticalStrut(15));
+        
+        // Relationship
+        formPanel.add(createFieldLabel("Mối Quan Hệ *"));
+        relationshipCombo = new JComboBox<>(new String[]{
+            "Vợ", "Chồng", "Con", "Bố", "Mẹ", "Anh/Chị/Em", "Ông/Bà", "Khác"
         });
-        return tf;
+        relationshipCombo.setFont(UIConstants.FONT_REGULAR);
+        relationshipCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        relationshipCombo.setAlignmentX(Component.LEFT_ALIGNMENT);
+        formPanel.add(relationshipCombo);
+        formPanel.add(Box.createVerticalStrut(15));
+        
+        // Gender
+        formPanel.add(createFieldLabel("Giới Tính *"));
+        genderCombo = new JComboBox<>(new String[]{"Nam", "Nữ", "Khác"});
+        genderCombo.setFont(UIConstants.FONT_REGULAR);
+        genderCombo.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        genderCombo.setAlignmentX(Component.LEFT_ALIGNMENT);
+        formPanel.add(genderCombo);
+        formPanel.add(Box.createVerticalStrut(15));
+        
+        // Date of birth
+        formPanel.add(createFieldLabel("Ngày Sinh (yyyy-MM-dd)"));
+        dobField = createTextField();
+        dobField.setToolTipText("Ví dụ: 1990-05-15");
+        formPanel.add(dobField);
+        formPanel.add(createHintLabel("Ví dụ: 1990-05-15 (Có thể để trống)"));
+        formPanel.add(Box.createVerticalStrut(15));
+        
+        // ID Card
+        formPanel.add(createFieldLabel("CMND/CCCD"));
+        idCardField = createTextField();
+        formPanel.add(idCardField);
+        formPanel.add(createHintLabel("Có thể để trống"));
+        formPanel.add(Box.createVerticalStrut(15));
+        
+        // Phone
+        formPanel.add(createFieldLabel("Số Điện Thoại"));
+        phoneField = createTextField();
+        formPanel.add(phoneField);
+        formPanel.add(createHintLabel("Có thể để trống"));
+        formPanel.add(Box.createVerticalStrut(15));
+        
+        // Is Active checkbox
+        isActiveCheck = new JCheckBox("Đang cư trú");
+        isActiveCheck.setFont(UIConstants.FONT_REGULAR);
+        isActiveCheck.setBackground(Color.WHITE);
+        isActiveCheck.setAlignmentX(Component.LEFT_ALIGNMENT);
+        isActiveCheck.setSelected(true);
+        formPanel.add(isActiveCheck);
+        
+        return formPanel;
     }
-
-    private JComboBox<String> styledComboBox(String[] items) {
-        JComboBox<String> cb = new JComboBox<>(items);
-        cb.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        cb.setPreferredSize(new Dimension(0, 34));
-        return cb;
-    }
-
-    private JSpinner createDateSpinner() {
-        SpinnerDateModel model = new SpinnerDateModel();
-        JSpinner sp = new JSpinner(model);
-        sp.setEditor(new JSpinner.DateEditor(sp, "dd/MM/yyyy"));
-        sp.setFont(new Font("Segoe UI", Font.PLAIN, 14));
-        sp.setPreferredSize(new Dimension(0, 34));
-
-        // Default: 30 năm trước
-        java.util.Calendar cal = java.util.Calendar.getInstance();
-        cal.add(java.util.Calendar.YEAR, -30);
-        sp.setValue(cal.getTime());
-        return sp;
-    }
-
-    private JButton footerButton(String text, Color bg) {
-        JButton btn = new JButton(text);
-        btn.setFont(new Font("Segoe UI", Font.BOLD, 13));
-        btn.setForeground(Color.WHITE);
-        btn.setBackground(bg);
-        btn.setFocusPainted(false);
-        btn.setBorderPainted(false);
-        btn.setPreferredSize(new Dimension(130, 38));
-        btn.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        btn.addMouseListener(new java.awt.event.MouseAdapter() {
-            @Override public void mouseEntered(java.awt.event.MouseEvent e) { btn.setBackground(bg.darker()); }
-            @Override public void mouseExited(java.awt.event.MouseEvent e)  { btn.setBackground(bg); }
+    
+    private JPanel createButtonPanel() {
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
+        buttonPanel.setBackground(UIConstants.BACKGROUND_COLOR);
+        
+        ModernButton cancelButton = new ModernButton("Hủy", UIConstants.TEXT_SECONDARY);
+        cancelButton.setPreferredSize(new Dimension(100, 40));
+        cancelButton.addActionListener(e -> {
+            confirmed = false;
+            dispose();
         });
-        return btn;
+        
+        ModernButton saveButton = new ModernButton(
+            member.getId() == null ? "Thêm" : "Lưu", 
+            UIConstants.SUCCESS_COLOR
+        );
+        saveButton.setPreferredSize(new Dimension(100, 40));
+        saveButton.addActionListener(e -> saveMember());
+        
+        buttonPanel.add(cancelButton);
+        buttonPanel.add(saveButton);
+        
+        return buttonPanel;
     }
-
-    private GridBagConstraints defaultGBC() {
-        GridBagConstraints g = new GridBagConstraints();
-        g.fill = GridBagConstraints.HORIZONTAL;
-        g.insets = new Insets(4, 0, 4, 10);
-        g.anchor = GridBagConstraints.NORTHWEST;
-        return g;
+    
+    private JLabel createFieldLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        label.setForeground(UIConstants.TEXT_PRIMARY);
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return label;
     }
-
-    private void focus(JTextField field, String msg) {
-        field.requestFocus();
+    
+    private JLabel createHintLabel(String text) {
+        JLabel label = new JLabel(text);
+        label.setFont(new Font("Segoe UI", Font.ITALIC, 11));
+        label.setForeground(UIConstants.TEXT_SECONDARY);
+        label.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return label;
+    }
+    
+    private JTextField createTextField() {
+        JTextField field = new JTextField();
+        field.setFont(UIConstants.FONT_REGULAR);
         field.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(UIConstants.DANGER_COLOR, 2),
-                new EmptyBorder(5, 9, 5, 9)
+            BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
+            new EmptyBorder(10, 12, 10, 12)
         ));
-        JOptionPane.showMessageDialog(this, msg, "Kiểm tra lại", JOptionPane.WARNING_MESSAGE);
-        new Timer(2000, e -> {
-            field.setBorder(BorderFactory.createCompoundBorder(
+        field.setAlignmentX(Component.LEFT_ALIGNMENT);
+        field.setMaximumSize(new Dimension(Integer.MAX_VALUE, 42));
+        
+        field.addFocusListener(new java.awt.event.FocusAdapter() {
+            public void focusGained(java.awt.event.FocusEvent evt) {
+                field.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(UIConstants.PRIMARY_COLOR, 2),
+                    new EmptyBorder(9, 11, 9, 11)
+                ));
+            }
+            public void focusLost(java.awt.event.FocusEvent evt) {
+                field.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1),
-                    new EmptyBorder(6, 10, 6, 10)
-            ));
-            ((Timer) e.getSource()).stop();
-        }).start();
+                    new EmptyBorder(10, 12, 10, 12)
+                ));
+            }
+        });
+        
+        return field;
     }
-
-    // ===================== GETTERS =====================
-
-    public boolean isConfirmed() { return confirmed; }
-    public HouseholdMember getMember()  { return member; }
+    
+    private void loadMemberData() {
+        nameField.setText(member.getFullName());
+        relationshipCombo.setSelectedItem(member.getRelationship());
+        genderCombo.setSelectedItem(member.getGender());
+        
+        if (member.getDob() != null) {
+            dobField.setText(dateFormat.format(member.getDob()));
+        }
+        
+        idCardField.setText(member.getIdentityCard() != null ? member.getIdentityCard() : "");
+        phoneField.setText(member.getPhone() != null ? member.getPhone() : "");
+        isActiveCheck.setSelected(member.isActive());
+    }
+    
+    private void saveMember() {
+        if (!validateForm()) {
+            return;
+        }
+        
+        try {
+            member.setFullName(nameField.getText().trim());
+            member.setRelationship((String) relationshipCombo.getSelectedItem());
+            member.setGender((String) genderCombo.getSelectedItem());
+            
+            // Date of birth (optional)
+            String dobText = dobField.getText().trim();
+            if (!dobText.isEmpty()) {
+                member.setDob(dateFormat.parse(dobText));
+            } else {
+                member.setDob(null);
+            }
+            
+            // Optional fields
+            String idCard = idCardField.getText().trim();
+            member.setIdentityCard(idCard.isEmpty() ? null : idCard);
+            
+            String phone = phoneField.getText().trim();
+            member.setPhone(phone.isEmpty() ? null : phone);
+            
+            member.setActive(isActiveCheck.isSelected());
+            
+            confirmed = true;
+            dispose();
+            
+        } catch (ParseException e) {
+            showError("Định dạng ngày sinh không đúng! Vui lòng nhập theo định dạng yyyy-MM-dd");
+        }
+    }
+    
+    private boolean validateForm() {
+        // Full name
+        if (nameField.getText().trim().isEmpty()) {
+            showError("Vui lòng nhập họ và tên!");
+            nameField.requestFocus();
+            return false;
+        }
+        
+        if (nameField.getText().trim().length() < 2) {
+            showError("Họ và tên phải có ít nhất 2 ký tự!");
+            nameField.requestFocus();
+            return false;
+        }
+        
+        // Validate date format if provided
+        String dobText = dobField.getText().trim();
+        if (!dobText.isEmpty()) {
+            try {
+                Date dob = dateFormat.parse(dobText);
+                Date now = new Date();
+                if (dob.after(now)) {
+                    showError("Ngày sinh không thể là tương lai!");
+                    dobField.requestFocus();
+                    return false;
+                }
+            } catch (ParseException e) {
+                showError("Định dạng ngày sinh không đúng! Vui lòng nhập theo định dạng yyyy-MM-dd (Ví dụ: 1990-05-15)");
+                dobField.requestFocus();
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    private void showError(String message) {
+        JOptionPane.showMessageDialog(
+            this,
+            message,
+            "Cảnh Báo",
+            JOptionPane.WARNING_MESSAGE
+        );
+    }
+    
+    public boolean isConfirmed() {
+        return confirmed;
+    }
+    
+    public HouseholdMember getMember() {
+        return member;
+    }
 }

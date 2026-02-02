@@ -36,7 +36,6 @@ public class ContractManagementPanel extends JPanel {
     private BuildingDAO buildingDAO;
     private ApartmentDAO apartmentDAO;
     private ResidentDAO residentDAO;
-    private PermissionManager permissionManager;
 
     private JLabel contextLabel;
     private JLabel countLabel;
@@ -48,7 +47,7 @@ public class ContractManagementPanel extends JPanel {
     private JComboBox<BuildingDisplay> buildingFilterCombo;
     private JComboBox<String> typeFilterCombo;
 
-    // Status checkboxes
+    // ✅ NEW: Status checkboxes
     private JCheckBox chkShowActive;
     private JCheckBox chkShowExpiring;
     private JCheckBox chkShowExpired;
@@ -61,6 +60,8 @@ public class ContractManagementPanel extends JPanel {
     private List<Building> buildings;
 
     private SimpleDateFormat dateFormat = new SimpleDateFormat("dd/MM/yyyy");
+
+    // Flag to prevent infinite loop
     private boolean isUpdatingCombos = false;
 
     public ContractManagementPanel() {
@@ -68,7 +69,6 @@ public class ContractManagementPanel extends JPanel {
         this.buildingDAO = new BuildingDAO();
         this.apartmentDAO = new ApartmentDAO();
         this.residentDAO = new ResidentDAO();
-        this.permissionManager = PermissionManager.getInstance();
 
         setLayout(new BorderLayout());
         setBackground(UIConstants.BACKGROUND_COLOR);
@@ -224,6 +224,7 @@ public class ContractManagementPanel extends JPanel {
         return headerPanel;
     }
 
+    // ✅ NEW: Enhanced filter bar with checkbox group
     private JPanel createFilterBar() {
         JPanel mainFilterPanel = new JPanel();
         mainFilterPanel.setLayout(new BoxLayout(mainFilterPanel, BoxLayout.Y_AXIS));
@@ -233,7 +234,7 @@ public class ContractManagementPanel extends JPanel {
                 new EmptyBorder(18, 25, 18, 25)
         ));
 
-        // ROW 1: Dropdown filters
+        // ROW 1: Dropdown filters (Building + Type)
         JPanel row1 = new JPanel(new FlowLayout(FlowLayout.LEFT, 12, 0));
         row1.setBackground(Color.WHITE);
 
@@ -305,6 +306,7 @@ public class ContractManagementPanel extends JPanel {
         return mainFilterPanel;
     }
 
+    // ✅ NEW: Create styled status checkbox
     private JCheckBox createStatusCheckbox(String text, Color color, boolean selected) {
         JCheckBox checkbox = new JCheckBox(text);
         checkbox.setSelected(selected);
@@ -329,8 +331,16 @@ public class ContractManagementPanel extends JPanel {
         tablePanel.setBackground(Color.WHITE);
         tablePanel.setBorder(BorderFactory.createLineBorder(UIConstants.BORDER_COLOR, 1, true));
 
+        // Columns: Số HĐ, Căn hộ, Chủ hộ, Loại, Ngày bắt đầu, Ngày kết thúc, Trạng thái, Thao tác
         String[] columns = {
-            "Số HĐ", "Căn hộ", "Chủ hộ", "Loại", "Ngày ký/BĐ", "Kết thúc", "Trạng thái", "Thao tác"
+            "Số HĐ",
+            "Căn hộ",
+            "Chủ hộ",
+            "Loại", // ✅ Hiển thị "Thuê" hoặc "Sở hữu"
+            "Ngày ký/BĐ", // ✅ RENTAL: Ngày bắt đầu, OWNERSHIP: Ngày ký
+            "Kết thúc", // ✅ RENTAL: Ngày kết thúc, OWNERSHIP: "—"
+            "Trạng thái",
+            "Thao tác"
         };
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
@@ -412,7 +422,10 @@ public class ContractManagementPanel extends JPanel {
             contractTable.getColumnModel().getColumn(i).setCellRenderer(centerRenderer);
         }
 
+        // Status column with custom renderer
         contractTable.getColumnModel().getColumn(6).setCellRenderer(new StatusCellRenderer());
+
+        // Button renderer and editor for action column
         contractTable.getColumnModel().getColumn(7).setCellRenderer(new ButtonRenderer());
         contractTable.getColumnModel().getColumn(7).setCellEditor(new ButtonEditor(new JCheckBox()));
 
@@ -669,6 +682,9 @@ public class ContractManagementPanel extends JPanel {
         }
     }
 
+    /**
+     * Inner class for Building display in combo box
+     */
     private class BuildingDisplay {
 
         Building building;
@@ -683,6 +699,9 @@ public class ContractManagementPanel extends JPanel {
         }
     }
 
+    /**
+     * Button Renderer
+     */
     class ButtonRenderer extends JButton implements TableCellRenderer {
 
         public ButtonRenderer() {
@@ -702,6 +721,9 @@ public class ContractManagementPanel extends JPanel {
         }
     }
 
+    /**
+     * Button Editor
+     */
     class ButtonEditor extends DefaultCellEditor {
 
         protected JButton button;
@@ -712,7 +734,11 @@ public class ContractManagementPanel extends JPanel {
             super(checkBox);
             button = new JButton();
             button.setOpaque(true);
-            button.addActionListener(e -> fireEditingStopped());
+            button.addActionListener(new ActionListener() {
+                public void actionPerformed(ActionEvent e) {
+                    fireEditingStopped();
+                }
+            });
         }
 
         public Component getTableCellEditorComponent(JTable table, Object value,
@@ -749,6 +775,7 @@ public class ContractManagementPanel extends JPanel {
             protected void paintComponent(Graphics g) {
                 Graphics2D g2d = (Graphics2D) g.create();
                 g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
                 Color color1, color2;
                 if (getModel().isPressed()) {
                     color1 = baseColor.darker();
@@ -760,6 +787,7 @@ public class ContractManagementPanel extends JPanel {
                     color1 = baseColor;
                     color2 = baseColor.darker();
                 }
+
                 GradientPaint gp = new GradientPaint(0, 0, color1, getWidth(), getHeight(), color2);
                 g2d.setPaint(gp);
                 g2d.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
@@ -778,7 +806,9 @@ public class ContractManagementPanel extends JPanel {
 
     private void loadInitialData() {
         isUpdatingCombos = true;
+
         try {
+            // Load buildings
             buildings = buildingDAO.getAllBuildings();
             buildingFilterCombo.removeAllItems();
             Long filterId = permissionManager.getBuildingFilter();
@@ -799,16 +829,21 @@ public class ContractManagementPanel extends JPanel {
                     buildingFilterCombo.setEnabled(false);
                 }
             }
+
+            // Load all contracts
             allContracts = contractDAO.getAllContracts();
+
         } finally {
             isUpdatingCombos = false;
         }
+
         applyFilters();
     }
 
     private void resetFilters() {
         searchField.setText("Tìm số HĐ, chủ hộ, căn hộ...");
         searchField.setForeground(new Color(158, 158, 158));
+
         isUpdatingCombos = true;
         try {
             buildingFilterCombo.setSelectedIndex(0);
@@ -822,10 +857,13 @@ public class ContractManagementPanel extends JPanel {
         } finally {
             isUpdatingCombos = false;
         }
+
         loadInitialData();
     }
 
+    // ===== ACTION HANDLERS =====
     private void showContractDetail(int row) {
+        // Get filtered contracts list
         List<Contract> filteredContracts = getFilteredContracts();
         if (row < 0 || filteredContracts == null || row >= filteredContracts.size()) {
             return;
@@ -861,12 +899,14 @@ public class ContractManagementPanel extends JPanel {
         }
     }
 
+    // ✅ Helper method to get filtered contracts matching current table
     private List<Contract> getFilteredContracts() {
         if (allContracts == null) {
             return null;
         }
         String searchText = searchField.getText().trim().toLowerCase();
         final String keyword = searchText.equals("tìm số hđ, chủ hộ, căn hộ...") ? "" : searchText;
+
         final BuildingDisplay selectedBuilding = (BuildingDisplay) buildingFilterCombo.getSelectedItem();
         final String selectedType = (String) typeFilterCombo.getSelectedItem();
 
@@ -928,9 +968,16 @@ public class ContractManagementPanel extends JPanel {
     }
 
     private void exportToExcel() {
-        ExcelExporter.exportTable(contractTable, "HopDong", "DANH SÁCH HỢP ĐỒNG", this);
+        // TODO: Implement CSV export similar to ResidentManagementPanel
+        JOptionPane.showMessageDialog(this,
+                "Export to Excel feature will be implemented",
+                "Coming Soon",
+                JOptionPane.INFORMATION_MESSAGE);
     }
 
+    /**
+     * Reload data (call this after create/update/delete)
+     */
     public void reloadData() {
         loadInitialData();
     }

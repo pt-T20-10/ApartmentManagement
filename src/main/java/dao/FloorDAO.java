@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * DAO class for Floor operations
- * FINAL VERSION: Smart Insert + Full Validation + Cascade Update
+ * ✅ FIXED: Tính cả OWNED apartments trong FloorStats
  */
 public class FloorDAO {
     
@@ -25,44 +25,54 @@ public class FloorDAO {
     }
 
     // --- 1. LẤY DANH SÁCH & THỐNG KÊ ---
+    /**
+     * ✅ FIXED: Query bổ sung đếm OWNED apartments
+     */
     public List<FloorWithStats> getFloorsWithStatsByBuildingId(Long buildingId) {
         List<FloorWithStats> results = new ArrayList<>();
+
         String sql =
-            "SELECT f.id, f.building_id, f.floor_number, f.name, f.status, f.is_deleted, " +
+            "SELECT f.id, f.building_id, f.floor_number, f.name, f.status, f.is_deleted AS is_deleted, " +
             "       COALESCE(apt_stats.total_apts, 0)  AS total_apts, " +
             "       COALESCE(apt_stats.rented_apts, 0) AS rented_apts, " +
-            "       COALESCE(apt_stats.owned_apts, 0)  AS owned_apts " +
+            "       COALESCE(apt_stats.owned_apts, 0)  AS owned_apts " +  // ← NEW
             "FROM floors f " +
             "LEFT JOIN ( " +
             "    SELECT a.floor_id, " +
             "           COUNT(a.id) AS total_apts, " +
             "           SUM(CASE WHEN a.status IN ('RENTED', 'Đã thuê', 'OCCUPIED') THEN 1 ELSE 0 END) AS rented_apts, " +
-            "           SUM(CASE WHEN a.status = 'OWNED' THEN 1 ELSE 0 END) AS owned_apts " +
+            "           SUM(CASE WHEN a.status = 'OWNED' THEN 1 ELSE 0 END) AS owned_apts " +  // ← NEW
             "    FROM apartments a " +
             "    WHERE a.is_deleted = 0 " +
             "    GROUP BY a.floor_id " +
             ") apt_stats ON f.id = apt_stats.floor_id " +
-            "WHERE f.building_id = ? AND (f.is_deleted = 0 OR f.is_deleted IS NULL) " +
+            "WHERE f.building_id = ? AND f.is_deleted = 0 " +
             "ORDER BY f.floor_number ASC";
 
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
             pstmt.setLong(1, buildingId);
+
             try (ResultSet rs = pstmt.executeQuery()) {
                 while (rs.next()) {
                     Floor floor = mapResultSetToFloor(rs);
                     FloorStats stats = new FloorStats();
                     stats.totalApartments  = rs.getInt("total_apts");
                     stats.rentedApartments = rs.getInt("rented_apts");
-                    stats.ownedApartments  = rs.getInt("owned_apts");
+                    stats.ownedApartments  = rs.getInt("owned_apts");  // ← NEW
+                    
                     results.add(new FloorWithStats(floor, stats));
                 }
             }
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         return results;
     }
 
     // --- 2. CÁC HÀM GET CƠ BẢN ---
+
     public Floor getFloorById(Long id) {
         String sql = "SELECT * FROM floors WHERE id = ? AND is_deleted = 0";
         try (Connection conn = Db_connection.getConnection();
@@ -71,7 +81,9 @@ public class FloorDAO {
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) return mapResultSetToFloor(rs);
             }
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         return null;
     }
     
@@ -82,15 +94,18 @@ public class FloorDAO {
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setLong(1, buildingId);
             try (ResultSet rs = pstmt.executeQuery()) {
-                while (rs.next()) floors.add(mapResultSetToFloor(rs));
+                while (rs.next()) {
+                    floors.add(mapResultSetToFloor(rs));
+                }
             }
-        } catch (SQLException e) { e.printStackTrace(); }
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
         return floors;
     }
 
-    // --- 3. CHECK VALIDATION (ĐÃ KHÔI PHỤC ĐẦY ĐỦ) ---
-    
-    // ✅ Kiểm tra trùng Tên (BatchAddFloorDialog cần cái này)
+    // --- 3. CHECK VALIDATION ---
+
     public boolean isFloorNameExists(Long buildingId, String name) {
         return isFloorNameExists(buildingId, name, null);
     }
@@ -110,7 +125,6 @@ public class FloorDAO {
         return false;
     }
 
-    // ✅ Kiểm tra trùng Số tầng
     public boolean isFloorNumberExists(Long buildingId, int floorNumber) {
         return isFloorNumberExists(buildingId, floorNumber, null);
     }
@@ -130,50 +144,102 @@ public class FloorDAO {
         return false;
     }
 
-    // --- 4. CRUD OPERATIONS (SMART INSERT) ---
+    // --- 4. LOGIC NGHIỆP VỤ ---
 
-    public boolean insertFloor(Floor floor) {
-        // Kiểm tra xem có tầng đã xóa trùng số không
-        Long deletedId = getDeletedFloorId(floor.getBuildingId(), floor.getFloorNumber());
+    public boolean canDeleteFloor(Long floorId) {
+        String sqlApt = "SELECT COUNT(*) FROM apartments WHERE floor_id = ? AND is_deleted = 0";
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sqlApt)) {
+            pstmt.setLong(1, floorId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next() && rs.getInt(1) > 0) {
+                    return false;
+                }
+            }
+        } catch (SQLException e) { 
+            e.printStackTrace(); 
+            return false; 
+        }
 
-        if (deletedId != null) {
-            // Restore nếu tìm thấy
-            return restoreFloor(deletedId, floor.getName(), floor.getStatus());
-        } else {
-            // Insert mới nếu không
-            String sql = "INSERT INTO floors (building_id, floor_number, name, status, is_deleted) VALUES (?, ?, ?, ?, 0)";
-            try (Connection conn = Db_connection.getConnection();
-                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setLong(1, floor.getBuildingId());
-                pstmt.setInt(2, floor.getFloorNumber());
-                pstmt.setString(3, floor.getName());
-                pstmt.setString(4, floor.getStatus());
-                return pstmt.executeUpdate() > 0;
-            } catch (SQLException e) { e.printStackTrace(); }
+        return !hasActiveContracts(floorId);
+    }
+
+    public boolean hasActiveContracts(Long floorId) {
+        String sql = "SELECT COUNT(*) FROM contracts c " +
+                     "JOIN apartments a ON c.apartment_id = a.id " +
+                     "WHERE a.floor_id = ? " +
+                     "AND c.status = 'ACTIVE' " + 
+                     "AND c.is_deleted = 0";
+
+        try (Connection conn = Db_connection.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            
+            pstmt.setLong(1, floorId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        } catch (SQLException e) {
+            e.printStackTrace();
         }
         return false;
     }
 
-    private Long getDeletedFloorId(Long buildingId, int floorNumber) {
-        String sql = "SELECT id FROM floors WHERE building_id = ? AND floor_number = ? AND is_deleted = 1 LIMIT 1";
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setLong(1, buildingId);
-            pstmt.setInt(2, floorNumber);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) return rs.getLong("id");
+    public boolean updateStatusCascade(Long floorId, String newStatus) {
+        Connection conn = null;
+        PreparedStatement pstFloor = null;
+        PreparedStatement pstApts = null;
+        
+        try {
+            conn = Db_connection.getConnection();
+            conn.setAutoCommit(false);
+
+            String sqlFloor = "UPDATE floors SET status = ? WHERE id = ?";
+            pstFloor = conn.prepareStatement(sqlFloor);
+            pstFloor.setString(1, newStatus);
+            pstFloor.setLong(2, floorId);
+            pstFloor.executeUpdate();
+
+            if ("MAINTENANCE".equalsIgnoreCase(newStatus)) {
+                String sqlApt = "UPDATE apartments SET status = 'MAINTENANCE' WHERE floor_id = ? AND is_deleted = 0";
+                pstApts = conn.prepareStatement(sqlApt);
+                pstApts.setLong(1, floorId);
+                pstApts.executeUpdate();
+
+            } else if ("ACTIVE".equalsIgnoreCase(newStatus)) {
+                String sqlApt = "UPDATE apartments SET status = 'AVAILABLE' WHERE floor_id = ? AND status = 'MAINTENANCE' AND is_deleted = 0";
+                pstApts = conn.prepareStatement(sqlApt);
+                pstApts.setLong(1, floorId);
+                pstApts.executeUpdate();
             }
-        } catch (SQLException e) { e.printStackTrace(); }
-        return null;
+
+            conn.commit();
+            return true;
+
+        } catch (SQLException e) {
+            e.printStackTrace();
+            try { if(conn!=null) conn.rollback(); } catch(SQLException ex){}
+            return false;
+        } finally {
+            try {
+                if(pstFloor!=null) pstFloor.close();
+                if(pstApts!=null) pstApts.close();
+                if(conn!=null) { conn.setAutoCommit(true); conn.close(); }
+            } catch(SQLException e){}
+        }
     }
 
-    private boolean restoreFloor(Long floorId, String name, String status) {
-        String sql = "UPDATE floors SET is_deleted = 0, name = ?, status = ? WHERE id = ?";
+    // --- 5. CRUD OPERATIONS ---
+
+    public boolean insertFloor(Floor floor) {
+        String sql = "INSERT INTO floors (building_id, floor_number, name, status, is_deleted) VALUES (?, ?, ?, ?, 0)";
         try (Connection conn = Db_connection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, name);
-            pstmt.setString(2, status);
-            pstmt.setLong(3, floorId);
+            pstmt.setLong(1, floor.getBuildingId());
+            pstmt.setInt(2, floor.getFloorNumber());
+            pstmt.setString(3, floor.getName());
+            pstmt.setString(4, floor.getStatus());
             return pstmt.executeUpdate() > 0;
         } catch (SQLException e) { e.printStackTrace(); }
         return false;
@@ -201,85 +267,23 @@ public class FloorDAO {
         } catch (SQLException e) { e.printStackTrace(); }
         return false;
     }
-    
-    // --- 5. LOGIC NGHIỆP VỤ KHÁC ---
-
-    public boolean updateStatusCascade(Long floorId, String newStatus) {
-        Connection conn = null;
-        PreparedStatement pstFloor = null;
-        PreparedStatement pstApts = null;
-        try {
-            conn = Db_connection.getConnection();
-            conn.setAutoCommit(false);
-
-            String sqlFloor = "UPDATE floors SET status = ? WHERE id = ?";
-            pstFloor = conn.prepareStatement(sqlFloor);
-            pstFloor.setString(1, newStatus);
-            pstFloor.setLong(2, floorId);
-            pstFloor.executeUpdate();
-
-            if ("MAINTENANCE".equalsIgnoreCase(newStatus)) {
-                String sqlApt = "UPDATE apartments SET status = 'MAINTENANCE' WHERE floor_id = ? AND is_deleted = 0";
-                pstApts = conn.prepareStatement(sqlApt);
-                pstApts.setLong(1, floorId);
-                pstApts.executeUpdate();
-            } else if ("ACTIVE".equalsIgnoreCase(newStatus)) {
-                String sqlApt = "UPDATE apartments SET status = 'AVAILABLE' WHERE floor_id = ? AND status = 'MAINTENANCE' AND is_deleted = 0";
-                pstApts = conn.prepareStatement(sqlApt);
-                pstApts.setLong(1, floorId);
-                pstApts.executeUpdate();
-            }
-            conn.commit();
-            return true;
-        } catch (SQLException e) {
-            e.printStackTrace();
-            try { if(conn!=null) conn.rollback(); } catch(SQLException ex){}
-            return false;
-        } finally {
-            try {
-                if(pstFloor!=null) pstFloor.close();
-                if(pstApts!=null) pstApts.close();
-                if(conn!=null) { conn.setAutoCommit(true); conn.close(); }
-            } catch(SQLException e){}
-        }
-    }
-
-    public boolean canDeleteFloor(Long floorId) {
-        String sqlApt = "SELECT COUNT(*) FROM apartments WHERE floor_id = ? AND is_deleted = 0";
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sqlApt)) {
-            pstmt.setLong(1, floorId);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next() && rs.getInt(1) > 0) return false;
-            }
-        } catch (SQLException e) { return false; }
-        return !hasActiveContracts(floorId);
-    }
-
-    public boolean hasActiveContracts(Long floorId) {
-        String sql = "SELECT COUNT(*) FROM contracts c " +
-                     "JOIN apartments a ON c.apartment_id = a.id " +
-                     "WHERE a.floor_id = ? AND c.status = 'ACTIVE' AND c.is_deleted = 0";
-        try (Connection conn = Db_connection.getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setLong(1, floorId);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) return rs.getInt(1) > 0;
-            }
-        } catch (SQLException e) { e.printStackTrace(); }
-        return false;
-    }
 
     // --- 6. INNER CLASSES ---
+
+    /**
+     * ✅ FIXED: Tính toán đúng với cả OWNED apartments
+     */
     public static class FloorStats {
         public int totalApartments = 0;
         public int rentedApartments = 0;
         public int ownedApartments = 0;
         
+        // ✅ FIXED: Căn còn trống = Total - (Rented + Owned)
         public int getAvailableApartments() { 
             return totalApartments - (rentedApartments + ownedApartments); 
         }
         
+        // ✅ FIXED: Tỷ lệ lấp đầy = (Rented + Owned) / Total
         public int getOccupancyRate() { 
             if (totalApartments == 0) return 0;
             return ((rentedApartments + ownedApartments) * 100) / totalApartments; 
