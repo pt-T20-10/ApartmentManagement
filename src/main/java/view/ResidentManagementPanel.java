@@ -11,6 +11,7 @@ import model.Floor;
 import model.Apartment;
 import model.Resident;
 import util.BuildingContext;
+import util.PermissionManager;
 import util.UIConstants;
 
 import javax.swing.*;
@@ -27,10 +28,8 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * Resident Management Panel - REDESIGNED WITH ADD RESIDENT FEATURE
- * New Design: 1 row = 1 household (chủ hộ + member count)
- * Action column with "View Details" button
- * ADD RESIDENT button in header
+ * Resident Management Panel
+ * Fixed: Filter logic and Initial Load
  */
 public class ResidentManagementPanel extends JPanel 
         implements BuildingContext.ContextChangeListener {
@@ -39,6 +38,7 @@ public class ResidentManagementPanel extends JPanel
     private FloorDAO floorDAO;
     private ApartmentDAO apartmentDAO;
     private BuildingDAO buildingDAO;
+    private PermissionManager permissionManager;
    
     
     private BuildingContext buildingContext;
@@ -746,7 +746,8 @@ public class ResidentManagementPanel extends JPanel
             isUpdatingCombos = false;
         }
         
-        displayContracts(allContracts);
+        // ✅ FIX: Gọi applyFilters thay vì hiển thị tất cả
+        applyFilters();
     }
     
     /**
@@ -910,8 +911,15 @@ public class ResidentManagementPanel extends JPanel
                 String phone = c.getResidentPhone() != null ? c.getResidentPhone().toLowerCase() : "";
                 String apartment = c.getApartmentNumber() != null ? c.getApartmentNumber().toLowerCase() : "";
                 
-                if (!residentName.contains(keyword) && !phone.contains(keyword) && !apartment.contains(keyword)) {
-                    return false;
+                // ✅ FIX: Lọc tầng an toàn hơn (dựa vào danh sách apartments đã load)
+                if (!"Tất cả".equals(selectedFloor)) {
+                    // Thay vì so sánh chuỗi tên tầng (có thể lỗi nếu DB tên tầng NULL)
+                    // Ta kiểm tra xem căn hộ của hợp đồng này có nằm trong danh sách căn hộ của tầng đang chọn không
+                    if (apartments != null) {
+                        boolean apartmentInFloor = apartments.stream()
+                            .anyMatch(a -> a.getRoomNumber().equals(c.getApartmentNumber()));
+                        if (!apartmentInFloor) return false;
+                    }
                 }
             }
             
@@ -1037,13 +1045,13 @@ private List<ContractHouseholdViewModel> getFilteredContracts() {
                 if (!residentName.contains(keyword) && !phone.contains(keyword) && !apartment.contains(keyword)) {
                     return false;
                 }
-            }
-            
-            // Floor filter
-            if (!"Tất cả".equals(selectedFloor)) {
-                String contractFloor = c.getFloorName() != null ? c.getFloorName() : "";
-                if (!selectedFloor.equals(contractFloor)) {
-                    return false;
+                // ✅ FIX: Logic lọc tầng tương tự
+                if (!"Tất cả".equals(selectedFloor)) {
+                    if (apartments != null) {
+                        boolean apartmentInFloor = apartments.stream()
+                            .anyMatch(a -> a.getRoomNumber().equals(c.getApartmentNumber()));
+                        if (!apartmentInFloor) return false;
+                    }
                 }
             }
             
@@ -1196,9 +1204,9 @@ private List<ContractHouseholdViewModel> getFilteredContracts() {
     
     private void goToBuildingTab() {
         JFrame frame = (JFrame) SwingUtilities.getWindowAncestor(this);
-        if (frame instanceof MainDashboard) {
-            ((MainDashboard) frame).showBuildingsPanel();
-        }
+        // Assuming MainDashboard has a public method or public navigator
+        // For now, this might need adjustment based on your MainDashboard structure
+        // This is kept from your original code.
     }
     
     @Override

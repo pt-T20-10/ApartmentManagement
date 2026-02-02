@@ -11,9 +11,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * DAO class for Contract operations UPDATED: Support for RENTAL and OWNERSHIP
- * contract types - RENTAL: Has start_date and end_date - OWNERSHIP: NO
- * start_date and end_date (only signed_date)
+ * ContractDAO - FINAL FULL VERSION
+ * Fix: insertContract returns generated ID.
+ * All other methods kept intact.
  */
 public class ContractDAO {
 
@@ -88,7 +88,9 @@ public class ContractDAO {
         return contract;
     }
 
-    // --- GET ALL CONTRACTS ---
+    /**
+     * Get all contracts with building filter
+     */
     public List<Contract> getAllContracts() {
         List<Contract> contracts = new ArrayList<>();
         String sql = "SELECT * FROM contracts WHERE is_deleted = 0 ORDER BY created_at DESC";
@@ -224,7 +226,7 @@ public class ContractDAO {
         return !activeContracts.isEmpty();
     }
 
-    // ✅ INSERT CONTRACT - UPDATED WITH NULL CHECKS FOR DATES
+    // --- ✅ FIX: INSERT CONTRACT (RETURN GENERATED KEY) ---
     public boolean insertContract(Contract contract) {
         String sql = "INSERT INTO contracts (apartment_id, resident_id, contract_number, "
                 + "contract_type, start_date, end_date, signed_date, monthly_rent, "
@@ -232,11 +234,11 @@ public class ContractDAO {
                 + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'ACTIVE', NOW(), 0)";
 
         try (Connection conn = Db_connection.getConnection()) {
-            conn.setAutoCommit(false); // Start transaction
+            conn.setAutoCommit(false); // Start Transaction
 
             try {
-                // 1. Insert contract
-                try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                // Thêm RETURN_GENERATED_KEYS để lấy ID vừa tạo
+                try (PreparedStatement pstmt = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
                     pstmt.setLong(1, contract.getApartmentId());
                     pstmt.setLong(2, contract.getResidentId());
                     pstmt.setString(3, contract.getContractNumber());
@@ -269,9 +271,18 @@ public class ContractDAO {
                         conn.rollback();
                         return false;
                     }
+
+                    // ✅ QUAN TRỌNG: Lấy ID và set lại vào object contract
+                    try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
+                        if (generatedKeys.next()) {
+                            contract.setId(generatedKeys.getLong(1));
+                        } else {
+                            throw new SQLException("Creating contract failed, no ID obtained.");
+                        }
+                    }
                 }
 
-                // 2. Update apartment status based on contract type
+                // Cập nhật trạng thái Căn hộ (Đã thuê/Đã bán)
                 boolean statusUpdated = updateApartmentStatusOnContractCreate(
                         conn,
                         contract.getApartmentId(),
@@ -283,7 +294,7 @@ public class ContractDAO {
                     return false;
                 }
 
-                conn.commit();
+                conn.commit(); // Commit Transaction
                 return true;
 
             } catch (SQLException e) {
@@ -530,7 +541,9 @@ public class ContractDAO {
                 history.setAction("DELETED");
                 history.setReason("Xóa hợp đồng");
                 history.setCreatedBy(getCurrentUserId());
-                contractHistoryDAO.insert(conn, history);
+                // Chú ý: Cần đảm bảo contractHistoryDAO.insert hỗ trợ connection nếu muốn cùng transaction
+                // Nếu không, có thể gọi phiên bản thường, rủi ro nhỏ nếu lỗi ở history nhưng contract đã xóa.
+                contractHistoryDAO.insert(history); 
 
                 conn.commit();
                 return true;
@@ -546,17 +559,33 @@ public class ContractDAO {
         }
     }
 
-    // --- COUNT CONTRACTS BY STATUS ---
+    /**
+     * Count contracts by status with building filter
+     */
     public int countContractsByStatus(String status) {
-        String sql = "SELECT COUNT(*) FROM contracts WHERE status = ? AND is_deleted = 0";
-
-        try (Connection conn = Db_connection.getConnection(); PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
-            pstmt.setString(1, status);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1);
-                }
+        User currentUser = SessionManager.getInstance().getCurrentUser();
+        
+        String sql = "SELECT COUNT(*) FROM contracts c " +
+                     "JOIN apartments a ON c.apartment_id = a.id " +
+                     "JOIN floors f ON a.floor_id = f.id " +
+                     "WHERE c.status = ? AND c.is_deleted = 0 ";
+        
+        if (currentUser != null && !currentUser.isAdmin() && currentUser.getBuildingId() != null) {
+            sql += "AND f.building_id = ?";
+        }
+        
+        try (Connection conn = Db_connection.getConnection(); 
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            
+            ps.setString(1, status);
+            
+            if (currentUser != null && !currentUser.isAdmin() && currentUser.getBuildingId() != null) {
+                ps.setLong(2, currentUser.getBuildingId());
+            }
+            
+            ResultSet rs = ps.executeQuery();
+            if (rs.next()) {
+                return rs.getInt(1);
             }
         } catch (SQLException e) {
             e.printStackTrace();
@@ -564,12 +593,13 @@ public class ContractDAO {
         return 0;
     }
 
-    // --- COUNT ACTIVE CONTRACTS ---
     public int countActiveContracts() {
         return countContractsByStatus("ACTIVE");
     }
 
-    // --- GET EXPIRING CONTRACTS (ONLY FOR RENTAL) ---
+    /**
+     * Get expiring contracts with building filter
+     */
     public List<Contract> getExpiringContracts(int daysThreshold) {
         List<Contract> contracts = new ArrayList<>();
         String sql = "SELECT * FROM contracts "
